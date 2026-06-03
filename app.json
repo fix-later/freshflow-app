@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "FreshFlow",
+    "slug": "freshflow-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/imagemain.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/imagemain.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#6BAD76"
+    },
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/imagemain.png",
+        "backgroundColor": "#6BAD76"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
+}
