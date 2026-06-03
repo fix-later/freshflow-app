@@ -25,7 +25,7 @@ export interface PriceUpdate {
   oldPrice: number;
   newPrice: number;
   updatedAt: string;
-  kioskId: string;
+  marketAgentId: string;
 }
 
 export interface OrderItem {
@@ -75,7 +75,7 @@ export interface InventoryItem {
   quantity: number;
   minQuantity: number;
   unit: string;
-  kioskId: string;
+  marketAgentId: string;
 }
 
 export interface HubBatch {

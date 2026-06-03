@@ -1,28 +1,30 @@
 export const Routes = {
-  LOGIN: 'Login',
+  // Auth
+  LOGIN:    'Login',
+  REGISTER: 'Register',
 
-  RESTAURANT_ORDERS: 'RestaurantOrders',
-  RESTAURANT_PRICING: 'RestaurantPricing',
+  // Restaurant
+  RESTAURANT_ORDERS:   'RestaurantOrders',
+  RESTAURANT_PRICING:  'RestaurantPricing',
   RESTAURANT_TRACKING: 'RestaurantTracking',
 
-  KIOSK_DASHBOARD: 'KioskDashboard',
-  KIOSK_INVENTORY: 'KioskInventory',
-  KIOSK_UPDATE_PRICE: 'UpdatePrice',
+  // Market Agent
+  MARKET_AGENT_HOME:         'MarketAgentHome',
+  MARKET_AGENT_INVENTORY:    'MarketAgentInventory',
+  MARKET_AGENT_UPDATE_PRICE: 'UpdatePrice',
 
+  // Hub Staff
   HUB_DASHBOARD: 'HubDashboard',
-  HUB_CHECKIN: 'CheckIn',
-  HUB_SORTING: 'Sorting',
+  HUB_CHECKIN:   'CheckIn',
+  HUB_SORTING:   'Sorting',
 
-  DRIVER_HOME: 'DriverHome',
-  DRIVER_STOP_LIST: 'StopList',
+  // Driver
+  DRIVER_HOME:       'DriverHome',
+  DRIVER_STOP_LIST:  'StopList',
   DRIVER_NAVIGATION: 'DriverNavigation',
 
-  ADMIN_ANALYTICS: 'AdminAnalytics',
-  ADMIN_LOGISTICS: 'AdminLogistics',
-  ADMIN_USERS: 'AdminUsers',
-  ADMIN_SETTINGS: 'AdminSettings',
-
-  ORDER_DETAIL: 'OrderDetail',
-  CREATE_ORDER: 'CreateOrder',
+  // Shared
+  ORDER_DETAIL:  'OrderDetail',
+  CREATE_ORDER:  'CreateOrder',
   NOTIFICATIONS: 'Notifications',
 } as const;

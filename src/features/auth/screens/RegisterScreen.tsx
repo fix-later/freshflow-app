@@ -1,14 +1,12 @@
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../../../components/Screen';
-import { AuthStackParamList } from '../../../navigation/types';
+import { type AuthStackParamList } from '../../../navigation/types';
 import { Colors } from '../../../constants/colors';
 
-type RegisterScreenProps = NativeStackScreenProps<AuthStackParamList, 'Register'> & {
-  onSignIn: () => void;
-};
+type RegisterScreenProps = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
-export function RegisterScreen({ navigation, onSignIn }: RegisterScreenProps) {
+export function RegisterScreen({ navigation }: RegisterScreenProps) {
   return (
     <Screen title="Tạo tài khoản" subtitle="Màn hình đăng ký sẽ được mở rộng khi tích hợp backend.">
       <View style={styles.card}>
@@ -16,10 +14,6 @@ export function RegisterScreen({ navigation, onSignIn }: RegisterScreenProps) {
         <Text style={styles.cardText}>
           Tạm thời đây là placeholder để giữ đúng cấu trúc Auth cho giai đoạn đầu.
         </Text>
-
-        <Pressable style={styles.primaryButton} onPress={onSignIn}>
-          <Text style={styles.primaryButtonText}>Tạo tài khoản mẫu</Text>
-        </Pressable>
 
         <Pressable onPress={() => navigation.goBack()}>
           <Text style={styles.link}>Quay lại đăng nhập</Text>

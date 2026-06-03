@@ -1,9 +1,3 @@
-/**
- * Cài packages trước khi dùng file này:
- *   npm install axios
- *   npx expo install expo-secure-store
- */
-
 import axios, {
   type AxiosError,
   type AxiosResponse,
