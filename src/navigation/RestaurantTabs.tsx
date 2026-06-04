@@ -1,3 +1,4 @@
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { OrderListScreen } from '../features/orders/screens/OrderListScreen';
@@ -8,10 +9,10 @@ import { Colors } from '../constants/colors';
 
 const Tab = createBottomTabNavigator<RestaurantTabParamList>();
 
-const TAB_ICON = {
-  RestaurantOrders: { focused: 'clipboard', unfocused: 'clipboard-outline' },
-  RestaurantPricing: { focused: 'trending-up', unfocused: 'trending-up-outline' },
-  RestaurantTracking: { focused: 'locate', unfocused: 'locate-outline' },
+const TAB_CONFIG = {
+  RestaurantOrders: { label: 'Chợ', icon: 'storefront-outline' as const, activeIcon: 'storefront' as const },
+  RestaurantPricing: { label: 'Mua hàng', icon: 'cart-outline' as const, activeIcon: 'cart' as const },
+  RestaurantTracking: { label: 'Giao hàng', icon: 'car-outline' as const, activeIcon: 'car' as const },
 } as const;
 
 export function RestaurantTabs() {
@@ -19,26 +20,40 @@ export function RestaurantTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
         tabBarStyle: {
-          borderTopColor: Colors.border,
           backgroundColor: Colors.surface,
-          paddingBottom: 4,
-          height: 56,
+          borderTopWidth: 0,
+          elevation: 0,
+          height: 64,
+          paddingBottom: 8,
+          paddingTop: 4,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '600',
+          marginTop: 2,
         },
-        tabBarIcon: ({ focused, color, size }) => {
-          const icons = TAB_ICON[route.name as keyof typeof TAB_ICON];
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.onSurfaceVariant,
+        tabBarIcon: ({ focused, size }) => {
+          const config = TAB_CONFIG[route.name as keyof typeof TAB_CONFIG];
           return (
-            <Ionicons
-              name={focused ? icons.focused : icons.unfocused}
-              size={size}
-              color={color}
-            />
+            <View
+              style={{
+                width: 56,
+                height: 32,
+                borderRadius: 12,
+                backgroundColor: focused ? 'rgba(0,107,44,0.12)' : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons
+                name={focused ? config.activeIcon : config.icon}
+                size={focused ? size + 1 : size}
+                color={focused ? Colors.primary : Colors.onSurfaceVariant}
+              />
+            </View>
           );
         },
       })}
@@ -46,17 +61,17 @@ export function RestaurantTabs() {
       <Tab.Screen
         name="RestaurantOrders"
         component={OrderListScreen}
-        options={{ title: 'Đơn hàng' }}
+        options={{ title: 'Chợ' }}
       />
       <Tab.Screen
         name="RestaurantPricing"
         component={PriceListScreen}
-        options={{ title: 'Giá thị trường' }}
+        options={{ title: 'Mua hàng' }}
       />
       <Tab.Screen
         name="RestaurantTracking"
         component={TrackOrderScreen}
-        options={{ title: 'Theo dõi' }}
+        options={{ title: 'Giao hàng' }}
       />
     </Tab.Navigator>
   );

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../../constants/colors';
 import { UserRole } from '../../../constants/roles';
 import { useAuthStore } from '../../../store/authStore';
@@ -25,6 +26,7 @@ const MOCK_USERS: { label: string; role: UserRole }[] = [
 ];
 
 export function LoginScreen() {
+  const navigation = useNavigation();
   const { signIn } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -136,9 +138,9 @@ export function LoginScreen() {
             {/* Register link */}
             <View style={styles.registerRow}>
               <Text style={styles.registerText}>Chưa có tài khoản? </Text>
-              <Pressable>
-                <Text style={styles.registerLink}>Đăng ký ngay</Text>
-              </Pressable>
+            <Pressable onPress={() => navigation.navigate('Register' as never)}>
+              <Text style={styles.registerLink}>Đăng ký ngay</Text>
+            </Pressable>
             </View>
           </View>
 
