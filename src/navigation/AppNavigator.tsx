@@ -6,9 +6,15 @@ import { RestaurantTabs } from './RestaurantTabs';
 import { MarketAgentStack } from './MarketAgentStack';
 import { HubStack } from './HubStack';
 import { DriverStack } from './DriverStack';
+import { SplashScreen } from '../screens/SplashScreen';
 
 function RoleNavigator() {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, isLoading } = useAuthStore();
+
+  // Show splash screen while auth is initializing
+  if (isLoading) {
+    return <SplashScreen />;
+  }
 
   if (!isAuthenticated || !user) return <AuthStack />;
 
