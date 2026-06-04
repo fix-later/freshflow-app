@@ -1,4 +1,4 @@
-import { type PropsWithChildren } from 'react';
+import { type PropsWithChildren, useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../store/AuthProvider';
 
