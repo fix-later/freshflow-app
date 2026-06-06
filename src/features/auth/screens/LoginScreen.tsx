@@ -113,7 +113,10 @@ export function LoginScreen() {
             </View>
 
             {/* Forgot password */}
-            <Pressable style={styles.forgotRow}>
+            <Pressable
+              style={styles.forgotRow}
+              onPress={() => navigation.navigate('ForgotPassword' as never)}
+            >
               <Text style={styles.forgotText}>Quên mật khẩu?</Text>
             </Pressable>
 
