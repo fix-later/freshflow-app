@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
-import type { User } from '../../types/common.types';
-import type { UserRole } from '../../constants/roles';
-import { apiClient, TOKEN_KEY } from './client';
+import type { User } from '../../../types/common.types';
+import type { UserRole } from '../../../constants/roles';
+import { apiClient, TOKEN_KEY } from '../../../services/api/client';
 
 export const REFRESH_TOKEN_KEY = 'ff_refresh_token';
 
@@ -11,7 +11,6 @@ interface LoginResponse {
   expiresIn?: number;
 }
 
-// Decode JWT payload without a library
 function parseJwt(token: string): Record<string, unknown> {
   const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
   const json = decodeURIComponent(
@@ -34,10 +33,7 @@ export function userFromToken(token: string): User {
     (c['email'] as string) ??
     (c['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] as string) ??
     '';
-  const name =
-    (c['name'] as string) ??
-    (c['unique_name'] as string) ??
-    email;
+  const name = (c['name'] as string) ?? (c['unique_name'] as string) ?? email;
   const role =
     (c['role'] as UserRole) ??
     (c['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] as UserRole);
@@ -59,7 +55,7 @@ export interface RegisterRestaurantResponse {
   isApproved: boolean;
 }
 
-export const authService = {
+export const authApi = {
   async registerRestaurant(payload: RegisterRestaurantPayload): Promise<RegisterRestaurantResponse> {
     const { data } = await apiClient.post<RegisterRestaurantResponse>(
       '/api/v1/auth/register',
@@ -86,6 +82,15 @@ export const authService = {
 
   async forgotPassword(identifier: string): Promise<void> {
     await apiClient.post('/api/v1/auth/forgot-password', { identifier });
+  },
+
+  async register(
+    email: string,
+    password: string,
+    restaurantName: string,
+    phone: string,
+  ): Promise<void> {
+    await apiClient.post('/api/v1/auth/register', { email, password, restaurantName, phone });
   },
 
   async refreshAccessToken(): Promise<{ user: User; accessToken: string } | null> {

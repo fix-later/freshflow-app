@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { type User } from '../types/common.types';
 import { AuthContext } from './authStore';
 import { TOKEN_KEY } from '../services/api/client';
-import { authService, userFromToken, REFRESH_TOKEN_KEY } from '../services/api/auth';
+import { authApi, userFromToken, REFRESH_TOKEN_KEY } from '../features/auth/api/authApi';
 import * as SecureStore from 'expo-secure-store';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setToken(null);
     if (refreshToken) {
-      authService.logout(refreshToken).catch(() => {});
+      authApi.logout(refreshToken).catch(() => {});
     } else {
       SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
     }
