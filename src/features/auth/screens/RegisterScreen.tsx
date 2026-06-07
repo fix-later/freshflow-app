@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,11 +15,39 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
 import { theme } from '../../../config/theme';
-import { useAuthStore } from '../../../store/authStore';
 import { Button } from '../../../components/ui/Button';
+import { authApi } from '../api/authApi';
+
+// Password must match backend: min 8 chars, 1 uppercase, 1 digit, 1 special char
+function isPasswordStrong(pw: string): boolean {
+  return pw.length >= 8 && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^a-zA-Z0-9]/.test(pw);
+}
+
+interface TaxInfo {
+  name: string;
+  address: string;
+  shortName?: string;
+}
+
+async function fetchTaxInfo(code: string): Promise<TaxInfo | null> {
+  try {
+    const res = await fetch(`https://api.vietqr.io/v2/business/${code.trim()}`);
+    const json = await res.json();
+    if (json?.code === '00' && json?.data) {
+      return {
+        name: json.data.name ?? '',
+        address: json.data.address ?? '',
+        shortName: json.data.shortName ?? '',
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export function RegisterScreen({ navigation }: { navigation: any }) {
-  const { signIn } = useAuthStore();
+  const [isLoading, setIsLoading] = useState(false);
 
   // ─── Personal info ───────────────────────
   const [name, setName] = useState('');
@@ -28,6 +58,29 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
   const [restaurantName, setRestaurantName] = useState('');
   const [restaurantAddress, setRestaurantAddress] = useState('');
   const [taxCode, setTaxCode] = useState('');
+  const [taxLookupLoading, setTaxLookupLoading] = useState(false);
+  const [taxVerified, setTaxVerified] = useState(false);
+  const [taxLookupError, setTaxLookupError] = useState('');
+
+  // ─── Tax lookup ──────────────────────────
+  const handleTaxCodeChange = async (code: string) => {
+    setTaxCode(code);
+    setTaxVerified(false);
+    setTaxLookupError('');
+    // MST cá nhân: 10 số, MST chi nhánh: 13 số
+    if (code.length === 10 || code.length === 13) {
+      setTaxLookupLoading(true);
+      const info = await fetchTaxInfo(code);
+      setTaxLookupLoading(false);
+      if (info) {
+        setRestaurantName(info.name);
+        setRestaurantAddress(info.address);
+        setTaxVerified(true);
+      } else {
+        setTaxLookupError('Không tìm thấy thông tin doanh nghiệp với mã số thuế này.');
+      }
+    }
+  };
 
   // ─── Security ────────────────────────────
   const [password, setPassword] = useState('');
@@ -39,6 +92,13 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
   const [agreeTerms, setAgreeTerms] = useState(false);
 
   // ─── Validation ──────────────────────────
+  const passwordChecks = {
+    length: password.length >= 8,
+    upper: /[A-Z]/.test(password),
+    digit: /[0-9]/.test(password),
+    special: /[^a-zA-Z0-9]/.test(password),
+  };
+
   const isFormValid =
     name.trim().length > 0 &&
     phone.trim().length >= 10 &&
@@ -46,17 +106,52 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
     restaurantName.trim().length > 0 &&
     restaurantAddress.trim().length > 0 &&
     taxCode.trim().length > 0 &&
-    password.length >= 6 &&
+    Object.values(passwordChecks).every(Boolean) &&
     password === confirmPassword &&
     agreeTerms;
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (!isFormValid) return;
-    // Mock: auto-login after register
-    signIn(
-      { id: '1', email, name, role: 'RESTAURANT' },
-      'mock-token-register',
-    );
+    setIsLoading(true);
+    try {
+      await authApi.register(
+        email.trim(),
+        password,
+        restaurantName.trim(),
+        phone.trim(),
+      );
+      Alert.alert(
+        '🎉 Đăng ký thành công!',
+        'Tài khoản nhà hàng của bạn đã được tạo thành công.\n\nVui lòng chờ quản trị viên xét duyệt (thường trong 1–2 ngày làm việc) trước khi đăng nhập.',
+        [{ text: 'Về trang đăng nhập', onPress: () => navigation.goBack() }],
+      );
+    } catch (err: any) {
+      const code: string = err?.response?.data?.code ?? '';
+      const serverMsg: string = err?.response?.data?.message ?? '';
+
+      let title = 'Đăng ký thất bại';
+      let body = 'Đã có lỗi xảy ra. Vui lòng thử lại sau.';
+
+      if (code === 'EMAIL_ALREADY_EXISTS') {
+        title = 'Email đã được sử dụng';
+        body = `Địa chỉ email "${email.trim()}" đã có tài khoản.\nVui lòng dùng email khác hoặc đăng nhập.`;
+      } else if (code === 'PHONE_ALREADY_EXISTS') {
+        title = 'Số điện thoại đã được sử dụng';
+        body = `Số điện thoại "${phone.trim()}" đã được đăng ký.\nVui lòng dùng số điện thoại khác.`;
+      } else if (code === 'ROLE_NOT_CONFIGURED') {
+        title = 'Lỗi hệ thống';
+        body = 'Hệ thống chưa cấu hình vai trò nhà hàng. Vui lòng liên hệ hỗ trợ.';
+      } else if (!err?.response) {
+        title = 'Không có kết nối mạng';
+        body = 'Vui lòng kiểm tra kết nối internet và thử lại.';
+      } else if (serverMsg) {
+        body = serverMsg;
+      }
+
+      Alert.alert(title, body, [{ text: 'Đã hiểu' }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // ─── Reusable input ──────────────────────
@@ -172,12 +267,47 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
               <View style={styles.sectionLine} />
             </View>
 
+            {/* ─── Mã số thuế ─────────────────── */}
+            <Text style={styles.label}>Mã số thuế *</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="document-text-outline" size={18} color={Colors.textMuted} />
+              <TextInput
+                style={styles.input}
+                value={taxCode}
+                onChangeText={handleTaxCodeChange}
+                placeholder="0123456789"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="number-pad"
+                maxLength={14}
+              />
+              {taxLookupLoading ? (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              ) : taxVerified ? (
+                <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+              ) : (
+                <View style={styles.taxBadge}>
+                  <Text style={styles.taxBadgeText}>MST</Text>
+                </View>
+              )}
+            </View>
+            {taxLookupError ? (
+              <Text style={styles.errorText}>{taxLookupError}</Text>
+            ) : taxVerified ? (
+              <Text style={styles.successText}>Đã xác thực thông tin doanh nghiệp ✓</Text>
+            ) : (
+              <Text style={styles.helperText}>
+                Nhập mã số thuế để tự động điền thông tin nhà hàng
+              </Text>
+            )}
+
+            <View style={styles.fieldGap} />
+
             {renderInput(
               'Tên nhà hàng *',
               restaurantName,
               setRestaurantName,
               'restaurant-outline',
-              'Nhà hàng ABC',
+              'Tự động điền từ mã số thuế',
               { autoCapitalize: 'words' },
             )}
 
@@ -188,32 +318,9 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
               restaurantAddress,
               setRestaurantAddress,
               'location-outline',
-              'Số 123, Đường ABC, Quận 1, TP.HCM',
+              'Tự động điền từ mã số thuế',
               { autoCapitalize: 'sentences' },
             )}
-
-            <View style={styles.fieldGap} />
-
-            {/* ─── Mã số thuế ─────────────────── */}
-            <Text style={styles.label}>Mã số thuế *</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="document-text-outline" size={18} color={Colors.textMuted} />
-              <TextInput
-                style={styles.input}
-                value={taxCode}
-                onChangeText={setTaxCode}
-                placeholder="0123456789"
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="number-pad"
-                maxLength={14}
-              />
-              <View style={styles.taxBadge}>
-                <Text style={styles.taxBadgeText}>MST</Text>
-              </View>
-            </View>
-            <Text style={styles.helperText}>
-              Mã số thuế giúp xác thực thông tin doanh nghiệp của bạn
-            </Text>
 
             {/* ═══ SECTION: BẢO MẬT ═══ */}
             <View style={[styles.sectionRow, { marginTop: 24 }]}>
@@ -227,7 +334,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
               password,
               setPassword,
               'lock-closed-outline',
-              'Ít nhất 6 ký tự',
+              'Ít nhất 8 ký tự, 1 hoa, 1 số, 1 ký tự đặc biệt',
               {
                 secureTextEntry: !showPassword,
                 rightElement: (
@@ -240,6 +347,29 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
                   </Pressable>
                 ),
               },
+            )}
+
+            {/* Password strength checklist */}
+            {password.length > 0 && (
+              <View style={styles.passwordChecks}>
+                {[
+                  { ok: passwordChecks.length, label: 'Ít nhất 8 ký tự' },
+                  { ok: passwordChecks.upper,  label: '1 chữ hoa (A-Z)' },
+                  { ok: passwordChecks.digit,  label: '1 chữ số (0-9)' },
+                  { ok: passwordChecks.special, label: '1 ký tự đặc biệt (!@#...)' },
+                ].map(({ ok, label }) => (
+                  <View key={label} style={styles.checkRow}>
+                    <Ionicons
+                      name={ok ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={14}
+                      color={ok ? Colors.success : Colors.textMuted}
+                    />
+                    <Text style={[styles.checkLabel, ok && styles.checkLabelOk]}>
+                      {label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             )}
 
             <View style={styles.fieldGap} />
@@ -296,12 +426,12 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
 
             {/* ─── Register button ────────────── */}
             <Button
-              title="ĐĂNG KÝ NHÀ HÀNG"
+              title={isLoading ? 'ĐANG XỬ LÝ...' : 'ĐĂNG KÝ NHÀ HÀNG'}
               variant="primary"
               size="lg"
               fullWidth
               onPress={handleRegister}
-              disabled={!isFormValid}
+              disabled={!isFormValid || isLoading}
               style={styles.registerButton}
             />
 
@@ -552,6 +682,24 @@ const styles = StyleSheet.create({
   registerButton: {
     marginTop: 20,
     borderRadius: 14,
+  },
+
+  // ─── Password checklist ──────────────────
+  passwordChecks: {
+    marginTop: 8,
+    gap: 4,
+  },
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  checkLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  checkLabelOk: {
+    color: Colors.success,
   },
 
   // ─── Divider ─────────────────────────────
