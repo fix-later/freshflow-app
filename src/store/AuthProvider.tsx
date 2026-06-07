@@ -1,28 +1,29 @@
 import { useCallback, useEffect, useState } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import { type User } from '../types/common.types';
 import { AuthContext } from './authStore';
 import { TOKEN_KEY } from '../services/api/client';
+import { authService, userFromToken, REFRESH_TOKEN_KEY } from '../services/api/auth';
+import * as SecureStore from 'expo-secure-store';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check for existing token on app start
+  // Restore session from stored tokens on app start
   useEffect(() => {
     async function initAuth() {
       try {
         const storedToken = await SecureStore.getItemAsync(TOKEN_KEY);
         if (storedToken) {
+          // Parse user info from the JWT — no extra network call needed
+          const restoredUser = userFromToken(storedToken);
+          setUser(restoredUser);
           setToken(storedToken);
-          // TODO: call GET /auth/me to validate token and get user info
-          // For now, just set loading false and let the app show login
         }
       } catch {
-        // No stored token — proceed to login
+        // Token missing or malformed — fall through to login
       } finally {
-        // Small delay for smooth splash transition
         setTimeout(() => setIsLoading(false), 1200);
       }
     }
@@ -34,10 +35,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(t);
   }, []);
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
+    const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY).catch(() => null);
     setUser(null);
     setToken(null);
-    SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+    if (refreshToken) {
+      authService.logout(refreshToken).catch(() => {});
+    } else {
+      SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+    }
   }, []);
 
   const setLoading = useCallback((loading: boolean) => {

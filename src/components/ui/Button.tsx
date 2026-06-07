@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -34,18 +33,6 @@ export function Button({
   style,
   ...rest
 }: ButtonProps) {
-  const [pressed, setPressed] = useState(false);
-
-  const containerStyles: ViewStyle[] = [
-    styles.base,
-    styles[`variant_${variant}`],
-    styles[`size_${size}`],
-    fullWidth && styles.fullWidth,
-    pressed && !disabled && styles[`pressed_${variant}`],
-    disabled && styles.disabled,
-    style,
-  ].filter(Boolean) as ViewStyle[];
-
   const textStyles = [
     styles.text,
     styles[`text_${variant}`],
@@ -54,10 +41,15 @@ export function Button({
 
   return (
     <Pressable
-      style={({ pressed: isPressed }) => {
-        setPressed(isPressed);
-        return containerStyles;
-      }}
+      style={({ pressed }) => [
+        styles.base,
+        styles[`variant_${variant}`],
+        styles[`size_${size}`],
+        fullWidth && styles.fullWidth,
+        pressed && !disabled && styles[`pressed_${variant}`],
+        disabled && styles.disabled,
+        style,
+      ].filter(Boolean) as ViewStyle[]}
       disabled={disabled || loading}
       {...rest}
     >
