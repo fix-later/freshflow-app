@@ -16,7 +16,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
 import { theme } from '../../../config/theme';
 import { Button } from '../../../components/ui/Button';
-import { authService } from '../../../services/api/auth';
+import { authApi } from '../api/authApi';
 
 // Password must match backend: min 8 chars, 1 uppercase, 1 digit, 1 special char
 function isPasswordStrong(pw: string): boolean {
@@ -114,12 +114,12 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
     if (!isFormValid) return;
     setIsLoading(true);
     try {
-      await authService.registerRestaurant({
-        email: email.trim(),
+      await authApi.register(
+        email.trim(),
         password,
-        restaurantName: restaurantName.trim(),
-        phone: phone.trim() || undefined,
-      });
+        restaurantName.trim(),
+        phone.trim(),
+      );
       Alert.alert(
         '🎉 Đăng ký thành công!',
         'Tài khoản nhà hàng của bạn đã được tạo thành công.\n\nVui lòng chờ quản trị viên xét duyệt (thường trong 1–2 ngày làm việc) trước khi đăng nhập.',
