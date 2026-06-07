@@ -44,7 +44,30 @@ export function userFromToken(token: string): User {
   return { id, email, name, role };
 }
 
+export interface RegisterRestaurantPayload {
+  email: string;
+  password: string;
+  restaurantName: string;
+  phone?: string;
+}
+
+export interface RegisterRestaurantResponse {
+  userId: string;
+  restaurantId: string;
+  email: string;
+  restaurantName: string;
+  isApproved: boolean;
+}
+
 export const authService = {
+  async registerRestaurant(payload: RegisterRestaurantPayload): Promise<RegisterRestaurantResponse> {
+    const { data } = await apiClient.post<RegisterRestaurantResponse>(
+      '/api/v1/auth/register',
+      payload,
+    );
+    return data;
+  },
+
   async login(identifier: string, password: string): Promise<{ user: User; accessToken: string }> {
     const { data } = await apiClient.post<LoginResponse>('/api/v1/auth/login', {
       identifier,
