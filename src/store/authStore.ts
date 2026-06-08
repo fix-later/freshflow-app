@@ -7,9 +7,11 @@ export interface AuthStore {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  sessionExpired: boolean;
   signIn: (user: User, token: string) => void;
   signOut: () => void;
   setLoading: (loading: boolean) => void;
+  clearSessionExpired: () => void;
 }
 
 export const AuthContext = createContext<AuthStore | null>(null);
