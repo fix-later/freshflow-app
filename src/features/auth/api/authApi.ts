@@ -84,6 +84,10 @@ export const authApi = {
     await apiClient.post('/api/v1/auth/forgot-password', { identifier });
   },
 
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    await apiClient.post('/api/v1/auth/reset-password', { token, newPassword });
+  },
+
   async register(
     email: string,
     password: string,
