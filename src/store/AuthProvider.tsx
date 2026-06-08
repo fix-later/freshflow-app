@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { type User } from '../types/common.types';
 import { AuthContext } from './authStore';
-import { TOKEN_KEY } from '../services/api/client';
+import { TOKEN_KEY, registerSignOut } from '../services/api/client';
 import { authApi, userFromToken, REFRESH_TOKEN_KEY } from '../features/auth/api/authApi';
 import * as SecureStore from 'expo-secure-store';
 
@@ -9,6 +9,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Give the axios interceptor a way to trigger sign-out when refresh fails
+  useEffect(() => {
+    registerSignOut(() => {
+      setUser(null);
+      setToken(null);
+    });
+  }, []);
 
   // Restore session from stored tokens on app start
   useEffect(() => {
