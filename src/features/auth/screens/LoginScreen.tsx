@@ -27,7 +27,7 @@ const MOCK_USERS: { label: string; role: UserRole }[] = [
 
 export function LoginScreen() {
   const navigation = useNavigation();
-  const { signIn } = useAuthStore();
+  const { signIn, sessionExpired, clearSessionExpired } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -71,6 +71,19 @@ export function LoginScreen() {
             <Text style={styles.brandName}>FreshFlow</Text>
             <Text style={styles.brandSub}>Đăng nhập để tiếp tục</Text>
           </View>
+
+          {/* ─── Session Expired Banner ──────── */}
+          {sessionExpired && (
+            <View style={styles.expiredBanner}>
+              <Ionicons name="time-outline" size={18} color="#92400E" />
+              <Text style={styles.expiredText}>
+                Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.
+              </Text>
+              <Pressable onPress={clearSessionExpired} hitSlop={8}>
+                <Ionicons name="close" size={18} color="#92400E" />
+              </Pressable>
+            </View>
+          )}
 
           {/* ─── Form Card ─────────────────── */}
           <View style={styles.formCard}>
@@ -362,5 +375,27 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 40,
+  },
+
+  // ─── Session Expired Banner ───────────────
+  expiredBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 16,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  expiredText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#92400E',
+    lineHeight: 18,
+    fontWeight: '500',
   },
 });

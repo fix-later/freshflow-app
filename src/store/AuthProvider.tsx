@@ -9,12 +9,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
-  // Give the axios interceptor a way to trigger sign-out when refresh fails
+  // Give the axios interceptor a way to trigger sign-out + session-expired flag
   useEffect(() => {
     registerSignOut(() => {
       setUser(null);
       setToken(null);
+      setSessionExpired(true);
     });
   }, []);
 
@@ -24,7 +26,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const storedToken = await SecureStore.getItemAsync(TOKEN_KEY);
         if (storedToken) {
-          // Parse user info from the JWT — no extra network call needed
           const restoredUser = userFromToken(storedToken);
           setUser(restoredUser);
           setToken(storedToken);
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback((u: User, t: string) => {
     setUser(u);
     setToken(t);
+    setSessionExpired(false);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -58,6 +60,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(loading);
   }, []);
 
+  const clearSessionExpired = useCallback(() => {
+    setSessionExpired(false);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -65,9 +71,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token,
         isAuthenticated: !!user,
         isLoading,
+        sessionExpired,
         signIn,
         signOut,
         setLoading,
+        clearSessionExpired,
       }}
     >
       {children}
