@@ -14,20 +14,30 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../../constants/colors';
 import { Button } from '../../../components/ui/Button';
+import { authApi } from '../api/authApi';
 
 export function ForgotPasswordScreen() {
   const navigation = useNavigation();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSend = async () => {
     if (!email) return;
     setLoading(true);
-    // TODO: replace with real API call — POST /auth/forgot-password { email }
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    setLoading(false);
-    setSent(true);
+    setError(null);
+    try {
+      await authApi.forgotPassword(email.trim());
+      setSent(true);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Không thể gửi email. Vui lòng kiểm tra lại địa chỉ email.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -105,6 +115,13 @@ export function ForgotPasswordScreen() {
                   />
                 </View>
 
+                {error && (
+                  <View style={styles.errorBox}>
+                    <Ionicons name="alert-circle-outline" size={16} color={Colors.error ?? '#EF4444'} />
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                )}
+
                 <Button
                   title="GỬI EMAIL ĐẶT LẠI"
                   variant="primary"
@@ -112,7 +129,7 @@ export function ForgotPasswordScreen() {
                   fullWidth
                   loading={loading}
                   onPress={handleSend}
-                  disabled={!email}
+                  disabled={!email || loading}
                   style={styles.submitBtn}
                 />
               </>
@@ -251,8 +268,24 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   submitBtn: {
-    marginTop: 20,
+    marginTop: 12,
     borderRadius: 14,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#EF4444',
+    lineHeight: 18,
   },
 
   // ─── Success State ───────────────────────────
