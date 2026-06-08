@@ -1,9 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
 import type { User } from '../../../types/common.types';
 import type { UserRole } from '../../../constants/roles';
-import { apiClient, TOKEN_KEY } from '../../../services/api/client';
+import { apiClient, TOKEN_KEY, REFRESH_TOKEN_KEY } from '../../../services/api/client';
 
-export const REFRESH_TOKEN_KEY = 'ff_refresh_token';
+export { REFRESH_TOKEN_KEY };
 
 interface LoginResponse {
   accessToken: string;
