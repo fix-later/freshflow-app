@@ -22,6 +22,16 @@ function parseJwt(token: string): Record<string, unknown> {
   return JSON.parse(json) as Record<string, unknown>;
 }
 
+// Map BE role names (lowercase) → FE UserRole constants (UPPERCASE)
+const ROLE_MAP: Record<string, UserRole> = {
+  restaurant:         'RESTAURANT',
+  market_agent:       'MARKET_AGENT',
+  hub_staff:          'HUB_STAFF',
+  driver:             'DRIVER',
+  admin:              'RESTAURANT', // fallback — admin không có app stack riêng
+  operations_manager: 'MARKET_AGENT',
+};
+
 // Map JWT claims → User (handles both modern short-form and legacy .NET SOAP claims)
 export function userFromToken(token: string): User {
   const c = parseJwt(token);
@@ -34,9 +44,12 @@ export function userFromToken(token: string): User {
     (c['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] as string) ??
     '';
   const name = (c['name'] as string) ?? (c['unique_name'] as string) ?? email;
-  const role =
-    (c['role'] as UserRole) ??
-    (c['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] as UserRole);
+  const rawRole =
+    (c['role'] as string) ??
+    (c['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] as string) ??
+    '';
+  // Normalize: BE sends lowercase ("restaurant"), FE expects uppercase ("RESTAURANT")
+  const role: UserRole = ROLE_MAP[rawRole.toLowerCase()] ?? (rawRole.toUpperCase() as UserRole);
   return { id, email, name, role };
 }
 
