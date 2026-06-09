@@ -3,9 +3,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { MarketAgentHomeScreen } from '../features/inventory/screens/MarketAgentHomeScreen';
 import { InventoryScreen } from '../features/inventory/screens/InventoryScreen';
 import { UpdatePriceScreen } from '../features/pricing/screens/UpdatePriceScreen';
+import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { type MarketAgentStackParamList } from './types';
 import { Colors } from '../constants/colors';
-import { LogoutButton } from '../components/ui/LogoutButton';
 
 const Tab = createBottomTabNavigator<MarketAgentStackParamList>();
 
@@ -13,6 +13,7 @@ const TAB_ICON = {
   MarketAgentHome: { focused: 'home', unfocused: 'home-outline' },
   MarketAgentInventory: { focused: 'cube', unfocused: 'cube-outline' },
   UpdatePrice: { focused: 'create', unfocused: 'create-outline' },
+  MarketAgentProfile: { focused: 'person-circle', unfocused: 'person-circle-outline' },
 } as const;
 
 export function MarketAgentStack() {
@@ -20,7 +21,6 @@ export function MarketAgentStack() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: true,
-        headerRight: () => <LogoutButton />,
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarStyle: {
@@ -48,6 +48,7 @@ export function MarketAgentStack() {
       <Tab.Screen name="MarketAgentHome" component={MarketAgentHomeScreen} options={{ title: 'Tổng quan' }} />
       <Tab.Screen name="MarketAgentInventory" component={InventoryScreen} options={{ title: 'Tồn kho' }} />
       <Tab.Screen name="UpdatePrice" component={UpdatePriceScreen} options={{ title: 'Cập nhật giá' }} />
+      <Tab.Screen name="MarketAgentProfile" component={ProfileScreen} options={{ title: 'Hồ sơ' }} />
     </Tab.Navigator>
   );
 }

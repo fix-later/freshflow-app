@@ -3,9 +3,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { HubDashboardScreen } from '../features/hub/screens/HubDashboardScreen';
 import { CheckInScreen } from '../features/hub/screens/CheckInScreen';
 import { SortingScreen } from '../features/hub/screens/SortingScreen';
+import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { type HubStackParamList } from './types';
 import { Colors } from '../constants/colors';
-import { LogoutButton } from '../components/ui/LogoutButton';
 
 const Tab = createBottomTabNavigator<HubStackParamList>();
 
@@ -13,6 +13,7 @@ const TAB_ICON = {
   HubDashboard: { focused: 'grid', unfocused: 'grid-outline' },
   CheckIn: { focused: 'download', unfocused: 'download-outline' },
   Sorting: { focused: 'layers', unfocused: 'layers-outline' },
+  HubProfile: { focused: 'person-circle', unfocused: 'person-circle-outline' },
 } as const;
 
 export function HubStack() {
@@ -20,7 +21,6 @@ export function HubStack() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: true,
-        headerRight: () => <LogoutButton />,
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarStyle: {
@@ -48,6 +48,7 @@ export function HubStack() {
       <Tab.Screen name="HubDashboard" component={HubDashboardScreen} options={{ title: 'Tổng quan' }} />
       <Tab.Screen name="CheckIn" component={CheckInScreen} options={{ title: 'Nhận hàng' }} />
       <Tab.Screen name="Sorting" component={SortingScreen} options={{ title: 'Phân loại' }} />
+      <Tab.Screen name="HubProfile" component={ProfileScreen} options={{ title: 'Hồ sơ' }} />
     </Tab.Navigator>
   );
 }
