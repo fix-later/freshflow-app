@@ -64,6 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSessionExpired(false);
   }, []);
 
+  const updateUser = useCallback((partial: Partial<User>) => {
+    setUser((prev) => (prev ? { ...prev, ...partial } : prev));
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -76,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut,
         setLoading,
         clearSessionExpired,
+        updateUser,
       }}
     >
       {children}

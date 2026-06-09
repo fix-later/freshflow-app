@@ -12,6 +12,7 @@ export interface AuthStore {
   signOut: () => void;
   setLoading: (loading: boolean) => void;
   clearSessionExpired: () => void;
+  updateUser: (partial: Partial<User>) => void;
 }
 
 export const AuthContext = createContext<AuthStore | null>(null);
