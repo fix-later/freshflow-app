@@ -120,13 +120,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
         restaurantName.trim(),
         phone.trim(),
       );
-      // TODO: navigate VerifyEmail khi BE implement gửi email thực
-      // navigation.navigate('VerifyEmail' as never, { email: email.trim() } as never);
-      Alert.alert(
-        '🎉 Đăng ký thành công!',
-        'Tài khoản nhà hàng của bạn đã được tạo.\n\nVui lòng chờ quản trị viên xét duyệt trước khi đăng nhập.',
-        [{ text: 'Về đăng nhập', onPress: () => navigation.navigate('Login' as never) }],
-      );
+      navigation.navigate('VerifyEmail' as never, { email: email.trim() } as never);
     } catch (err: any) {
       const code: string = err?.response?.data?.code ?? '';
       const serverMsg: string = err?.response?.data?.message ?? '';

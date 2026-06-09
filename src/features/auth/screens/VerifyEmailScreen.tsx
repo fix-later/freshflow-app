@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,36 +23,48 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'VerifyEmail'>;
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN = 60; // seconds
+const OTP_EXPIRES_IN = 10 * 60; // seconds
+
+function formatTime(seconds: number): string {
+  const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const secs = (seconds % 60).toString().padStart(2, '0');
+  return `${minutes}:${secs}`;
+}
 
 export function VerifyEmailScreen({ route, navigation }: Props) {
   const { email } = route.params;
 
   // ─── OTP inputs ──────────────────────────
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [focusedIndex, setFocusedIndex] = useState(0);
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   // ─── State ───────────────────────────────
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN);
+  const [expiresIn, setExpiresIn] = useState(OTP_EXPIRES_IN);
 
   // ─── Auto-send OTP on mount ───────────────
   useEffect(() => {
     sendOtp();
   }, []);
 
-  // ─── Cooldown timer ───────────────────────
+  // ─── Timers ───────────────────────────────
   useEffect(() => {
-    if (cooldown <= 0) return;
-    const timer = setInterval(() => setCooldown((c) => c - 1), 1000);
+    const timer = setInterval(() => {
+      setCooldown((c) => Math.max(c - 1, 0));
+      setExpiresIn((s) => Math.max(s - 1, 0));
+    }, 1000);
     return () => clearInterval(timer);
-  }, [cooldown]);
+  }, []);
 
   const sendOtp = async () => {
     setIsResending(true);
     try {
       await authApi.requestVerification(email);
       setCooldown(RESEND_COOLDOWN);
+      setExpiresIn(OTP_EXPIRES_IN);
     } catch {
       // Anti-oracle: BE luôn trả success dù email có tồn tại hay không
     } finally {
@@ -94,16 +108,25 @@ export function VerifyEmailScreen({ route, navigation }: Props) {
   // ─── Verify ───────────────────────────────
   const otpValue = otp.join('');
   const isOtpComplete = otpValue.length === OTP_LENGTH;
+  const isExpired = expiresIn <= 0;
+
+  useEffect(() => {
+    if (isOtpComplete && !isVerifying && !isExpired) {
+      Keyboard.dismiss();
+      handleVerify();
+    }
+  }, [otpValue, isOtpComplete, isExpired, isVerifying]);
 
   const handleVerify = async () => {
-    if (!isOtpComplete) return;
+    if (!isOtpComplete || isExpired) return;
     setIsVerifying(true);
     try {
       await authApi.verifyEmail(email, otpValue);
+      setOtp(Array(OTP_LENGTH).fill(''));
       Alert.alert(
         'Xác thực thành công!',
-        'Email của bạn đã được xác thực. Vui lòng chờ admin phê duyệt tài khoản trước khi đăng nhập.',
-        [{ text: 'Đăng nhập', onPress: () => navigation.navigate('Login') }],
+        'Email của bạn đã được xác thực. Tài khoản nhà hàng đang chờ quản trị viên xét duyệt trước khi có thể đăng nhập.',
+        [{ text: 'Về đăng nhập', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Login' }] }) }],
       );
     } catch (err: any) {
       const code: string = err?.response?.data?.code ?? '';
@@ -116,7 +139,7 @@ export function VerifyEmailScreen({ route, navigation }: Props) {
       Alert.alert('Xác thực thất bại', body, [{ text: 'Đã hiểu' }]);
       // Reset OTP on error
       setOtp(Array(OTP_LENGTH).fill(''));
-      inputRefs.current[0]?.focus();
+      setFocusedIndex(0);
     } finally {
       setIsVerifying(false);
     }
@@ -124,15 +147,16 @@ export function VerifyEmailScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        {/* ─── Back ───────────────────────── */}
-        <Pressable style={styles.backRow} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
-          <Text style={styles.backText}>Quay lại</Text>
-        </Pressable>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          {/* ─── Back ───────────────────────── */}
+          <Pressable style={styles.backRow} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+            <Text style={styles.backText}>Quay lại</Text>
+          </Pressable>
 
         {/* ─── Brand ──────────────────────── */}
         <View style={styles.brandSection}>
@@ -150,13 +174,36 @@ export function VerifyEmailScreen({ route, navigation }: Props) {
         <View style={styles.formCard}>
           <Text style={styles.otpLabel}>Nhập mã 6 chữ số</Text>
 
+          <View style={[styles.timerCard, isExpired && styles.timerCardExpired]}>
+            <View style={styles.timerIconWrap}>
+              <Ionicons
+                name={isExpired ? 'alert-circle-outline' : 'time-outline'}
+                size={18}
+                color={isExpired ? Colors.danger : Colors.primary}
+              />
+            </View>
+            <View style={styles.timerTextWrap}>
+              <Text style={styles.timerLabel}>
+                {isExpired ? 'Mã đã hết hạn' : 'Mã còn hiệu lực'}
+              </Text>
+              <Text style={[styles.timerValue, isExpired && styles.timerValueExpired]}>
+                {formatTime(expiresIn)}
+              </Text>
+            </View>
+          </View>
+
           {/* OTP Inputs */}
           <View style={styles.otpRow}>
             {Array(OTP_LENGTH).fill(0).map((_, i) => (
               <TextInput
                 key={i}
                 ref={(ref) => { inputRefs.current[i] = ref; }}
-                style={[styles.otpInput, otp[i] ? styles.otpInputFilled : null]}
+                style={[
+                  styles.otpInput,
+                  otp[i] ? styles.otpInputFilled : null,
+                  focusedIndex === i ? styles.otpInputFocused : null,
+                  isExpired ? styles.otpInputExpired : null,
+                ]}
                 value={otp[i]}
                 onChangeText={(t) => {
                   // Handle paste (long text input)
@@ -164,17 +211,20 @@ export function VerifyEmailScreen({ route, navigation }: Props) {
                   handleOtpChange(t, i);
                 }}
                 onKeyPress={({ nativeEvent }) => handleOtpKeyPress(nativeEvent.key, i)}
+                onFocus={() => setFocusedIndex(i)}
                 keyboardType="number-pad"
                 maxLength={OTP_LENGTH}
                 selectTextOnFocus
                 textAlign="center"
-                autoFocus={i === 0}
+                editable={!isExpired && !isVerifying}
               />
             ))}
           </View>
 
           <Text style={styles.helperText}>
-            Mã có hiệu lực trong 10 phút. Kiểm tra cả hộp thư spam nếu không thấy.
+            {isExpired
+              ? 'Mã xác thực đã hết hạn. Vui lòng bấm gửi lại để nhận mã mới.'
+              : 'Kiểm tra cả hộp thư spam nếu không thấy email.'}
           </Text>
 
           {/* Verify button */}
@@ -184,21 +234,26 @@ export function VerifyEmailScreen({ route, navigation }: Props) {
             size="lg"
             fullWidth
             onPress={handleVerify}
-            disabled={!isOtpComplete || isVerifying}
+            disabled={!isOtpComplete || isVerifying || isExpired}
             style={styles.verifyButton}
           />
 
           {/* Resend */}
           <View style={styles.resendRow}>
-            <Text style={styles.resendText}>Không nhận được mã? </Text>
+            <Text style={styles.resendText}>Không nhận được mã?</Text>
             <Pressable onPress={handleResend} disabled={cooldown > 0 || isResending}>
               <Text style={[styles.resendLink, (cooldown > 0 || isResending) && styles.resendDisabled]}>
-                {cooldown > 0 ? `Gửi lại (${cooldown}s)` : isResending ? 'Đang gửi...' : 'Gửi lại'}
+                {cooldown > 0
+                  ? `Gửi lại sau ${cooldown}s`
+                  : isResending
+                    ? 'Đang gửi mã...'
+                    : 'Gửi lại mã'}
               </Text>
             </Pressable>
           </View>
         </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
     </SafeAreaView>
   );
 }
@@ -282,7 +337,49 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 14,
+  },
+
+  // ─── Timer ───────────────────────────────
+  timerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: Colors.primaryLight ?? '#E8F5E9',
+    marginBottom: 22,
+  },
+  timerCardExpired: {
+    backgroundColor: '#FEE2E2',
+  },
+  timerIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerTextWrap: {
+    minWidth: 118,
+  },
+  timerLabel: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: '600',
+  },
+  timerValue: {
+    marginTop: 1,
+    fontSize: 20,
+    color: Colors.primary,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+  },
+  timerValueExpired: {
+    color: Colors.danger,
   },
 
   // ─── OTP inputs ──────────────────────────
@@ -293,18 +390,28 @@ const styles = StyleSheet.create({
   },
   otpInput: {
     flex: 1,
-    height: 56,
-    borderRadius: 14,
+    minWidth: 42,
+    height: 58,
+    borderRadius: 16,
     backgroundColor: '#F1F5F9',
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: Colors.textPrimary,
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: Colors.border,
   },
   otpInputFilled: {
     borderColor: Colors.primary,
     backgroundColor: Colors.primaryLight ?? '#E8F5E9',
+  },
+  otpInputFocused: {
+    borderColor: Colors.secondary,
+    backgroundColor: '#FFFFFF',
+  },
+  otpInputExpired: {
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+    color: Colors.danger,
   },
 
   // ─── Helper ──────────────────────────────
@@ -324,18 +431,21 @@ const styles = StyleSheet.create({
 
   // ─── Resend ──────────────────────────────
   resendRow: {
-    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: 22,
+    gap: 6,
   },
   resendText: {
     fontSize: 14,
     color: Colors.textSecondary,
+    textAlign: 'center',
   },
   resendLink: {
     fontSize: 14,
     fontWeight: '700',
     color: Colors.secondary,
+    textAlign: 'center',
   },
   resendDisabled: {
     color: Colors.textMuted,
