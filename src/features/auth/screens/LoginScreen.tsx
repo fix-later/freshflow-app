@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -9,29 +9,29 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { Colors } from '../../../constants/colors';
-import { UserRole } from '../../../constants/roles';
-import { useAuthStore } from '../../../store/authStore';
-import { Button } from '../../../components/ui/Button';
-import { authApi } from '../api/authApi';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { Colors } from "../../../constants/colors";
+import { UserRole } from "../../../constants/roles";
+import { useAuthStore } from "../../../store/authStore";
+import { Button } from "../../../components/ui/Button";
+import { authApi } from "../api/authApi";
 
 // Dev-only: mock users for testing role-based navigation
 const MOCK_USERS: { label: string; role: UserRole }[] = [
-  { label: 'Nhà hàng', role: UserRole.RESTAURANT },
-  { label: 'Market Agent', role: UserRole.MARKET_AGENT },
-  { label: 'Hub Staff', role: UserRole.HUB_STAFF },
-  { label: 'Tài xế', role: UserRole.DRIVER },
+  { label: "Nhà hàng", role: UserRole.RESTAURANT },
+  { label: "Market Agent", role: UserRole.MARKET_AGENT },
+  { label: "Hub Staff", role: UserRole.HUB_STAFF },
+  { label: "Tài xế", role: UserRole.DRIVER },
 ];
 
 export function LoginScreen() {
   const navigation = useNavigation();
   const { signIn, sessionExpired, clearSessionExpired } = useAuthStore();
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showDevMode, setShowDevMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -40,30 +40,34 @@ export function LoginScreen() {
     if (!identifier.trim() || !password) return;
     setIsLoading(true);
     try {
-      const { user, accessToken } = await authApi.login(identifier.trim(), password);
+      const { user, accessToken } = await authApi.login(
+        identifier.trim(),
+        password,
+      );
       signIn(user, accessToken);
     } catch (err: any) {
-      const code: string = err?.response?.data?.code ?? '';
-      const lockedUntil: string = err?.response?.data?.message ?? '';
+      const code: string = err?.response?.data?.code ?? "";
+      const lockedUntil: string = err?.response?.data?.message ?? "";
 
-      let title = 'Đăng nhập thất bại';
-      let body = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
+      let title = "Đăng nhập thất bại";
+      let body = "Đã có lỗi xảy ra. Vui lòng thử lại.";
 
-      if (code === 'INVALID_CREDENTIALS') {
-        title = 'Sai thông tin đăng nhập';
-        body = 'Email/số điện thoại hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.';
-      } else if (code === 'ACCOUNT_LOCKED') {
-        title = 'Tài khoản bị khóa';
+      if (code === "INVALID_CREDENTIALS") {
+        title = "Sai thông tin đăng nhập";
+        body =
+          "Email/số điện thoại hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.";
+      } else if (code === "ACCOUNT_LOCKED") {
+        title = "Tài khoản bị khóa";
         body = `Tài khoản tạm thời bị khóa do đăng nhập sai nhiều lần.\n${lockedUntil}`;
-      } else if (code === 'ACCOUNT_INACTIVE') {
-        title = 'Tài khoản bị vô hiệu hóa';
-        body = 'Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ hỗ trợ.';
+      } else if (code === "ACCOUNT_INACTIVE") {
+        title = "Tài khoản bị vô hiệu hóa";
+        body = "Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ hỗ trợ.";
       } else if (!err?.response) {
-        title = 'Không có kết nối mạng';
-        body = 'Vui lòng kiểm tra kết nối internet và thử lại.';
+        title = "Không có kết nối mạng";
+        body = "Vui lòng kiểm tra kết nối internet và thử lại.";
       }
 
-      Alert.alert(title, body, [{ text: 'Đã hiểu' }]);
+      Alert.alert(title, body, [{ text: "Đã hiểu" }]);
     } finally {
       setIsLoading(false);
     }
@@ -71,8 +75,8 @@ export function LoginScreen() {
 
   const handleDevLogin = (role: UserRole) => {
     signIn(
-      { id: '1', email: 'dev@freshflow.vn', name: 'Dev User', role },
-      'mock-token-dev',
+      { id: "1", email: "dev@freshflow.vn", name: "Dev User", role },
+      "mock-token-dev",
     );
   };
 
@@ -80,7 +84,7 @@ export function LoginScreen() {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -115,12 +119,16 @@ export function LoginScreen() {
             {/* Email / SĐT */}
             <Text style={styles.label}>Email hoặc Số điện thoại</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="person-outline" size={18} color={Colors.textMuted} />
+              <Ionicons
+                name="person-outline"
+                size={18}
+                color={Colors.textMuted}
+              />
               <TextInput
                 style={styles.input}
                 value={identifier}
                 onChangeText={setIdentifier}
-                placeholder="email@example.com hoặc 0901234567"
+                placeholder="email@example.com hoặc SĐT"
                 placeholderTextColor={Colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -131,7 +139,11 @@ export function LoginScreen() {
             {/* Password */}
             <Text style={[styles.label, { marginTop: 16 }]}>Mật khẩu</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={18} color={Colors.textMuted} />
+              <Ionicons
+                name="lock-closed-outline"
+                size={18}
+                color={Colors.textMuted}
+              />
               <TextInput
                 style={styles.input}
                 value={password}
@@ -141,9 +153,12 @@ export function LoginScreen() {
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
               />
-              <Pressable onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
+              <Pressable
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={8}
+              >
                 <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
                   size={20}
                   color={Colors.textMuted}
                 />
@@ -153,14 +168,14 @@ export function LoginScreen() {
             {/* Forgot password */}
             <Pressable
               style={styles.forgotRow}
-              onPress={() => navigation.navigate('ForgotPassword' as never)}
+              onPress={() => navigation.navigate("ForgotPassword" as never)}
             >
               <Text style={styles.forgotText}>Quên mật khẩu?</Text>
             </Pressable>
 
             {/* Login button */}
             <Button
-              title={isLoading ? 'ĐANG ĐĂNG NHẬP...' : 'ĐĂNG NHẬP'}
+              title={isLoading ? "ĐANG ĐĂNG NHẬP..." : "ĐĂNG NHẬP"}
               variant="primary"
               size="lg"
               fullWidth
@@ -179,9 +194,11 @@ export function LoginScreen() {
             {/* Register link */}
             <View style={styles.registerRow}>
               <Text style={styles.registerText}>Chưa có tài khoản? </Text>
-            <Pressable onPress={() => navigation.navigate('Register' as never)}>
-              <Text style={styles.registerLink}>Đăng ký ngay</Text>
-            </Pressable>
+              <Pressable
+                onPress={() => navigation.navigate("Register" as never)}
+              >
+                <Text style={styles.registerLink}>Đăng ký ngay</Text>
+              </Pressable>
             </View>
           </View>
 
@@ -191,7 +208,7 @@ export function LoginScreen() {
             onPress={() => setShowDevMode(!showDevMode)}
           >
             <Text style={styles.devToggleText}>
-              {showDevMode ? '▲ Ẩn' : '⚙️'} Dev Mode
+              {showDevMode ? "▲ Ẩn" : "⚙️"} Dev Mode
             </Text>
           </Pressable>
 
@@ -237,39 +254,39 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingTop: 48,
     paddingBottom: 48,
-    alignItems: 'center',
+    alignItems: "center",
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   brandDeco: {
-    position: 'absolute',
+    position: "absolute",
     top: -60,
     right: -40,
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
   logoIcon: {
     width: 72,
     height: 72,
     borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 16,
   },
   brandName: {
     fontSize: 32,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontWeight: "800",
+    color: "#FFFFFF",
     letterSpacing: 0.5,
   },
   brandSub: {
     marginTop: 6,
     fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
 
   // ─── Form ────────────────────────────────
@@ -279,7 +296,7 @@ const styles = StyleSheet.create({
     marginTop: -20,
     borderRadius: 24,
     padding: 24,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 4 },
@@ -287,17 +304,17 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textSecondary,
     marginBottom: 6,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     height: 50,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderRadius: 14,
     paddingHorizontal: 14,
     gap: 10,
@@ -306,16 +323,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: Colors.textPrimary,
-    height: '100%',
+    height: "100%",
     padding: 0,
   },
   forgotRow: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
     marginTop: 12,
   },
   forgotText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.secondary,
   },
 
@@ -327,8 +344,8 @@ const styles = StyleSheet.create({
 
   // ─── Divider ─────────────────────────────
   dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 24,
     gap: 12,
   },
@@ -344,8 +361,8 @@ const styles = StyleSheet.create({
 
   // ─── Register ────────────────────────────
   registerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: 20,
   },
   registerText: {
@@ -354,13 +371,13 @@ const styles = StyleSheet.create({
   },
   registerLink: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.secondary,
   },
 
   // ─── Dev Mode ────────────────────────────
   devToggle: {
-    alignSelf: 'center',
+    alignSelf: "center",
     marginTop: 24,
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -368,7 +385,7 @@ const styles = StyleSheet.create({
   devToggleText: {
     fontSize: 13,
     color: Colors.textMuted,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   devCard: {
     backgroundColor: Colors.surface,
@@ -381,21 +398,21 @@ const styles = StyleSheet.create({
   },
   devTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textSecondary,
     marginBottom: 12,
-    textAlign: 'center',
+    textAlign: "center",
   },
   devButton: {
     backgroundColor: Colors.primaryLight,
     borderRadius: 12,
     paddingVertical: 12,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 8,
   },
   devButtonText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.primary,
   },
   bottomSpacer: {
@@ -404,23 +421,23 @@ const styles = StyleSheet.create({
 
   // ─── Session Expired Banner ───────────────
   expiredBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     marginHorizontal: 20,
     marginTop: 16,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: "#FEF3C7",
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#FCD34D',
+    borderColor: "#FCD34D",
   },
   expiredText: {
     flex: 1,
     fontSize: 13,
-    color: '#92400E',
+    color: "#92400E",
     lineHeight: 18,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 });
