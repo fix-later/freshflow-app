@@ -5,6 +5,7 @@ import { InventoryScreen } from '../features/inventory/screens/InventoryScreen';
 import { UpdatePriceScreen } from '../features/pricing/screens/UpdatePriceScreen';
 import { type MarketAgentStackParamList } from './types';
 import { Colors } from '../constants/colors';
+import { LogoutButton } from '../components/ui/LogoutButton';
 
 const Tab = createBottomTabNavigator<MarketAgentStackParamList>();
 
@@ -18,7 +19,8 @@ export function MarketAgentStack() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerShown: false,
+        headerShown: true,
+        headerRight: () => <LogoutButton />,
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarStyle: {

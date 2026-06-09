@@ -6,6 +6,7 @@ import { PriceListScreen } from '../features/pricing/screens/PriceListScreen';
 import { TrackOrderScreen } from '../features/delivery/screens/TrackOrderScreen';
 import { type RestaurantTabParamList } from './types';
 import { Colors } from '../constants/colors';
+import { LogoutButton } from '../components/ui/LogoutButton';
 
 const Tab = createBottomTabNavigator<RestaurantTabParamList>();
 
@@ -19,7 +20,8 @@ export function RestaurantTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerShown: false,
+        headerShown: true,
+        headerRight: () => <LogoutButton />,
         tabBarStyle: {
           backgroundColor: Colors.surface,
           borderTopWidth: 0,

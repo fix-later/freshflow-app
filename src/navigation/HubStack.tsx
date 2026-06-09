@@ -5,6 +5,7 @@ import { CheckInScreen } from '../features/hub/screens/CheckInScreen';
 import { SortingScreen } from '../features/hub/screens/SortingScreen';
 import { type HubStackParamList } from './types';
 import { Colors } from '../constants/colors';
+import { LogoutButton } from '../components/ui/LogoutButton';
 
 const Tab = createBottomTabNavigator<HubStackParamList>();
 
@@ -18,7 +19,8 @@ export function HubStack() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerShown: false,
+        headerShown: true,
+        headerRight: () => <LogoutButton />,
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarStyle: {
