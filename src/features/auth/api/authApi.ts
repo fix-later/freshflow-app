@@ -101,6 +101,21 @@ export const authApi = {
     await apiClient.post('/api/v1/auth/reset-password', { token, newPassword });
   },
 
+  async requestVerification(identifier: string): Promise<void> {
+    await apiClient.post('/api/v1/auth/verify/request', {
+      identifier,
+      channel: 'EMAIL',
+    });
+  },
+
+  async verifyEmail(identifier: string, code: string): Promise<void> {
+    await apiClient.post('/api/v1/auth/verify', {
+      identifier,
+      channel: 'EMAIL',
+      code,
+    });
+  },
+
   async register(
     email: string,
     password: string,

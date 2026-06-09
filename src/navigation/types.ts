@@ -3,6 +3,7 @@ export type AuthStackParamList = {
   Register: undefined;
   ForgotPassword: undefined;
   ResetPassword: { token: string };
+  VerifyEmail: { email: string };
 };
 
 export type RestaurantTabParamList = {
