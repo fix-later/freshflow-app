@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,6 +17,7 @@ import { Colors } from '../../../constants/colors';
 import { UserRole } from '../../../constants/roles';
 import { useAuthStore } from '../../../store/authStore';
 import { Button } from '../../../components/ui/Button';
+import { authApi } from '../api/authApi';
 
 // Dev-only: mock users for testing role-based navigation
 const MOCK_USERS: { label: string; role: UserRole }[] = [
@@ -28,20 +30,43 @@ const MOCK_USERS: { label: string; role: UserRole }[] = [
 export function LoginScreen() {
   const navigation = useNavigation();
   const { signIn, sessionExpired, clearSessionExpired } = useAuthStore();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showDevMode, setShowDevMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = () => {
-    // TODO: real API call — for now fallback to dev flow
-    if (!email || !password) return;
-    // Mock: interpret email prefix as role hint or default to RESTAURANT
-    const role = UserRole.RESTAURANT;
-    signIn(
-      { id: '1', email, name: email.split('@')[0] || 'User', role },
-      'mock-token',
-    );
+  const handleLogin = async () => {
+    if (!identifier.trim() || !password) return;
+    setIsLoading(true);
+    try {
+      const { user, accessToken } = await authApi.login(identifier.trim(), password);
+      signIn(user, accessToken);
+    } catch (err: any) {
+      const code: string = err?.response?.data?.code ?? '';
+      const lockedUntil: string = err?.response?.data?.message ?? '';
+
+      let title = 'Đăng nhập thất bại';
+      let body = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
+
+      if (code === 'INVALID_CREDENTIALS') {
+        title = 'Sai thông tin đăng nhập';
+        body = 'Email/số điện thoại hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.';
+      } else if (code === 'ACCOUNT_LOCKED') {
+        title = 'Tài khoản bị khóa';
+        body = `Tài khoản tạm thời bị khóa do đăng nhập sai nhiều lần.\n${lockedUntil}`;
+      } else if (code === 'ACCOUNT_INACTIVE') {
+        title = 'Tài khoản bị vô hiệu hóa';
+        body = 'Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ hỗ trợ.';
+      } else if (!err?.response) {
+        title = 'Không có kết nối mạng';
+        body = 'Vui lòng kiểm tra kết nối internet và thử lại.';
+      }
+
+      Alert.alert(title, body, [{ text: 'Đã hiểu' }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDevLogin = (role: UserRole) => {
@@ -87,15 +112,15 @@ export function LoginScreen() {
 
           {/* ─── Form Card ─────────────────── */}
           <View style={styles.formCard}>
-            {/* Email */}
-            <Text style={styles.label}>Email</Text>
+            {/* Email / SĐT */}
+            <Text style={styles.label}>Email hoặc Số điện thoại</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="mail-outline" size={18} color={Colors.textMuted} />
+              <Ionicons name="person-outline" size={18} color={Colors.textMuted} />
               <TextInput
                 style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="your@email.com"
+                value={identifier}
+                onChangeText={setIdentifier}
+                placeholder="email@example.com hoặc 0901234567"
                 placeholderTextColor={Colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -135,12 +160,12 @@ export function LoginScreen() {
 
             {/* Login button */}
             <Button
-              title="ĐĂNG NHẬP"
+              title={isLoading ? 'ĐANG ĐĂNG NHẬP...' : 'ĐĂNG NHẬP'}
               variant="primary"
               size="lg"
               fullWidth
               onPress={handleLogin}
-              disabled={!email || !password}
+              disabled={!identifier.trim() || !password || isLoading}
               style={styles.loginButton}
             />
 
