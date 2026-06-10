@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { OrderListScreen } from '../features/orders/screens/OrderListScreen';
 import { PriceListScreen } from '../features/pricing/screens/PriceListScreen';
 import { TrackOrderScreen } from '../features/delivery/screens/TrackOrderScreen';
-import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
+import { RestaurantProfileTab } from './RestaurantProfileTab';
 import { type RestaurantTabParamList } from './types';
 import { Colors } from '../constants/colors';
 
@@ -77,7 +77,7 @@ export function RestaurantTabs() {
       />
       <Tab.Screen
         name="RestaurantProfile"
-        component={ProfileScreen}
+        component={RestaurantProfileTab}
         options={{ title: 'Hồ sơ' }}
       />
     </Tab.Navigator>

@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../../constants/colors';
 import { UserRole } from '../../../constants/roles';
 import { useAuthStore } from '../../../store/authStore';
@@ -98,6 +99,7 @@ function InfoRow({
 // ─── Main Screen ─────────────────────────────────────────────────────────────────
 
 export function ProfileScreen() {
+  const navigation = useNavigation();
   const { user, signOut, updateUser } = useAuthStore();
 
   // Profile fetch
@@ -427,6 +429,20 @@ export function ProfileScreen() {
               </>
             )}
           </View>
+
+          {/* ─── Restaurant nav row (RESTAURANT role only) ── */}
+          {user.role === UserRole.RESTAURANT && (
+            <Pressable
+              style={({ pressed }) => [styles.card, styles.navRow, pressed && { opacity: 0.7 }]}
+              onPress={() => navigation.navigate('RestaurantProfileEdit' as never)}
+            >
+              <View style={styles.rowLeft}>
+                <Ionicons name="business-outline" size={18} color={Colors.textMuted} />
+                <Text style={styles.changePwTitle}>Thông tin nhà hàng</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            </Pressable>
+          )}
 
           {/* ─── Change Password Card ────────────── */}
           <View style={styles.card}>
@@ -777,4 +793,11 @@ const styles = StyleSheet.create({
   },
   signOutPressed: { opacity: 0.7 },
   signOutText: { fontSize: 15, fontWeight: '600', color: Colors.danger },
+
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+  },
 });
