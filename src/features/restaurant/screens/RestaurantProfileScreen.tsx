@@ -14,7 +14,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
 import { Button } from '../../../components/ui/Button';
-import { restaurantApi, type RestaurantProfileDto } from '../api/restaurantApi';
+import { restaurantApi, type RestaurantProfileDto, type ApprovalStatusDto } from '../api/restaurantApi';
+
+// ─── Constants ──────────────────────────────────────────────────────────────────
+
+const APPROVAL_STATUS_LABEL: Record<ApprovalStatusDto['status'], string> = {
+  pending: 'Chờ duyệt',
+  active: 'Hoạt động',
+  suspended: 'Tạm ngừng',
+};
+
+const APPROVAL_STATUS_COLOR: Record<ApprovalStatusDto['status'], string> = {
+  pending: '#F59E0B',
+  active: '#22C55E',
+  suspended: '#EF4444',
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -132,6 +146,7 @@ export function RestaurantProfileScreen() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusDto['status'] | null>(null);
 
   useEffect(() => {
     restaurantApi
@@ -142,6 +157,11 @@ export function RestaurantProfileScreen() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    restaurantApi
+      .getApprovalStatus()
+      .then((s) => setApprovalStatus(s.status))
+      .catch(() => {});
   }, []);
 
   const setField = useCallback(<K extends keyof RestaurantProfileDto>(
@@ -249,6 +269,33 @@ export function RestaurantProfileScreen() {
               <Text style={styles.errorBannerText}>{saveError}</Text>
             </View>
           )}
+
+          {/* ─── Approval status card ───────────── */}
+          <View style={styles.card}>
+            <Text style={styles.cardSection}>Trạng thái tài khoản</Text>
+            <View style={styles.statusRow}>
+              <Ionicons name="checkmark-circle-outline" size={18} color={Colors.textMuted} />
+              {approvalStatus ? (
+                <View
+                  style={[
+                    styles.approvalBadge,
+                    { backgroundColor: APPROVAL_STATUS_COLOR[approvalStatus] + '22' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.approvalBadgeText,
+                      { color: APPROVAL_STATUS_COLOR[approvalStatus] },
+                    ]}
+                  >
+                    {APPROVAL_STATUS_LABEL[approvalStatus]}
+                  </Text>
+                </View>
+              ) : (
+                <ActivityIndicator size="small" color={Colors.textMuted} />
+              )}
+            </View>
+          </View>
 
           {/* ─── Form card ──────────────────────── */}
           <View style={styles.card}>
@@ -508,4 +555,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   actionBtn: { flex: 1, borderRadius: 12 },
+
+  // ─── Approval status ─────────────────────────
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingBottom: 14,
+  },
+  approvalBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  approvalBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });

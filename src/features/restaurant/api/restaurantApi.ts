@@ -8,6 +8,12 @@ export interface RestaurantProfileDto {
   pickupEnd: string;
 }
 
+export interface ApprovalStatusDto {
+  restaurantId: string;
+  status: 'pending' | 'active' | 'suspended';
+  updatedAt: string;
+}
+
 // API trả về "HH:MM:SS", chỉ giữ "HH:MM"
 function toHHMM(t: string): string {
   if (!t) return '';
@@ -30,5 +36,10 @@ export const restaurantApi = {
       payload,
     );
     return normalizeDto(data);
+  },
+
+  async getApprovalStatus(): Promise<ApprovalStatusDto> {
+    const { data } = await apiClient.get<ApprovalStatusDto>('/api/v1/restaurants/me/approval-status');
+    return data;
   },
 };
