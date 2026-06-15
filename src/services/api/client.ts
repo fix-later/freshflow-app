@@ -57,8 +57,32 @@ interface RefreshResponse {
 }
 
 apiClient.interceptors.response.use(
-  (response: AxiosResponse) => response,
+  // ── Success: unwrap BE envelope { success: true, data: T } → T ─────────────────
+  (response: AxiosResponse) => {
+    const body = response.data;
+    if (body && typeof body === 'object' && 'success' in body) {
+      if (body.success === true) {
+        response.data = body.data as unknown;
+      }
+    }
+    return response;
+  },
+
+  // ── Error: transform envelope + 401 refresh logic ─────────────────────────────
   async (error: AxiosError) => {
+    // Transform error envelope { success: false, error: { code, message } }
+    // into the legacy flat shape { code, message } so existing handlers still work.
+    if (error.response?.data && typeof error.response.data === 'object') {
+      const body = error.response.data as Record<string, unknown>;
+      if (body.success === false && body.error) {
+        const errDetail = body.error as Record<string, unknown>;
+        error.response.data = {
+          code: errDetail.code ?? '',
+          message: errDetail.message ?? '',
+        };
+      }
+    }
+
     const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     if (error.response?.status === 401 && !original._retry) {

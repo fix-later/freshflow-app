@@ -8,7 +8,13 @@ export { REFRESH_TOKEN_KEY };
 interface LoginResponse {
   accessToken: string;
   refreshToken: string;
-  expiresIn?: number;
+  expiresIn: number;
+  user: {
+    id: string;
+    email: string;
+    role: string;
+  };
+  approvalStatus: 'pending' | 'active' | 'suspended' | null;
 }
 
 function parseJwt(token: string): Record<string, unknown> {
