@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
   Modal,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -15,11 +17,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Colors } from "../../../constants/colors";
 import { useAuthStore } from "../../../store/authStore";
+import { pricingApi } from "../../pricing/api/pricingApi";
+import type { MarketDto, MarketProductDto, CategoryDto } from "../../../types/api.types";
 
 // ─── Configuration ─────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CONTAINER_PADDING = 20;
-const GAP = 16;
+const GAP = 10;
 const PRODUCT_CARD_WIDTH = (SCREEN_WIDTH - CONTAINER_PADDING * 2 - GAP) / 2;
 
 // ─── Assets ────────────────────────────────
@@ -46,6 +50,24 @@ const IMAGES = {
   deliveryBot:
     "https://lh3.googleusercontent.com/aida-public/AB6AXuCMEEoJwbj1fp-1Lo-PxSSypWZEHCEkdtgJ8eXmIVsKspjNtJXpnHV68l34zGE5XR5MdgvAmHvzZB4upLoU2g41umYoecTI3YLhhbzl5uyfps42OH-6EGoCfMmtZlTjdWGP7lOf9CSKL1YjVOdHtgT01_hrfyFGP6vnpzGMyELM4bZP2cNPLh3gGbeP9SyBb_RJr3i-945nRcDHNSj9zvMPto7cyAhABu5VT0A_IHFC26FUHmaUi5vJcMPEPK_JpOtu3ik6q7AjvZxL",
 };
+
+// ─── Product Images for API products ──────
+const PRODUCT_PLACEHOLDERS = [
+  'https://images.unsplash.com/photo-1607301405390-d831c242f59f?w=200',
+  'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=200',
+  'https://images.unsplash.com/photo-1582972236019-ea4af5ffe587?w=200',
+  'https://images.unsplash.com/photo-1566385101042-1a0f0b3c7b0b?w=200',
+  'https://images.unsplash.com/photo-1598033129183-c4f50c736c10?w=200',
+  'https://images.unsplash.com/photo-1595853035070-59a39fe84de3?w=200',
+  'https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=200',
+  'https://images.unsplash.com/photo-1601004890684-d8cbf643f5f2?w=200',
+  'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=200',
+  'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200',
+];
+
+function productImage(index: number): string {
+  return PRODUCT_PLACEHOLDERS[index % PRODUCT_PLACEHOLDERS.length];
+}
 
 // ─── Data ──────────────────────────────────
 const MARKETS = [
@@ -75,11 +97,20 @@ const MARKETS = [
   },
 ];
 
+const CATEGORIES = [
+  { id: "", name: "Tất cả", icon: "grid" },
+  { id: "rau-cu", name: "Rau củ", icon: "leaf" },
+  { id: "cu-qua", name: "Củ quả", icon: "nutrition" },
+  { id: "trai-cay", name: "Trái cây", icon: "basket" },
+  { id: "gia-vi", name: "Gia vị", icon: "flask" },
+];
+
 const PRODUCTS = [
   {
     id: "p1",
     name: "Cà chua VietGAP Hóc Môn",
     market: "Hóc Môn",
+    category: "rau-cu",
     price: 25000,
     oldPrice: 28000,
     trend: "2% vs hqua",
@@ -92,6 +123,7 @@ const PRODUCTS = [
     id: "p2",
     name: "Khoai tây Đà Lạt Loại 1",
     market: "Đà Lạt",
+    category: "cu-qua",
     price: 18500,
     trend: "5% vs hqua",
     badge: "Grade A",
@@ -103,6 +135,7 @@ const PRODUCTS = [
     id: "p3",
     name: "Hành tím Vĩnh Châu sạch",
     market: "Thủ Đức",
+    category: "cu-qua",
     price: 32000,
     trend: "Ổn định",
     trendType: "flat",
@@ -112,6 +145,7 @@ const PRODUCTS = [
     id: "p4",
     name: "Bơ sáp Đắk Lắk Size L",
     market: "Đà Lạt",
+    category: "trai-cay",
     price: 45000,
     trend: "-1% vs hqua",
     badge: "Sắp hết",
@@ -123,6 +157,7 @@ const PRODUCTS = [
     id: "p5",
     name: "Tỏi Phan Rang sạch",
     market: "Bình Điền",
+    category: "gia-vi",
     price: 0,
     outOfStock: true,
     badge: "Hết hàng",
@@ -135,10 +170,167 @@ function formatPrice(p: number) {
   return p.toLocaleString("vi-VN") + "đ";
 }
 
+// ─── Cart Item Type ────────────────────────────
+interface CartItem {
+  id: string;
+  name: string;
+  market: string;
+  unit: string;
+  price: number;
+  qty: number;
+  image: string;
+}
+
 // ─── Screen ────────────────────────────────
 export function OrderListScreen() {
   const { user, signOut } = useAuthStore();
   const [showCart, setShowCart] = useState(false);
+
+  // ── Tab state ────────────────────────────
+  const [activeTab, setActiveTab] = useState<'explore' | 'products'>('explore');
+
+  // ── Product tab filter state ─────────────
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState('');
+
+  // ── Real cart state (seeded with demo) ───
+  const [cart, setCart] = useState<CartItem[]>([
+    { id: '1', name: 'Cà chua VietGAP Hóc Môn', market: 'Hóc Môn', unit: 'Kg', price: 25000, qty: 2, image: IMAGES.product1 },
+    { id: '2', name: 'Khoai tây Đà Lạt Loại 1', market: 'Đà Lạt', unit: 'Kg', price: 18500, qty: 1, image: IMAGES.product2 },
+    { id: '3', name: 'Nấm đùi gà xuất khẩu', market: 'Hóc Môn', unit: 'Kg', price: 65000, qty: 1, image: IMAGES.product3 },
+  ]);
+
+  // ── Cart helpers ─────────────────────────
+  const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.qty, 0), [cart]);
+  const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.qty, 0), [cart]);
+
+  const addToCart = (product: typeof PRODUCTS[0]) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.name === product.name);
+      if (existing) {
+        return prev.map(c => c.name === product.name ? { ...c, qty: c.qty + 1 } : c);
+      }
+      return [...prev, { id: product.id, name: product.name, market: product.market, unit: 'Kg', price: product.price, qty: 1, image: product.image }];
+    });
+  };
+
+  const removeFromCart = (productName: string) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.name === productName);
+      if (existing && existing.qty <= 1) {
+        return prev.filter(c => c.name !== productName);
+      }
+      return prev.map(c => c.name === productName ? { ...c, qty: c.qty - 1 } : c);
+    });
+  };
+
+  const getCartQty = (productName: string) => cart.find(c => c.name === productName)?.qty ?? 0;
+
+  // ── API state for products tab ────────────
+  const [apiMarkets, setApiMarkets] = useState<MarketDto[]>([]);
+  const [apiCategories, setApiCategories] = useState<CategoryDto[]>([]);
+  const [apiProducts, setApiProducts] = useState<MarketProductDto[]>([]);
+  const [apiLoading, setApiLoading] = useState(true);
+  const [apiRefreshing, setApiRefreshing] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const apiLoadInit = useCallback(async () => {
+    try {
+      const [m, c] = await Promise.all([
+        pricingApi.getMarkets(),
+        pricingApi.getCategories(),
+      ]);
+      setApiMarkets(m);
+      setApiCategories(c);
+      if (m.length > 0 && !selectedMarketId) {
+        setSelectedMarketId(m[0].id);
+      }
+    } catch {
+      setApiError('Không thể tải danh sách chợ');
+    }
+  }, []);
+
+  const apiLoadProducts = useCallback(async (marketId: string, category?: string) => {
+    try {
+      setApiError(null);
+      const result = await pricingApi.getMarketProducts(marketId, {
+        category: category || undefined,
+        pageSize: 100,
+      });
+      setApiProducts(result.items);
+    } catch {
+      setApiError('Không thể tải sản phẩm');
+    }
+  }, []);
+
+  // ── Init on mount ─────────────────────────
+  useEffect(() => {
+    setApiLoading(true);
+    apiLoadInit().finally(() => setApiLoading(false));
+  }, []);
+
+  // ── Re-fetch when market/category changes ──
+  useEffect(() => {
+    if (!selectedMarketId) return;
+    setApiLoading(true);
+    apiLoadProducts(selectedMarketId, activeCategory).finally(() => setApiLoading(false));
+  }, [selectedMarketId, activeCategory]);
+
+  // ── Pull-to-refresh ───────────────────────
+  const handleApiRefresh = useCallback(async () => {
+    setApiRefreshing(true);
+    await Promise.all([
+      apiLoadInit(),
+      selectedMarketId && apiLoadProducts(selectedMarketId, activeCategory),
+    ]);
+    setApiRefreshing(false);
+  }, [selectedMarketId, activeCategory]);
+
+  // ── Filter API products by search ─────────
+  const filteredApiProducts = useMemo(() => {
+    if (!searchQuery) return apiProducts;
+    return apiProducts.filter(p =>
+      p.productName.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [searchQuery, apiProducts]);
+
+  // ── Add API product to cart ───────────────
+  const addApiToCart = (product: MarketProductDto) => {
+    const marketName = apiMarkets.find(m => m.id === product.marketId)?.name ?? '';
+    setCart(prev => {
+      const existing = prev.find(c => c.id === product.marketProductId);
+      if (existing) {
+        return prev.map(c =>
+          c.id === product.marketProductId ? { ...c, qty: c.qty + 1 } : c,
+        );
+      }
+      return [...prev, {
+        id: product.marketProductId,
+        name: product.productName,
+        market: marketName,
+        unit: product.unit,
+        price: product.currentPrice,
+        qty: 1,
+        image: productImage(apiProducts.indexOf(product)),
+      }];
+    });
+  };
+
+  const getApiCartQty = (productId: string) => cart.find(c => c.id === productId)?.qty ?? 0;
+
+  // ── Filtered products for catalog tab ────
+  const filteredProducts = useMemo(() => {
+    return PRODUCTS.filter(p => {
+      if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (activeCategory && p.category !== activeCategory) return false;
+      if (selectedMarketId) {
+        const market = MARKETS.find(m => m.id === selectedMarketId);
+        if (market && p.market !== market.name) return false;
+      }
+      return true;
+    });
+  }, [searchQuery, activeCategory, selectedMarketId]);
 
   const handleLogout = () => {
     Alert.alert("Đăng xuất", "Bạn muốn đăng xuất khỏi FreshFlow?", [
@@ -241,6 +433,64 @@ export function OrderListScreen() {
     </View>
   );
 
+  const renderProductInCatalog = ({ item, index }: { item: MarketProductDto; index: number }) => {
+    const qty = getApiCartQty(item.marketProductId);
+    const outOfStock = item.availableQuantity <= 0;
+    const marketName = apiMarkets.find(m => m.id === item.marketId)?.name ?? '';
+    return (
+      <View style={[styles.productCard, outOfStock && styles.productCardDisabled]}>
+        <View style={styles.productImageArea}>
+          <Image source={{ uri: productImage(index) }} style={styles.productImg} />
+          {outOfStock && (
+            <View style={[styles.pBadge, styles.pBadgeMuted]}>
+              <Text style={styles.pBadgeText}>Hết hàng</Text>
+            </View>
+          )}
+          <Pressable style={styles.heartBtn}>
+            <Ionicons name="heart-outline" size={16} color={Colors.onSurfaceVariant} />
+          </Pressable>
+        </View>
+        <View style={styles.productInfo}>
+          <Text style={styles.productMarketText}>{marketName}</Text>
+          <Text style={styles.productNameText} numberOfLines={2}>{item.productName}</Text>
+          <Text style={styles.productUnit}>{item.unit}</Text>
+          <View style={styles.cardFooter}>
+            <View>
+              <Text style={styles.cardPrice}>
+                {outOfStock ? "--" : formatPrice(item.currentPrice)}
+              </Text>
+            </View>
+          </View>
+          {!outOfStock && (
+            <View style={styles.catalogQtyRow}>
+              {qty > 0 ? (
+                <>
+                  <Pressable style={styles.catalogQtyBtn} onPress={() => {
+                    setCart(prev => {
+                      const existing = prev.find(c => c.id === item.marketProductId);
+                      if (existing && existing.qty <= 1) return prev.filter(c => c.id !== item.marketProductId);
+                      return prev.map(c => c.id === item.marketProductId ? { ...c, qty: c.qty - 1 } : c);
+                    });
+                  }}>
+                    <Ionicons name="remove" size={16} color="#FFF" />
+                  </Pressable>
+                  <Text style={styles.catalogQtyText}>{qty}</Text>
+                  <Pressable style={styles.catalogQtyBtn} onPress={() => addApiToCart(item)}>
+                    <Ionicons name="add" size={16} color="#FFF" />
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable style={styles.catalogAddBtn} onPress={() => addApiToCart(item)}>
+                  <Ionicons name="add" size={18} color="#FFF" />
+                </Pressable>
+              )}
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* ─── FIXED HEADER ──────────────────── */}
@@ -270,6 +520,23 @@ export function OrderListScreen() {
         </View>
       </View>
 
+      {/* ─── SEGMENTED TAB BAR ──────────────── */}
+      <View style={styles.tabBar}>
+        <Pressable
+          style={[styles.tabItem, activeTab === 'explore' && styles.tabItemActive]}
+          onPress={() => setActiveTab('explore')}
+        >
+          <Text style={[styles.tabText, activeTab === 'explore' && styles.tabTextActive]}>Khám phá</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tabItem, activeTab === 'products' && styles.tabItemActive]}
+          onPress={() => setActiveTab('products')}
+        >
+          <Text style={[styles.tabText, activeTab === 'products' && styles.tabTextActive]}>Sản phẩm</Text>
+        </Pressable>
+      </View>
+
+      {activeTab === 'explore' ? (
       <FlatList
         data={PRODUCTS}
         renderItem={renderProduct}
@@ -429,14 +696,123 @@ export function OrderListScreen() {
           </>
         }
       />
+      ) : (
+      <View style={{ flex: 1 }}>
+        {apiLoading && apiProducts.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loadingText}>Đang tải sản phẩm...</Text>
+          </View>
+        ) : apiError && apiProducts.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+            <Text style={styles.errorText}>{apiError}</Text>
+            <Pressable style={styles.retryBtn} onPress={() => {
+              setApiLoading(true);
+              if (selectedMarketId) {
+                apiLoadProducts(selectedMarketId, activeCategory).finally(() => setApiLoading(false));
+              } else {
+                apiLoadInit().finally(() => setApiLoading(false));
+              }
+            }}>
+              <Text style={styles.retryBtnText}>Thử lại</Text>
+            </Pressable>
+          </View>
+        ) : (
+        <FlatList
+          data={filteredApiProducts}
+          renderItem={(props) => renderProductInCatalog({ ...props, index: props.index })}
+          keyExtractor={(p) => p.marketProductId}
+          numColumns={2}
+          columnWrapperStyle={styles.productRow}
+          contentContainerStyle={styles.mainScroll}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={apiRefreshing} onRefresh={handleApiRefresh} colors={[Colors.primary]} />
+          }
+          ListHeaderComponent={
+            <View>
+              {/* Search Bar */}
+              <View style={styles.searchBar}>
+                <Ionicons name="search" size={20} color={Colors.outline} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Tìm sản phẩm..."
+                  placeholderTextColor={Colors.outline}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+                {searchQuery.length > 0 && (
+                  <Pressable onPress={() => setSearchQuery('')}>
+                    <Ionicons name="close-circle" size={18} color={Colors.outline} />
+                  </Pressable>
+                )}
+              </View>
+
+              {/* Market Chips */}
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={apiMarkets}
+                keyExtractor={(m) => m.id}
+                contentContainerStyle={styles.chipRow}
+                renderItem={({ item }) => {
+                  const active = selectedMarketId === item.id;
+                  return (
+                    <Pressable
+                      style={[styles.chip, active && styles.chipActive]}
+                      onPress={() => setSelectedMarketId(item.id === selectedMarketId ? null : item.id)}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.name}</Text>
+                    </Pressable>
+                  );
+                }}
+              />
+
+              {/* Category Chips */}
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={apiCategories}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.chipRow}
+                renderItem={({ item }) => {
+                  const active = activeCategory === item.name;
+                  return (
+                    <Pressable
+                      style={[styles.chip, active && styles.chipActive]}
+                      onPress={() => setActiveCategory(item.name === activeCategory ? '' : item.name)}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.name}</Text>
+                    </Pressable>
+                  );
+                }}
+              />
+            </View>
+          }
+          ListEmptyComponent={
+            !apiLoading ? (
+              <View style={styles.emptyCatalog}>
+                <Ionicons name="search-outline" size={48} color={Colors.outline} />
+                <Text style={styles.emptyCatalogText}>Không tìm thấy sản phẩm</Text>
+                <Text style={styles.emptyCatalogSub}>Thử thay đổi bộ lọc hoặc từ khoá</Text>
+              </View>
+            ) : null
+          }
+        />
+        )}
+      </View>
+      )}
 
       {/* ─── FLOATING CART FAB ─────────────── */}
+      {cartCount > 0 && (
       <Pressable style={styles.cartFab} onPress={() => setShowCart(true)}>
         <MaterialIcons name="shopping-cart" size={24} color="#FFF" />
         <View style={styles.cartFabBadge}>
-          <Text style={styles.cartFabBadgeText}>3</Text>
+          <Text style={styles.cartFabBadgeText}>{cartCount}</Text>
         </View>
       </Pressable>
+      )}
 
       {/* ─── CART FULL SCREEN MODAL ────────── */}
       <Modal
@@ -450,17 +826,15 @@ export function OrderListScreen() {
             <Pressable onPress={() => setShowCart(false)} style={styles.cartScreenClose}>
               <MaterialIcons name="arrow-back" size={24} color={Colors.onSurface} />
             </Pressable>
-            <Text style={styles.cartScreenTitle}>Giỏ hàng</Text>
-            <Text style={styles.cartScreenClear}>Xoá tất cả</Text>
+            <Text style={styles.cartScreenTitle}>Giỏ hàng ({cartCount})</Text>
+            <Pressable onPress={() => setCart([])}>
+              <Text style={styles.cartScreenClear}>Xoá tất cả</Text>
+            </Pressable>
           </View>
 
           {/* Body */}
           <FlatList
-            data={[
-              { id: '1', name: 'Cà chua VietGAP Hóc Môn', market: 'Hóc Môn', unit: 'Kg', price: 25000, qty: 2, image: IMAGES.product1 },
-              { id: '2', name: 'Khoai tây Đà Lạt Loại 1', market: 'Đà Lạt', unit: 'Kg', price: 18500, qty: 1, image: IMAGES.product2 },
-              { id: '3', name: 'Nấm đùi gà xuất khẩu', market: 'Hóc Môn', unit: 'Kg', price: 65000, qty: 1, image: IMAGES.product3 },
-            ]}
+            data={cart}
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.cartScreenList}
@@ -475,11 +849,13 @@ export function OrderListScreen() {
                   </Text>
                 </View>
                 <View style={styles.cartScreenItemQty}>
-                  <Pressable style={styles.cartScreenQtyBtn}>
+                  <Pressable style={styles.cartScreenQtyBtn} onPress={() => removeFromCart(item.name)}>
                     <MaterialIcons name="remove" size={16} color={Colors.primary} />
                   </Pressable>
                   <Text style={styles.cartScreenQtyText}>{item.qty}</Text>
-                  <Pressable style={styles.cartScreenQtyBtn}>
+                  <Pressable style={styles.cartScreenQtyBtn} onPress={() => {
+                    setCart(prev => prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c));
+                  }}>
                     <MaterialIcons name="add" size={16} color={Colors.primary} />
                   </Pressable>
                 </View>
@@ -504,7 +880,7 @@ export function OrderListScreen() {
               <View style={styles.cartScreenSummary}>
                 <View style={styles.cartScreenSummaryRow}>
                   <Text style={styles.cartScreenSummaryLabel}>Tạm tính</Text>
-                  <Text style={styles.cartScreenSummaryValue}>123.500đ</Text>
+                  <Text style={styles.cartScreenSummaryValue}>{cartTotal.toLocaleString('vi-VN')}đ</Text>
                 </View>
                 <View style={styles.cartScreenSummaryRow}>
                   <Text style={styles.cartScreenSummaryLabel}>Phí vận chuyển</Text>
@@ -512,12 +888,12 @@ export function OrderListScreen() {
                 </View>
                 <View style={styles.cartScreenSummaryRow}>
                   <Text style={styles.cartScreenSummaryLabel}>Giảm giá</Text>
-                  <Text style={[styles.cartScreenSummaryValue, { color: Colors.error }]}>–5.000đ</Text>
+                  <Text style={[styles.cartScreenSummaryValue, { color: Colors.error }]}>–0đ</Text>
                 </View>
                 <View style={styles.cartScreenSummaryDivider} />
                 <View style={styles.cartScreenSummaryRow}>
                   <Text style={styles.cartScreenSummaryTotal}>Tổng cộng</Text>
-                  <Text style={styles.cartScreenSummaryTotalValue}>133.500đ</Text>
+                  <Text style={styles.cartScreenSummaryTotalValue}>{(cartTotal + 15000).toLocaleString('vi-VN')}đ</Text>
                 </View>
               </View>
             }
@@ -527,7 +903,7 @@ export function OrderListScreen() {
           <View style={styles.cartScreenCheckoutBar}>
             <View>
               <Text style={styles.cartScreenCheckoutLabel}>Tạm tính</Text>
-              <Text style={styles.cartScreenCheckoutTotal}>133.500đ</Text>
+              <Text style={styles.cartScreenCheckoutTotal}>{(cartTotal + 15000).toLocaleString('vi-VN')}đ</Text>
             </View>
             <Pressable style={styles.cartScreenCheckoutBtn}>
               <Text style={styles.cartScreenCheckoutBtnText}>Tiến hành thanh toán</Text>
@@ -543,14 +919,46 @@ export default OrderListScreen;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  mainScroll: { paddingBottom: 160 },
+  mainScroll: { paddingBottom: 72 },
+
+  // ─── Loading / Error ───────────────────
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: Colors.onSurfaceVariant,
+    fontFamily: 'Inter-Medium',
+  },
+  errorText: {
+    fontSize: 15,
+    color: Colors.error,
+    fontFamily: 'Inter-Medium',
+    textAlign: 'center',
+    maxWidth: 260,
+  },
+  retryBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  retryBtnText: {
+    color: '#FFF',
+    fontFamily: 'Inter-Bold',
+    fontSize: 14,
+  },
 
   // ─── Header ────────────────────────────────
   appHeader: {
     backgroundColor: Colors.surface,
     paddingHorizontal: CONTAINER_PADDING,
-    paddingTop: 12,
-    paddingBottom: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: Colors.outlineVariant,
   },
@@ -558,7 +966,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    height: 56,
   },
   headerLogo: { flexDirection: "row", alignItems: "center", gap: 10 },
   headerLogoText: {
@@ -597,8 +1004,8 @@ const styles = StyleSheet.create({
   // ─── Hero ──────────────────────────────────
   heroBox: {
     marginHorizontal: CONTAINER_PADDING,
-    minHeight: 230,
-    borderRadius: 24,
+    minHeight: 180,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: Colors.secondaryContainer,
   },
@@ -609,46 +1016,46 @@ const styles = StyleSheet.create({
   },
   heroContent: {
     flex: 1,
-    paddingVertical: 28,
+    paddingVertical: 16,
     paddingHorizontal: CONTAINER_PADDING,
     justifyContent: "center",
   },
   heroAlertTag: {
     backgroundColor: Colors.primary,
     alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginBottom: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 6,
   },
   heroAlertTagText: {
     color: "#FFF",
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: "Inter-Bold",
     textTransform: "uppercase",
   },
   heroTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: "Inter-Bold",
     color: "#FFF",
-    lineHeight: 24,
+    lineHeight: 20,
   },
   heroSub: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter-Regular",
     color: "rgba(255,255,255,0.85)",
-    marginTop: 6,
-    lineHeight: 18,
+    marginTop: 4,
+    lineHeight: 15,
   },
   heroButton: {
     backgroundColor: Colors.primary,
     alignSelf: "flex-start",
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginTop: 8,
   },
-  heroButtonText: { color: "#FFF", fontFamily: "Inter-Bold", fontSize: 13 },
+  heroButtonText: { color: "#FFF", fontFamily: "Inter-Bold", fontSize: 12 },
 
   // ─── Market ────────────────────────────────
   secTitleRow: {
@@ -656,31 +1063,31 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-end",
     paddingHorizontal: CONTAINER_PADDING,
-    marginTop: 32,
-    marginBottom: 16,
+    marginTop: 12,
+    marginBottom: 8,
   },
-  secTitle: { fontSize: 24, fontFamily: "Inter-Bold", color: Colors.onSurface },
+  secTitle: { fontSize: 18, fontFamily: "Inter-Bold", color: Colors.onSurface },
   secAction: {
     color: Colors.primary,
     fontFamily: "Inter-SemiBold",
-    fontSize: 14,
+    fontSize: 12,
   },
   secCount: {
     color: Colors.onSurfaceVariant,
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: "Inter-Medium",
   },
   marketBento: {
     paddingHorizontal: CONTAINER_PADDING,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: GAP,
+    gap: 10,
   },
   marketCard: {
-    height: 200,
-    borderRadius: 20,
+    height: 140,
+    borderRadius: 14,
     overflow: "hidden",
-    width: (SCREEN_WIDTH - CONTAINER_PADDING * 2 - GAP) / 2,
+    width: (SCREEN_WIDTH - CONTAINER_PADDING * 2 - 10) / 2,
     borderWidth: 1,
     borderColor: Colors.outlineVariant,
   },
@@ -690,85 +1097,86 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.4)",
   },
-  marketContent: { flex: 1, padding: 20, justifyContent: "flex-end" },
+  marketContent: { flex: 1, padding: 12, justifyContent: "flex-end" },
   marketSubText: {
     color: "rgba(255,255,255,0.8)",
-    fontSize: 12,
+    fontSize: 10,
     fontFamily: "Inter-Medium",
     textTransform: "uppercase",
   },
   marketTitleText: {
     color: "#FFF",
-    fontSize: 24,
+    fontSize: 18,
     fontFamily: "Inter-Bold",
-    marginTop: 4,
+    marginTop: 2,
   },
   marketTrendRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 8,
+    gap: 4,
+    marginTop: 4,
   },
-  marketTrendTxt: { fontSize: 14, fontFamily: "Inter-Bold" },
+  marketTrendTxt: { fontSize: 12, fontFamily: "Inter-Bold" },
 
   // ─── Product Card ──────────────────────────
   productRow: {
     paddingHorizontal: CONTAINER_PADDING,
-    gap: GAP,
-    marginBottom: GAP,
+    gap: 10,
+    marginBottom: 10,
   },
   productCard: {
     width: PRODUCT_CARD_WIDTH,
     backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.outlineVariant,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
   productCardDisabled: { opacity: 0.6 },
   productImageArea: {
     width: "100%",
-    height: 140,
+    height: 110,
     backgroundColor: Colors.surfaceContainerLow,
     overflow: "hidden",
   },
   productImg: { width: "100%", height: "100%", resizeMode: "cover" },
-  productInfo: { padding: 16, flexGrow: 1 },
+  productInfo: { padding: 10, flexGrow: 1 },
   productMarketText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "700",
     color: Colors.outline,
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   productNameText: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: "Inter-SemiBold",
     color: Colors.onSurface,
-    marginTop: 4,
-    height: 40,
-    lineHeight: 18,
+    marginTop: 2,
+    height: 32,
+    lineHeight: 15,
+  },
+  productUnit: {
+    fontSize: 10,
+    fontFamily: "Inter-Medium",
+    color: Colors.outline,
+    marginTop: 1,
   },
   cardName: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: "Inter-SemiBold",
     color: Colors.onSurface,
-    lineHeight: 20,
-    marginBottom: 4,
+    lineHeight: 16,
+    marginBottom: 2,
   },
   trendRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginBottom: 12,
-    marginTop: 4,
+    gap: 2,
+    marginBottom: 6,
+    marginTop: 2,
   },
-  trendLabel: { fontSize: 12, fontFamily: "Inter-Bold", color: Colors.primary },
+  trendLabel: { fontSize: 10, fontFamily: "Inter-Bold", color: Colors.primary },
   trendDownColor: { color: "#16A34A" },
   trendUpColor: { color: Colors.error },
   trendFlatColor: { color: Colors.onSurfaceVariant },
@@ -778,63 +1186,53 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cardPrice: {
-    fontSize: 18,
+    fontSize: 15,
     fontFamily: "Inter-Bold",
     color: Colors.onSurface,
   },
   cardUnit: {
-    fontSize: 12,
+    fontSize: 10,
     fontFamily: "Inter-Medium",
     color: Colors.onSurfaceVariant,
   },
   addBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
   },
   addBtnDisabled: { backgroundColor: Colors.surfaceVariant, elevation: 0 },
   pBadge: {
     position: "absolute",
-    top: 12,
-    left: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    top: 6,
+    left: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   pBadgePrimary: { backgroundColor: Colors.primary },
   pBadgeSecondary: { backgroundColor: Colors.secondaryContainer },
   pBadgeTertiary: { backgroundColor: Colors.tertiaryContainer },
   pBadgeError: { backgroundColor: Colors.error },
   pBadgeMuted: { backgroundColor: Colors.surfaceVariant },
-  pBadgeText: { fontSize: 10, fontFamily: "Inter-Bold", color: "#FFF" },
+  pBadgeText: { fontSize: 8, fontFamily: "Inter-Bold", color: "#FFF" },
   heartBtn: {
     position: "absolute",
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    top: 6,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: "rgba(255,255,255,0.8)",
     alignItems: "center",
     justifyContent: "center",
   },
   addToCartBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
@@ -897,78 +1295,77 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     paddingHorizontal: CONTAINER_PADDING,
-    paddingVertical: 40,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: Colors.outlineVariant,
   },
-  statCell: { width: "50%", alignItems: "center", paddingVertical: 24 },
+  statCell: { width: "50%", alignItems: "center", paddingVertical: 8 },
   statVal: {
-    fontSize: 24,
+    fontSize: 18,
     fontFamily: "Inter-Bold",
     color: Colors.onSurface,
-    marginTop: 12,
+    marginTop: 4,
   },
   statLbl: {
-    fontSize: 14,
+    fontSize: 11,
     fontFamily: "Inter-Medium",
     color: Colors.outline,
     textAlign: "center",
-    marginTop: 4,
+    marginTop: 2,
   },
 
   // ─── Footer ────────────────────────────────
   footerSection: {
     paddingHorizontal: CONTAINER_PADDING,
-    paddingVertical: 36,
+    paddingVertical: 8,
     backgroundColor: Colors.surfaceContainerLow,
-    marginTop: 8,
   },
   footerBrand: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 4,
   },
   footerBrandText: {
-    fontSize: 22,
+    fontSize: 16,
     fontFamily: "Inter-Bold",
     color: Colors.primary,
   },
   footerDesc: {
-    fontSize: 13,
+    fontSize: 11,
     fontFamily: "Inter-Regular",
     color: Colors.outline,
-    lineHeight: 20,
-    marginBottom: 20,
+    lineHeight: 14,
+    marginBottom: 6,
   },
   footerInfoSection: {
-    gap: 12,
+    gap: 2,
   },
   footerInfoRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 6,
   },
   footerInfoText: {
-    fontSize: 13,
+    fontSize: 11,
     fontFamily: "Inter-Regular",
     color: Colors.onSurfaceVariant,
   },
   footerDivider: {
     height: 1,
     backgroundColor: Colors.outlineVariant,
-    marginVertical: 24,
+    marginVertical: 6,
   },
   footerSocialRow: {
     flexDirection: "row",
-    gap: 24,
+    gap: 16,
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: 4,
   },
   footerCopyText: {
     textAlign: "center",
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: "Inter-Regular",
     color: Colors.outline,
   },
@@ -1218,4 +1615,135 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   // ─── End Cart Screen ─────────────────
+
+  // ─── Tab Bar ──────────────────────────────
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    paddingHorizontal: CONTAINER_PADDING,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.outlineVariant,
+    gap: 8,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerHigh,
+  },
+  tabItemActive: {
+    backgroundColor: Colors.primary,
+  },
+  tabText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: Colors.onSurfaceVariant,
+  },
+  tabTextActive: {
+    color: Colors.onPrimary,
+  },
+
+  // ─── Search Bar ─────────────────────────
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: CONTAINER_PADDING,
+    marginTop: 16,
+    marginBottom: 4,
+    backgroundColor: Colors.surfaceContainerHighest,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 44,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: Colors.onSurface,
+    height: 44,
+  },
+
+  // ─── Chip Row ───────────────────────────
+  chipRow: {
+    paddingHorizontal: CONTAINER_PADDING,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 100,
+    backgroundColor: Colors.surfaceContainerHigh,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  chipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  chipText: {
+    fontSize: 13,
+    fontFamily: 'Inter-SemiBold',
+    color: Colors.onSurfaceVariant,
+  },
+  chipTextActive: {
+    color: Colors.onPrimary,
+  },
+
+  // ─── Catalog Qty Controls ──────────────
+  catalogQtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 8,
+  },
+  catalogQtyBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catalogQtyText: {
+    fontSize: 15,
+    fontFamily: 'Inter-Bold',
+    color: Colors.onSurface,
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  catalogAddBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ─── Empty Catalog ─────────────────────
+  emptyCatalog: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: CONTAINER_PADDING,
+  },
+  emptyCatalogText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: Colors.onSurfaceVariant,
+    marginTop: 12,
+  },
+  emptyCatalogSub: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    color: Colors.outline,
+    marginTop: 4,
+  },
 });

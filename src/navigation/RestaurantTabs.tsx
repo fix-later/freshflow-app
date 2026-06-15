@@ -63,7 +63,7 @@ export function RestaurantTabs() {
       <Tab.Screen
         name="RestaurantOrders"
         component={OrderListScreen}
-        options={{ title: 'Chợ' }}
+        options={{ headerShown: false }}
       />
       <Tab.Screen
         name="RestaurantPricing"
