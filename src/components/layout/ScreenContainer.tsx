@@ -1,10 +1,11 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, type ReactElement } from 'react';
 import {
   ScrollView,
   StatusBar,
   StyleSheet,
   View,
   type ViewStyle,
+  type RefreshControlProps,
 } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
@@ -17,6 +18,7 @@ export interface ScreenContainerProps {
   safeArea?: boolean;
   edges?: Edge[];
   style?: ViewStyle;
+  refreshControl?: ReactElement<RefreshControlProps>;
 }
 
 export function ScreenContainer({
@@ -27,6 +29,7 @@ export function ScreenContainer({
   safeArea = true,
   edges = ['top'],
   style,
+  refreshControl,
 }: ScreenContainerProps) {
   const contentStyle: ViewStyle[] = [
     { flex: 1, backgroundColor: bgColor },
@@ -42,6 +45,7 @@ export function ScreenContainer({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          refreshControl={refreshControl}
         >
           {children}
         </ScrollView>

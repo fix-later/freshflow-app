@@ -14,18 +14,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { Colors } from "../../../constants/colors";
-import { UserRole } from "../../../constants/roles";
 import { useAuthStore } from "../../../store/authStore";
 import { Button } from "../../../components/ui/Button";
 import { authApi } from "../api/authApi";
-
-// Dev-only: mock users for testing role-based navigation
-const MOCK_USERS: { label: string; role: UserRole }[] = [
-  { label: "Nhà hàng", role: UserRole.RESTAURANT },
-  { label: "Market Agent", role: UserRole.MARKET_AGENT },
-  { label: "Hub Staff", role: UserRole.HUB_STAFF },
-  { label: "Tài xế", role: UserRole.DRIVER },
-];
 
 export function LoginScreen() {
   const navigation = useNavigation();
@@ -33,7 +24,6 @@ export function LoginScreen() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [showDevMode, setShowDevMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
@@ -71,13 +61,6 @@ export function LoginScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleDevLogin = (role: UserRole) => {
-    signIn(
-      { id: "1", email: "dev@freshflow.vn", name: "Dev User", role },
-      "mock-token-dev",
-    );
   };
 
   return (
@@ -201,31 +184,6 @@ export function LoginScreen() {
               </Pressable>
             </View>
           </View>
-
-          {/* ─── Dev Mode ──────────────────── */}
-          <Pressable
-            style={styles.devToggle}
-            onPress={() => setShowDevMode(!showDevMode)}
-          >
-            <Text style={styles.devToggleText}>
-              {showDevMode ? "▲ Ẩn" : "⚙️"} Dev Mode
-            </Text>
-          </Pressable>
-
-          {showDevMode && (
-            <View style={styles.devCard}>
-              <Text style={styles.devTitle}>Chọn vai trò (mock)</Text>
-              {MOCK_USERS.map(({ label, role }) => (
-                <Pressable
-                  key={role}
-                  style={styles.devButton}
-                  onPress={() => handleDevLogin(role)}
-                >
-                  <Text style={styles.devButtonText}>{label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
 
           {/* Bottom spacer */}
           <View style={styles.bottomSpacer} />
@@ -375,46 +333,6 @@ const styles = StyleSheet.create({
     color: Colors.secondary,
   },
 
-  // ─── Dev Mode ────────────────────────────
-  devToggle: {
-    alignSelf: "center",
-    marginTop: 24,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  devToggleText: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    fontWeight: "600",
-  },
-  devCard: {
-    backgroundColor: Colors.surface,
-    marginHorizontal: 20,
-    marginTop: 12,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  devTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.textSecondary,
-    marginBottom: 12,
-    textAlign: "center",
-  },
-  devButton: {
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  devButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: Colors.primary,
-  },
   bottomSpacer: {
     height: 40,
   },
