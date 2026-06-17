@@ -1,0 +1,115 @@
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { Colors } from '../../../constants/colors';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface PriceDashboardHeaderProps {
+  marketName: string;
+  productCount: number;
+  categoryCount?: number;
+  outOfStockCount?: number;
+  pendingCount?: number;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function PriceDashboardHeader({
+  marketName,
+  productCount,
+  categoryCount,
+  outOfStockCount,
+  pendingCount,
+}: PriceDashboardHeaderProps) {
+  return (
+    <View style={styles.summaryHeader}>
+      <Text style={styles.subtitleText}>{marketName}</Text>
+      <View style={styles.statsRow}>
+        <View style={styles.statBox}>
+          <Text style={styles.statVal}>{productCount}</Text>
+          <Text style={styles.statLabel}>Sản phẩm</Text>
+        </View>
+        <View style={styles.statDivider} />
+        {categoryCount !== undefined && (
+          <>
+            <View style={styles.statBox}>
+              <Text style={[styles.statVal, { color: Colors.primary }]}>{categoryCount}</Text>
+              <Text style={styles.statLabel}>Loại sản phẩm</Text>
+            </View>
+            <View style={styles.statDivider} />
+          </>
+        )}
+        {outOfStockCount !== undefined && (
+          <>
+            <View style={styles.statBox}>
+              <Text
+                style={[
+                  styles.statVal,
+                  { color: outOfStockCount > 0 ? Colors.warning : Colors.textPrimary },
+                ]}
+              >
+                {outOfStockCount}
+              </Text>
+              <Text style={styles.statLabel}>Hết hàng</Text>
+            </View>
+            <View style={styles.statDivider} />
+          </>
+        )}
+        {pendingCount !== undefined && pendingCount > 0 && (
+          <View style={styles.statBox}>
+            <Text style={[styles.statVal, { color: Colors.primary }]}>{pendingCount}</Text>
+            <Text style={styles.statLabel}>Chờ lưu</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  summaryHeader: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  subtitleText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    marginBottom: 16,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statVal: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  statDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+  },
+});

@@ -1,17 +1,51 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { MarketAgentHomeScreen } from '../features/inventory/screens/MarketAgentHomeScreen';
-import { InventoryScreen } from '../features/inventory/screens/InventoryScreen';
+import { MarketKiosksScreen } from '../features/inventory/screens/MarketKiosksScreen';
+
 import { UpdatePriceScreen } from '../features/pricing/screens/UpdatePriceScreen';
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
-import { type MarketAgentStackParamList } from './types';
+import { type MarketAgentStackParamList, type MarketHomeStackParamList } from './types';
 import { Colors } from '../constants/colors';
 
 const Tab = createBottomTabNavigator<MarketAgentStackParamList>();
+const HomeStack = createNativeStackNavigator<MarketHomeStackParamList>();
+
+function MarketAgentHomeNavigator() {
+  return (
+    <HomeStack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: Colors.surface,
+        },
+        headerTitleStyle: {
+          fontWeight: '700',
+          fontSize: 16,
+          color: Colors.textPrimary,
+        },
+        headerTintColor: Colors.primary,
+        headerShadowVisible: false,
+      }}
+    >
+      <HomeStack.Screen
+        name="MarketAgentHomeMain"
+        component={MarketAgentHomeScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="MarketKiosks"
+        component={MarketKiosksScreen}
+        options={({ route }) => ({
+          title: route.params?.marketName || 'Danh sách Kiosk',
+        })}
+      />
+    </HomeStack.Navigator>
+  );
+}
 
 const TAB_ICON = {
   MarketAgentHome: { focused: 'home', unfocused: 'home-outline' },
-  MarketAgentInventory: { focused: 'cube', unfocused: 'cube-outline' },
   UpdatePrice: { focused: 'create', unfocused: 'create-outline' },
   MarketAgentProfile: { focused: 'person-circle', unfocused: 'person-circle-outline' },
 } as const;
@@ -45,9 +79,8 @@ export function MarketAgentStack() {
         },
       })}
     >
-      <Tab.Screen name="MarketAgentHome" component={MarketAgentHomeScreen} options={{ title: 'Tổng quan' }} />
-      <Tab.Screen name="MarketAgentInventory" component={InventoryScreen} options={{ title: 'Tồn kho' }} />
-      <Tab.Screen name="UpdatePrice" component={UpdatePriceScreen} options={{ title: 'Cập nhật giá' }} />
+      <Tab.Screen name="MarketAgentHome" component={MarketAgentHomeNavigator} options={{ title: 'Tổng quan', headerShown: false }} />
+      <Tab.Screen name="UpdatePrice" component={UpdatePriceScreen} options={{ title: 'Cập nhật giá', headerShown: false }} />
       <Tab.Screen name="MarketAgentProfile" component={ProfileScreen} options={{ title: 'Hồ sơ' }} />
     </Tab.Navigator>
   );

@@ -13,10 +13,14 @@ export type RestaurantTabParamList = {
   RestaurantProfile: undefined;
 };
 
+export type MarketHomeStackParamList = {
+  MarketAgentHomeMain: undefined;
+  MarketKiosks: { marketId: string; marketName: string };
+};
+
 export type MarketAgentStackParamList = {
   MarketAgentHome: undefined;
-  MarketAgentInventory: undefined;
-  UpdatePrice: { productId?: string } | undefined;
+  UpdatePrice: { productId?: string; marketId?: string } | undefined;
   MarketAgentProfile: undefined;
 };
 

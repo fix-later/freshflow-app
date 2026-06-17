@@ -10,7 +10,6 @@ export const Routes = {
 
   // Market Agent
   MARKET_AGENT_HOME:         'MarketAgentHome',
-  MARKET_AGENT_INVENTORY:    'MarketAgentInventory',
   MARKET_AGENT_UPDATE_PRICE: 'UpdatePrice',
 
   // Hub Staff
