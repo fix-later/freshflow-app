@@ -13,12 +13,13 @@ import {
   View,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Colors } from "../../../constants/colors";
 import { useAuthStore } from "../../../store/authStore";
 import { pricingApi } from "../../pricing/api/pricingApi";
 import type { MarketDto, MarketProductDto, CategoryDto } from "../../../types/api.types";
+import { PaymentScreen } from "./PaymentScreen";
 
 // ─── Configuration ─────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -171,7 +172,7 @@ function formatPrice(p: number) {
 }
 
 // ─── Cart Item Type ────────────────────────────
-interface CartItem {
+export interface CartItem {
   id: string;
   name: string;
   market: string;
@@ -184,7 +185,9 @@ interface CartItem {
 // ─── Screen ────────────────────────────────
 export function OrderListScreen() {
   const { user, signOut } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const [showCart, setShowCart] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
 
   // ── Tab state ────────────────────────────
   const [activeTab, setActiveTab] = useState<'explore' | 'products'>('explore');
@@ -820,9 +823,9 @@ export function OrderListScreen() {
         animationType="slide"
         onRequestClose={() => setShowCart(false)}
       >
-        <SafeAreaView style={styles.cartScreen} edges={['top']}>
+        <SafeAreaView style={styles.cartScreen} edges={['bottom']}>
           {/* Header */}
-          <View style={styles.cartScreenHeader}>
+          <View style={[styles.cartScreenHeader, { paddingTop: insets.top + 10 }]}>
             <Pressable onPress={() => setShowCart(false)} style={styles.cartScreenClose}>
               <MaterialIcons name="arrow-back" size={24} color={Colors.onSurface} />
             </Pressable>
@@ -905,12 +908,36 @@ export function OrderListScreen() {
               <Text style={styles.cartScreenCheckoutLabel}>Tạm tính</Text>
               <Text style={styles.cartScreenCheckoutTotal}>{(cartTotal + 15000).toLocaleString('vi-VN')}đ</Text>
             </View>
-            <Pressable style={styles.cartScreenCheckoutBtn}>
+            <Pressable
+              style={styles.cartScreenCheckoutBtn}
+              onPress={() => {
+                setShowCart(false);
+                setShowPayment(true);
+              }}
+            >
               <Text style={styles.cartScreenCheckoutBtnText}>Tiến hành thanh toán</Text>
             </Pressable>
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* ─── PAYMENT MODAL ─────────────────── */}
+      <PaymentScreen
+        visible={showPayment}
+        cart={cart}
+        subtotal={cartTotal}
+        shippingFee={15000}
+        discount={0}
+        onBack={() => {
+          setShowPayment(false);
+          setShowCart(true);
+        }}
+        onClose={() => setShowPayment(false)}
+        onDone={() => {
+          setCart([]);
+          setShowPayment(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1417,7 +1444,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingBottom: 14,
     backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.outlineVariant,
