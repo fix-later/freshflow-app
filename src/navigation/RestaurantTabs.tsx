@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { OrderListScreen } from '../features/orders/screens/OrderListScreen';
 import { PriceListScreen } from '../features/pricing/screens/PriceListScreen';
 import { TrackOrderScreen } from '../features/delivery/screens/TrackOrderScreen';
@@ -18,47 +19,52 @@ const TAB_CONFIG = {
 } as const;
 
 export function RestaurantTabs() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: true,
-        tabBarStyle: {
-          backgroundColor: Colors.surface,
-          borderTopWidth: 0,
-          elevation: 0,
-          height: 64,
-          paddingBottom: 8,
-          paddingTop: 4,
-        },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '600',
-          marginTop: 2,
-        },
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.onSurfaceVariant,
-        tabBarIcon: ({ focused, size }) => {
-          const config = TAB_CONFIG[route.name as keyof typeof TAB_CONFIG];
-          return (
-            <View
-              style={{
-                width: 56,
-                height: 32,
-                borderRadius: 12,
-                backgroundColor: focused ? 'rgba(0,107,44,0.12)' : 'transparent',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Ionicons
-                name={focused ? config.activeIcon : config.icon}
-                size={focused ? size + 1 : size}
-                color={focused ? Colors.primary : Colors.onSurfaceVariant}
-              />
-            </View>
-          );
-        },
-      })}
+      screenOptions={({ route }) => {
+        const config = TAB_CONFIG[route.name as keyof typeof TAB_CONFIG];
+        return {
+          headerShown: true,
+          tabBarLabel: config?.label,
+          tabBarStyle: {
+            backgroundColor: Colors.surface,
+            borderTopWidth: 0,
+            elevation: 0,
+            height: 64 + (insets.bottom > 0 ? insets.bottom - 8 : 0),
+            paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+            paddingTop: 8,
+          },
+          tabBarLabelStyle: {
+            fontSize: 10,
+            fontWeight: '600',
+            marginTop: 2,
+          },
+          tabBarActiveTintColor: Colors.primary,
+          tabBarInactiveTintColor: Colors.onSurfaceVariant,
+          tabBarIcon: ({ focused, size }) => {
+            return (
+              <View
+                style={{
+                  width: 56,
+                  height: 32,
+                  borderRadius: 12,
+                  backgroundColor: focused ? 'rgba(0,107,44,0.12)' : 'transparent',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons
+                  name={focused ? config.activeIcon : config.icon}
+                  size={focused ? size + 1 : size}
+                  color={focused ? Colors.primary : Colors.onSurfaceVariant}
+                />
+              </View>
+            );
+          },
+        };
+      }}
     >
       <Tab.Screen
         name="RestaurantOrders"

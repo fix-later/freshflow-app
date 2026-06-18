@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MarketAgentHomeScreen } from '../features/inventory/screens/MarketAgentHomeScreen';
 import { MarketKiosksScreen } from '../features/inventory/screens/MarketKiosksScreen';
 
@@ -51,6 +52,8 @@ const TAB_ICON = {
 } as const;
 
 export function MarketAgentStack() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -60,8 +63,8 @@ export function MarketAgentStack() {
         tabBarStyle: {
           borderTopColor: Colors.border,
           backgroundColor: Colors.surface,
-          paddingBottom: 4,
-          height: 56,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 4,
+          height: 56 + (insets.bottom > 0 ? insets.bottom - 4 : 0),
         },
         tabBarLabelStyle: {
           fontSize: 11,

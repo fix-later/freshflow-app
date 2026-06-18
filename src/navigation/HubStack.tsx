@@ -1,5 +1,6 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HubDashboardScreen } from '../features/hub/screens/HubDashboardScreen';
 import { CheckInScreen } from '../features/hub/screens/CheckInScreen';
 import { SortingScreen } from '../features/hub/screens/SortingScreen';
@@ -17,6 +18,8 @@ const TAB_ICON = {
 } as const;
 
 export function HubStack() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -26,8 +29,8 @@ export function HubStack() {
         tabBarStyle: {
           borderTopColor: Colors.border,
           backgroundColor: Colors.surface,
-          paddingBottom: 4,
-          height: 56,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 4,
+          height: 56 + (insets.bottom > 0 ? insets.bottom - 4 : 0),
         },
         tabBarLabelStyle: {
           fontSize: 11,
