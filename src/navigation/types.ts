@@ -13,6 +13,22 @@ export type RestaurantTabParamList = {
   RestaurantProfile: undefined;
 };
 
+export type CreateOrderItem = {
+  marketProductId: string;
+  productName: string;
+  marketName: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  image: string;
+};
+
+export type RestaurantOrdersStackParamList = {
+  OrderList: undefined;
+  CreateOrder: { items: CreateOrderItem[] };
+  OrderDetail: { orderId: string };
+};
+
 export type MarketHomeStackParamList = {
   MarketAgentHomeMain: undefined;
   MarketKiosks: { marketId: string; marketName: string };

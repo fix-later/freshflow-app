@@ -2,10 +2,10 @@ import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { OrderListScreen } from '../features/orders/screens/OrderListScreen';
 import { PriceListScreen } from '../features/pricing/screens/PriceListScreen';
 import { TrackOrderScreen } from '../features/delivery/screens/TrackOrderScreen';
 import { RestaurantProfileTab } from './RestaurantProfileTab';
+import { RestaurantOrdersTab } from './RestaurantOrdersTab';
 import { type RestaurantTabParamList } from './types';
 import { Colors } from '../constants/colors';
 
@@ -33,7 +33,7 @@ export function RestaurantTabs() {
             borderTopWidth: 0,
             elevation: 0,
             height: 64 + (insets.bottom > 0 ? insets.bottom - 8 : 0),
-            paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+            paddingBottom: Math.max(insets.bottom, 16),
             paddingTop: 8,
           },
           tabBarLabelStyle: {
@@ -68,7 +68,7 @@ export function RestaurantTabs() {
     >
       <Tab.Screen
         name="RestaurantOrders"
-        component={OrderListScreen}
+        component={RestaurantOrdersTab}
         options={{ headerShown: false }}
       />
       <Tab.Screen

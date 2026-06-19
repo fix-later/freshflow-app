@@ -15,11 +15,15 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { type NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Colors } from "../../../constants/colors";
 import { useAuthStore } from "../../../store/authStore";
 import { pricingApi } from "../../pricing/api/pricingApi";
 import type { MarketDto, MarketProductDto, CategoryDto } from "../../../types/api.types";
-import { PaymentScreen } from "./PaymentScreen";
+import { type RestaurantOrdersStackParamList } from "../../../navigation/types";
+
+type OrdersNav = NativeStackNavigationProp<RestaurantOrdersStackParamList>;
 
 // ─── Configuration ─────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -186,8 +190,8 @@ export interface CartItem {
 export function OrderListScreen() {
   const { user, signOut } = useAuthStore();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<OrdersNav>();
   const [showCart, setShowCart] = useState(false);
-  const [showPayment, setShowPayment] = useState(false);
 
   // ── Tab state ────────────────────────────
   const [activeTab, setActiveTab] = useState<'explore' | 'products'>('explore');
@@ -912,7 +916,17 @@ export function OrderListScreen() {
               style={styles.cartScreenCheckoutBtn}
               onPress={() => {
                 setShowCart(false);
-                setShowPayment(true);
+                navigation.navigate('CreateOrder', {
+                  items: cart.map(item => ({
+                    marketProductId: item.id,
+                    productName: item.name,
+                    marketName: item.market,
+                    unit: item.unit,
+                    quantity: item.qty,
+                    unitPrice: item.price,
+                    image: item.image,
+                  })),
+                });
               }}
             >
               <Text style={styles.cartScreenCheckoutBtnText}>Tiến hành thanh toán</Text>
@@ -920,24 +934,6 @@ export function OrderListScreen() {
           </View>
         </SafeAreaView>
       </Modal>
-
-      {/* ─── PAYMENT MODAL ─────────────────── */}
-      <PaymentScreen
-        visible={showPayment}
-        cart={cart}
-        subtotal={cartTotal}
-        shippingFee={15000}
-        discount={0}
-        onBack={() => {
-          setShowPayment(false);
-          setShowCart(true);
-        }}
-        onClose={() => setShowPayment(false)}
-        onDone={() => {
-          setCart([]);
-          setShowPayment(false);
-        }}
-      />
     </SafeAreaView>
   );
 }
