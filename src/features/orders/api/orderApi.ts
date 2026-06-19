@@ -53,7 +53,7 @@ export interface OrderListMeta {
 }
 
 export interface CreateOrderPayload {
-  items: { marketProductId: string; quantity: number }[];
+  items: { marketProductId: string; quantity: number; note?: string }[];
   scheduledFor?: string;
   notes?: string;
 }

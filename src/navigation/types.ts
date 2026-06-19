@@ -21,6 +21,7 @@ export type CreateOrderItem = {
   quantity: number;
   unitPrice: number;
   image: string;
+  note?: string;
 };
 
 export type RestaurantOrdersStackParamList = {

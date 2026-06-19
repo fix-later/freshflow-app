@@ -184,6 +184,7 @@ export interface CartItem {
   price: number;
   qty: number;
   image: string;
+  note?: string;
 }
 
 // ─── Screen ────────────────────────────────
@@ -233,6 +234,10 @@ export function OrderListScreen() {
   };
 
   const getCartQty = (productName: string) => cart.find(c => c.name === productName)?.qty ?? 0;
+
+  const updateItemNote = (itemId: string, note: string) => {
+    setCart(prev => prev.map(c => c.id === itemId ? { ...c, note } : c));
+  };
 
   // ── API state for products tab ────────────
   const [apiMarkets, setApiMarkets] = useState<MarketDto[]>([]);
@@ -847,25 +852,35 @@ export function OrderListScreen() {
             contentContainerStyle={styles.cartScreenList}
             renderItem={({ item }) => (
               <View style={styles.cartScreenItem}>
-                <Image source={{ uri: item.image }} style={styles.cartScreenItemImg} />
-                <View style={styles.cartScreenItemInfo}>
-                  <Text style={styles.cartScreenItemName}>{item.name}</Text>
-                  <Text style={styles.cartScreenItemMarket}>{item.market} • {item.unit}</Text>
-                  <Text style={styles.cartScreenItemPrice}>
-                    {(item.price * item.qty).toLocaleString('vi-VN')}đ
-                  </Text>
+                <View style={styles.cartScreenItemRow}>
+                  <Image source={{ uri: item.image }} style={styles.cartScreenItemImg} />
+                  <View style={styles.cartScreenItemInfo}>
+                    <Text style={styles.cartScreenItemName}>{item.name}</Text>
+                    <Text style={styles.cartScreenItemMarket}>{item.market} • {item.unit}</Text>
+                    <Text style={styles.cartScreenItemPrice}>
+                      {(item.price * item.qty).toLocaleString('vi-VN')}đ
+                    </Text>
+                  </View>
+                  <View style={styles.cartScreenItemQty}>
+                    <Pressable style={styles.cartScreenQtyBtn} onPress={() => removeFromCart(item.name)}>
+                      <MaterialIcons name="remove" size={16} color={Colors.primary} />
+                    </Pressable>
+                    <Text style={styles.cartScreenQtyText}>{item.qty}</Text>
+                    <Pressable style={styles.cartScreenQtyBtn} onPress={() => {
+                      setCart(prev => prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c));
+                    }}>
+                      <MaterialIcons name="add" size={16} color={Colors.primary} />
+                    </Pressable>
+                  </View>
                 </View>
-                <View style={styles.cartScreenItemQty}>
-                  <Pressable style={styles.cartScreenQtyBtn} onPress={() => removeFromCart(item.name)}>
-                    <MaterialIcons name="remove" size={16} color={Colors.primary} />
-                  </Pressable>
-                  <Text style={styles.cartScreenQtyText}>{item.qty}</Text>
-                  <Pressable style={styles.cartScreenQtyBtn} onPress={() => {
-                    setCart(prev => prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c));
-                  }}>
-                    <MaterialIcons name="add" size={16} color={Colors.primary} />
-                  </Pressable>
-                </View>
+                <TextInput
+                  style={styles.cartScreenItemNote}
+                  placeholder="Ghi chú sản phẩm (tùy chọn)..."
+                  placeholderTextColor={Colors.outline}
+                  value={item.note ?? ''}
+                  onChangeText={(text) => updateItemNote(item.id, text)}
+                  maxLength={200}
+                />
               </View>
             )}
             ListHeaderComponent={
@@ -925,6 +940,7 @@ export function OrderListScreen() {
                     quantity: item.qty,
                     unitPrice: item.price,
                     image: item.image,
+                    note: item.note,
                   })),
                 });
               }}
@@ -1467,8 +1483,7 @@ const styles = StyleSheet.create({
     paddingBottom: 180,
   },
   cartScreenItem: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "column",
     backgroundColor: Colors.surface,
     marginHorizontal: 16,
     marginTop: 12,
@@ -1476,7 +1491,22 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.outlineVariant,
+    gap: 10,
+  },
+  cartScreenItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
+  },
+  cartScreenItemNote: {
+    fontSize: 12,
+    color: Colors.onSurface,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: Colors.surfaceContainerLowest,
   },
   cartScreenItemImg: {
     width: 60,

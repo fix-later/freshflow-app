@@ -65,16 +65,24 @@ function SuccessView({ orderId, onDone }: { orderId: string; onDone: () => void 
 function ItemRow({ item }: { item: CreateOrderItem }) {
   return (
     <View style={styles.itemRow}>
-      <Image source={{ uri: item.image }} style={styles.itemImg} />
-      <View style={styles.itemInfo}>
-        <Text style={styles.itemName} numberOfLines={2}>{item.productName}</Text>
-        <Text style={styles.itemMeta}>{item.marketName} • {item.unit}</Text>
-        <Text style={styles.itemPrice}>{(item.unitPrice * item.quantity).toLocaleString('vi-VN')}đ</Text>
+      <View style={styles.itemMainRow}>
+        <Image source={{ uri: item.image }} style={styles.itemImg} />
+        <View style={styles.itemInfo}>
+          <Text style={styles.itemName} numberOfLines={2}>{item.productName}</Text>
+          <Text style={styles.itemMeta}>{item.marketName} • {item.unit}</Text>
+          <Text style={styles.itemPrice}>{(item.unitPrice * item.quantity).toLocaleString('vi-VN')}đ</Text>
+        </View>
+        <View style={styles.itemQtyWrap}>
+          <Text style={styles.itemQtyLabel}>SL</Text>
+          <Text style={styles.itemQty}>{item.quantity}</Text>
+        </View>
       </View>
-      <View style={styles.itemQtyWrap}>
-        <Text style={styles.itemQtyLabel}>SL</Text>
-        <Text style={styles.itemQty}>{item.quantity}</Text>
-      </View>
+      {item.note ? (
+        <View style={styles.itemNoteWrap}>
+          <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textMuted} />
+          <Text style={styles.itemNote}>{item.note}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -105,7 +113,7 @@ export function CreateOrderScreen({ route, navigation }: Props) {
     try {
       const scheduledFor = buildScheduledFor(timeOption, customTime.trim());
       const result = await orderApi.create({
-        items: items.map(it => ({ marketProductId: it.marketProductId, quantity: it.quantity })),
+        items: items.map(it => ({ marketProductId: it.marketProductId, quantity: it.quantity, note: it.note })),
         scheduledFor,
         notes: notes.trim() || undefined,
       });
@@ -263,7 +271,10 @@ const styles = StyleSheet.create({
   separator: { height: 1, backgroundColor: Colors.surfaceVariant, marginHorizontal: 12 },
 
   // Items
-  itemRow: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
+  itemRow: { flexDirection: 'column', padding: 12, gap: 8 },
+  itemMainRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  itemNoteWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 2 },
+  itemNote: { fontSize: 11, color: Colors.textMuted, fontStyle: 'italic', flex: 1 },
   itemImg: { width: 56, height: 56, borderRadius: 10, backgroundColor: Colors.surfaceVariant },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 13, fontWeight: '600', color: Colors.onSurface, marginBottom: 2 },
