@@ -34,6 +34,7 @@ export type RestaurantOrdersStackParamList = {
     notes?: string;
   };
   OrderDetail: { orderId: string };
+  OrderHistory: undefined;
 };
 
 export type MarketHomeStackParamList = {

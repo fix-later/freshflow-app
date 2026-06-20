@@ -501,6 +501,13 @@ export function OrderListScreen() {
             <Text style={styles.headerLogoText}>FreshFlow</Text>
           </View>
           <View style={styles.headerIcons}>
+            <Pressable style={styles.hIconButton} onPress={() => navigation.navigate('OrderHistory')}>
+              <Ionicons
+                name="time-outline"
+                size={23}
+                color={Colors.onSurfaceVariant}
+              />
+            </Pressable>
             <Pressable style={styles.hIconButton}>
               <MaterialIcons
                 name="notifications"

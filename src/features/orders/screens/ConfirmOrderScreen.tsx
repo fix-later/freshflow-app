@@ -50,8 +50,8 @@ function CutoffBanner() {
   const title = isPast
     ? 'Đã qua cutoff hôm nay'
     : isSafe
-    ? 'Kịp cutoff hôm nay'
-    : `Còn ${hoursLeft}g ${minutesLeft}p để đặt`;
+      ? 'Kịp cutoff hôm nay'
+      : `Còn ${hoursLeft}g ${minutesLeft}p để đặt`;
   const sub = isPast
     ? `Đơn sẽ giao sáng ngày ${nextLabel} lúc 5:00`
     : `Đặt trước 22:00 → giao sáng ${nextLabel} lúc 5:00`;
@@ -126,7 +126,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         notes,
       });
       console.log('Order creation result:', result);
-      
+
       // Extract order ID with robust envelope fallback check
       const orderId = result?.orderId || result?.id || (result as any)?.data?.orderId || (result as any)?.data?.id || 'SUCCESS';
       clearCart();

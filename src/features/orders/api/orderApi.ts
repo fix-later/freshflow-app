@@ -38,7 +38,8 @@ export interface OrderDto {
 }
 
 export interface OrderListItemDto {
-  id: string;
+  id?: string;
+  orderId?: string;
   restaurantId: string;
   restaurantName: string;
   status: OrderStatus;

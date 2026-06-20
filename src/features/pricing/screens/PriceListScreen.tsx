@@ -225,7 +225,10 @@ export function PriceListScreen() {
           </View>
           <Text style={styles.headerTitle}>Mua hàng</Text>
         </View>
-        <Pressable style={styles.historyBtn}>
+        <Pressable
+          style={styles.historyBtn}
+          onPress={() => navigation.navigate('RestaurantOrders', { screen: 'OrderHistory' })}
+        >
           <Ionicons name="time-outline" size={20} color={Colors.textPrimary} />
         </Pressable>
       </View>
