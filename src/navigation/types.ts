@@ -27,6 +27,12 @@ export type CreateOrderItem = {
 export type RestaurantOrdersStackParamList = {
   OrderList: undefined;
   CreateOrder: { items: CreateOrderItem[] };
+  ConfirmOrder: {
+    items: CreateOrderItem[];
+    scheduledFor?: string;
+    deliveryLabel: string;
+    notes?: string;
+  };
   OrderDetail: { orderId: string };
 };
 

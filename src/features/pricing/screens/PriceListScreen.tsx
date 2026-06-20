@@ -9,12 +9,15 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../../constants/colors';
 import { pricingApi } from '../api/pricingApi';
+import { useCartStore } from '../../../store/cartStore';
 import type { MarketDto, MarketProductDto, CategoryDto } from '../../../types/api.types';
 
 // ─── Assets ────────────────────────────────
@@ -35,8 +38,8 @@ const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 function getMarketImage(name: string): string | undefined {
   const key = name.toLowerCase().includes('hóc') ? 'hoc-mon'
     : name.toLowerCase().includes('bình') ? 'binh-dien'
-    : name.toLowerCase().includes('thủ') ? 'thu-duc'
-    : undefined;
+      : name.toLowerCase().includes('thủ') ? 'thu-duc'
+        : undefined;
   return key ? MARKET_IMAGES[key] : undefined;
 }
 
@@ -91,9 +94,21 @@ export function PriceListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Cart state ──────────────────────────
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // ── Global cart state ──────────────────
+  const {
+    cart,
+    cartCount,
+    cartTotal,
+    addToCart: globalAddToCart,
+    removeFromCart: globalRemoveFromCart,
+    updateItemQty,
+    updateItemNote,
+    clearCart,
+  } = useCartStore();
+
   const [showCart, setShowCart] = useState(false);
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
 
   // ── Derived market name ─────────────────
   const selectedMarketName = useMemo(() => {
@@ -155,36 +170,23 @@ export function PriceListScreen() {
 
   // ── Cart helpers ────────────────────────
   const getQuantity = (productId: string) =>
-    cart.find((c) => c.product.marketProductId === productId)?.quantity ?? 0;
+    cart.find((c) => c.id === productId)?.qty ?? 0;
 
   const addToCart = (product: MarketProductDto) => {
-    setCart((prev) => {
-      const existing = prev.find((c) => c.product.marketProductId === product.marketProductId);
-      if (existing) {
-        return prev.map((c) =>
-          c.product.marketProductId === product.marketProductId
-            ? { ...c, quantity: c.quantity + 1 }
-            : c,
-        );
-      }
-      return [...prev, { product, quantity: 1 }];
+    const marketName = markets.find((m) => m.id === product.marketId)?.name ?? '';
+    globalAddToCart({
+      id: product.marketProductId,
+      name: product.productName,
+      market: marketName,
+      unit: product.unit,
+      price: product.currentPrice,
+      image: productImage(products.indexOf(product)),
     });
   };
 
   const removeFromCart = (productId: string) => {
-    setCart((prev) => {
-      const existing = prev.find((c) => c.product.marketProductId === productId);
-      if (existing && existing.quantity <= 1) {
-        return prev.filter((c) => c.product.marketProductId !== productId);
-      }
-      return prev.map((c) =>
-        c.product.marketProductId === productId ? { ...c, quantity: c.quantity - 1 } : c,
-      );
-    });
+    globalRemoveFromCart(productId);
   };
-
-  const cartTotal = cart.reduce((sum, item) => sum + item.product.currentPrice * item.quantity, 0);
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   // ── Render: Loading ──────────────────────
   if (loading && markets.length === 0) {
@@ -376,82 +378,142 @@ export function PriceListScreen() {
         </View>
       )}
 
-      {/* ─── Cart bottom bar ─────────────────── */}
+      {/* ─── FLOATING CART FAB ─────────────── */}
       {cartCount > 0 && (
-        <Pressable style={styles.cartBar} onPress={() => setShowCart(true)}>
-          <View style={styles.cartBarLeft}>
-            <View style={styles.cartBadge}>
-              <Ionicons name="cart" size={18} color={Colors.onPrimary} />
-              <Text style={styles.cartBadgeText}>{cartCount}</Text>
-            </View>
-            <Text style={styles.cartBarTitle}>Xem giỏ hàng</Text>
+        <Pressable style={styles.cartFab} onPress={() => setShowCart(true)}>
+          <MaterialIcons name="shopping-cart" size={24} color="#FFF" />
+          <View style={styles.cartFabBadge}>
+            <Text style={styles.cartFabBadgeText}>{cartCount}</Text>
           </View>
-          <Text style={styles.cartBarTotal}>{formatPrice(cartTotal)}</Text>
         </Pressable>
       )}
 
-      {/* ─── Cart Modal ──────────────────────── */}
+      {/* ─── CART FULL SCREEN MODAL ────────── */}
       <Modal
         visible={showCart}
         animationType="slide"
-        transparent
         onRequestClose={() => setShowCart(false)}
       >
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setShowCart(false)} />
-          <View style={styles.modalSheet}>
-            {/* Handle */}
-            <View style={styles.modalHandle} />
-
-            {/* Header */}
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Giỏ hàng ({cartCount})</Text>
-              <Pressable onPress={() => setCart([])}>
-                <Text style={styles.modalClear}>Xoá tất cả</Text>
-              </Pressable>
-            </View>
-
-            {/* Items */}
-            <FlatList
-              data={cart}
-              keyExtractor={(item) => item.product.marketProductId}
-              contentContainerStyle={styles.modalList}
-              renderItem={({ item }) => (
-                <View style={styles.cartItem}>
-                  <Image source={{ uri: productImage(0) }} style={styles.cartItemImage} />
-                  <View style={styles.cartItemInfo}>
-                    <Text style={styles.cartItemName}>{item.product.productName}</Text>
-                    <Text style={styles.cartItemUnit}>{item.product.unit}</Text>
-                  </View>
-                  <View style={styles.cartQtyCol}>
-                    <Pressable style={styles.cartQtyBtn} onPress={() => addToCart(item.product)}>
-                      <Ionicons name="add" size={16} color={Colors.primary} />
-                    </Pressable>
-                    <Text style={styles.cartQtyText}>{item.quantity}</Text>
-                    <Pressable style={styles.cartQtyBtn} onPress={() => removeFromCart(item.product.marketProductId)}>
-                      <Ionicons name="remove" size={16} color={Colors.primary} />
-                    </Pressable>
-                  </View>
-                  <Text style={styles.cartItemPrice}>
-                    {formatPrice(item.product.currentPrice * item.quantity)}
-                  </Text>
-                </View>
-              )}
-            />
-
-            {/* Total + Place order */}
-            <View style={styles.modalFooter}>
-              <View>
-                <Text style={styles.modalTotalLabel}>Tạm tính</Text>
-                <Text style={styles.modalTotal}>{formatPrice(cartTotal)}</Text>
-              </View>
-              <Pressable style={styles.orderBtn}>
-                <Ionicons name="receipt" size={18} color={Colors.onPrimary} />
-                <Text style={styles.orderBtnText}>Đặt hàng</Text>
-              </Pressable>
-            </View>
+        <SafeAreaView style={styles.cartScreen} edges={['bottom']}>
+          {/* Header */}
+          <View style={[styles.cartScreenHeader, { paddingTop: insets.top + 10 }]}>
+            <Pressable onPress={() => setShowCart(false)} style={styles.cartScreenClose}>
+              <MaterialIcons name="arrow-back" size={24} color={Colors.onSurface} />
+            </Pressable>
+            <Text style={styles.cartScreenTitle}>Giỏ hàng ({cartCount})</Text>
+            <Pressable onPress={clearCart}>
+              <Text style={styles.cartScreenClear}>Xoá tất cả</Text>
+            </Pressable>
           </View>
-        </View>
+
+          {/* Body */}
+          <FlatList
+            data={cart}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.cartScreenList}
+            renderItem={({ item }) => (
+              <View style={styles.cartScreenItem}>
+                <View style={styles.cartScreenItemRow}>
+                  <Image source={{ uri: item.image }} style={styles.cartScreenItemImg} />
+                  <View style={styles.cartScreenItemInfo}>
+                    <Text style={styles.cartScreenItemName}>{item.name}</Text>
+                    <Text style={styles.cartScreenItemMarket}>{item.market} • {item.unit}</Text>
+                    <Text style={styles.cartScreenItemPrice}>
+                      {formatPrice(item.price * item.qty)}
+                    </Text>
+                  </View>
+                  <View style={styles.cartScreenItemQty}>
+                    <Pressable style={styles.cartScreenQtyBtn} onPress={() => globalRemoveFromCart(item.id)}>
+                      <MaterialIcons name="remove" size={16} color={Colors.primary} />
+                    </Pressable>
+                    <Text style={styles.cartScreenQtyText}>{item.qty}</Text>
+                    <Pressable style={styles.cartScreenQtyBtn} onPress={() => {
+                      globalAddToCart(item);
+                    }}>
+                      <MaterialIcons name="add" size={16} color={Colors.primary} />
+                    </Pressable>
+                  </View>
+                </View>
+                <TextInput
+                  style={styles.cartScreenItemNote}
+                  placeholder="Ghi chú sản phẩm (tùy chọn)..."
+                  placeholderTextColor={Colors.outline}
+                  value={item.note ?? ''}
+                  onChangeText={(text) => updateItemNote(item.id, text)}
+                  maxLength={200}
+                />
+              </View>
+            )}
+            ListHeaderComponent={
+              <View style={styles.cartScreenVoucherSection}>
+                <View style={styles.cartScreenVoucherRow}>
+                  <MaterialIcons name="discount" size={18} color={Colors.outline} />
+                  <TextInput
+                    style={styles.cartScreenVoucherInput}
+                    placeholder="Nhập mã giảm giá"
+                    placeholderTextColor={Colors.outline}
+                  />
+                  <Pressable style={styles.cartScreenVoucherBtn}>
+                    <Text style={styles.cartScreenVoucherBtnText}>Áp dụng</Text>
+                  </Pressable>
+                </View>
+              </View>
+            }
+            ListFooterComponent={
+              <View style={styles.cartScreenSummary}>
+                <View style={styles.cartScreenSummaryRow}>
+                  <Text style={styles.cartScreenSummaryLabel}>Tạm tính</Text>
+                  <Text style={styles.cartScreenSummaryValue}>{formatPrice(cartTotal)}</Text>
+                </View>
+                <View style={styles.cartScreenSummaryRow}>
+                  <Text style={styles.cartScreenSummaryLabel}>Phí vận chuyển</Text>
+                  <Text style={styles.cartScreenSummaryValue}>Sẽ xác nhận sau</Text>
+                </View>
+                <View style={styles.cartScreenSummaryRow}>
+                  <Text style={styles.cartScreenSummaryLabel}>Giảm giá</Text>
+                  <Text style={[styles.cartScreenSummaryValue, { color: Colors.error }]}>– 0đ</Text>
+                </View>
+                <View style={styles.cartScreenSummaryDivider} />
+                <View style={styles.cartScreenSummaryRow}>
+                  <Text style={styles.cartScreenSummaryTotal}>Tổng cộng</Text>
+                  <Text style={styles.cartScreenSummaryTotalValue}>{formatPrice(cartTotal)}</Text>
+                </View>
+              </View>
+            }
+          />
+
+          {/* Footer Bar */}
+          <View style={styles.cartScreenCheckoutBar}>
+            <View>
+              <Text style={styles.cartScreenCheckoutLabel}>Tạm tính</Text>
+              <Text style={styles.cartScreenCheckoutTotal}>{formatPrice(cartTotal)}</Text>
+            </View>
+            <Pressable
+              style={styles.cartScreenCheckoutBtn}
+              onPress={() => {
+                setShowCart(false);
+                navigation.navigate('RestaurantOrders', {
+                  screen: 'CreateOrder',
+                  params: {
+                    items: cart.map(item => ({
+                      marketProductId: item.id,
+                      productName: item.name,
+                      marketName: item.market,
+                      unit: item.unit,
+                      quantity: item.qty,
+                      unitPrice: item.price,
+                      image: item.image,
+                      note: item.note,
+                    })),
+                  },
+                });
+              }}
+            >
+              <Text style={styles.cartScreenCheckoutBtnText}>Tiến hành thanh toán</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -753,181 +815,258 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
-  // ─── Cart bottom bar ────────────────────
-  cartBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  // ─── Floating Cart FAB ────────────────────
+  cartFab: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 24,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: Colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    paddingBottom: 28,
-  },
-  cartBarLeft: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
-  cartBadge: {
-    flexDirection: 'row',
+  cartFabBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.error,
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    borderWidth: 2.5,
+    borderColor: Colors.background,
   },
-  cartBadgeText: {
-    fontSize: 14,
+  cartFabBadgeText: {
+    color: '#FFF',
+    fontSize: 11,
     fontWeight: '700',
-    color: Colors.onPrimary,
-  },
-  cartBarTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.onPrimary,
-  },
-  cartBarTotal: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.onPrimary,
   },
 
-  // ─── Cart Modal ─────────────────────────
-  modalOverlay: {
+  // ─── Cart Full Screen ───────────────────
+  cartScreen: {
     flex: 1,
-    justifyContent: 'flex-end',
+    backgroundColor: Colors.background,
   },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  modalSheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '70%',
-    paddingBottom: 34,
-  },
-  modalHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.outlineVariant,
-    alignSelf: 'center',
-    marginTop: 10,
-  },
-  modalHeader: {
+  cartScreenHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingBottom: 14,
+    backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.outlineVariant,
   },
-  modalTitle: {
+  cartScreenClose: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceContainerHigh,
+  },
+  cartScreenTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: Colors.onSurface,
   },
-  modalClear: {
-    fontSize: 13,
+  cartScreenClear: {
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.error,
   },
-  modalList: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    gap: 12,
+  cartScreenList: {
+    paddingBottom: 180,
   },
-  cartItem: {
+  cartScreenItem: {
+    flexDirection: 'column',
+    backgroundColor: Colors.surface,
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    gap: 10,
+  },
+  cartScreenItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 8,
   },
-  cartItemImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
+  cartScreenItemNote: {
+    fontSize: 12,
+    color: Colors.onSurface,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: Colors.surfaceContainerLowest,
+  },
+  cartScreenItemImg: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
     backgroundColor: Colors.surfaceContainerHigh,
   },
-  cartItemInfo: {
+  cartScreenItemInfo: {
     flex: 1,
+    gap: 2,
   },
-  cartItemName: {
+  cartScreenItemName: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: Colors.onSurface,
   },
-  cartItemUnit: {
-    fontSize: 11,
+  cartScreenItemMarket: {
+    fontSize: 12,
     color: Colors.outline,
-    marginTop: 1,
   },
-  cartQtyCol: {
+  cartScreenItemPrice: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.onSurface,
+    marginTop: 4,
+  },
+  cartScreenItemQty: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  cartQtyBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+  cartScreenQtyBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primary,
   },
-  cartQtyText: {
-    fontSize: 14,
+  cartScreenQtyText: {
+    fontSize: 15,
     fontWeight: '700',
-    color: Colors.textPrimary,
-    minWidth: 20,
+    color: Colors.onSurface,
+    minWidth: 24,
     textAlign: 'center',
   },
-  cartItemPrice: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: Colors.primary,
-    minWidth: 80,
-    textAlign: 'right',
+  cartScreenVoucherSection: {
+    backgroundColor: Colors.surface,
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
   },
-  modalFooter: {
+  cartScreenVoucherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  cartScreenVoucherInput: {
+    flex: 1,
+    height: 40,
+    backgroundColor: Colors.surfaceContainerHigh,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: Colors.onSurface,
+  },
+  cartScreenVoucherBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  cartScreenVoucherBtnText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  cartScreenSummary: {
+    backgroundColor: Colors.surface,
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    gap: 12,
+  },
+  cartScreenSummaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  cartScreenSummaryLabel: {
+    fontSize: 14,
+    color: Colors.outline,
+  },
+  cartScreenSummaryValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.onSurface,
+  },
+  cartScreenSummaryDivider: {
+    height: 1,
+    backgroundColor: Colors.outlineVariant,
+    marginVertical: 4,
+  },
+  cartScreenSummaryTotal: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  cartScreenSummaryTotalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  cartScreenCheckoutBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.surface,
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingVertical: 16,
+    paddingBottom: 32,
     borderTopWidth: 1,
     borderTopColor: Colors.outlineVariant,
-    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  modalTotalLabel: {
+  cartScreenCheckoutLabel: {
     fontSize: 12,
     color: Colors.outline,
   },
-  modalTotal: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.textPrimary,
+  cartScreenCheckoutTotal: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.onSurface,
   },
-  orderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  cartScreenCheckoutBtn: {
     backgroundColor: Colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 14,
   },
-  orderBtnText: {
-    fontSize: 15,
+  cartScreenCheckoutBtnText: {
+    color: '#FFF',
     fontWeight: '700',
-    color: Colors.onPrimary,
+    fontSize: 15,
   },
 });

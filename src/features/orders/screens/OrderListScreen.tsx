@@ -19,6 +19,7 @@ import { useNavigation } from "@react-navigation/native";
 import { type NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Colors } from "../../../constants/colors";
 import { useAuthStore } from "../../../store/authStore";
+import { useCartStore } from "../../../store/cartStore";
 import { pricingApi } from "../../pricing/api/pricingApi";
 import type { MarketDto, MarketProductDto, CategoryDto } from "../../../types/api.types";
 import { type RestaurantOrdersStackParamList } from "../../../navigation/types";
@@ -202,42 +203,37 @@ export function OrderListScreen() {
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState('');
 
-  // ── Real cart state (seeded with demo) ───
-  const [cart, setCart] = useState<CartItem[]>([
-    { id: '1', name: 'Cà chua VietGAP Hóc Môn', market: 'Hóc Môn', unit: 'Kg', price: 25000, qty: 2, image: IMAGES.product1 },
-    { id: '2', name: 'Khoai tây Đà Lạt Loại 1', market: 'Đà Lạt', unit: 'Kg', price: 18500, qty: 1, image: IMAGES.product2 },
-    { id: '3', name: 'Nấm đùi gà xuất khẩu', market: 'Hóc Môn', unit: 'Kg', price: 65000, qty: 1, image: IMAGES.product3 },
-  ]);
-
-  // ── Cart helpers ─────────────────────────
-  const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.qty, 0), [cart]);
-  const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.qty, 0), [cart]);
+  // ── Global cart state ───
+  const {
+    cart,
+    cartCount,
+    cartTotal,
+    addToCart: globalAddToCart,
+    removeFromCart: globalRemoveFromCart,
+    updateItemQty,
+    updateItemNote,
+    clearCart,
+  } = useCartStore();
 
   const addToCart = (product: typeof PRODUCTS[0]) => {
-    setCart(prev => {
-      const existing = prev.find(c => c.name === product.name);
-      if (existing) {
-        return prev.map(c => c.name === product.name ? { ...c, qty: c.qty + 1 } : c);
-      }
-      return [...prev, { id: product.id, name: product.name, market: product.market, unit: 'Kg', price: product.price, qty: 1, image: product.image }];
+    globalAddToCart({
+      id: product.id,
+      name: product.name,
+      market: product.market,
+      unit: 'Kg',
+      price: product.price,
+      image: product.image,
     });
   };
 
   const removeFromCart = (productName: string) => {
-    setCart(prev => {
-      const existing = prev.find(c => c.name === productName);
-      if (existing && existing.qty <= 1) {
-        return prev.filter(c => c.name !== productName);
-      }
-      return prev.map(c => c.name === productName ? { ...c, qty: c.qty - 1 } : c);
-    });
+    const item = cart.find(c => c.name === productName);
+    if (item) {
+      globalRemoveFromCart(item.id);
+    }
   };
 
   const getCartQty = (productName: string) => cart.find(c => c.name === productName)?.qty ?? 0;
-
-  const updateItemNote = (itemId: string, note: string) => {
-    setCart(prev => prev.map(c => c.id === itemId ? { ...c, note } : c));
-  };
 
   // ── API state for products tab ────────────
   const [apiMarkets, setApiMarkets] = useState<MarketDto[]>([]);
@@ -310,22 +306,13 @@ export function OrderListScreen() {
   // ── Add API product to cart ───────────────
   const addApiToCart = (product: MarketProductDto) => {
     const marketName = apiMarkets.find(m => m.id === product.marketId)?.name ?? '';
-    setCart(prev => {
-      const existing = prev.find(c => c.id === product.marketProductId);
-      if (existing) {
-        return prev.map(c =>
-          c.id === product.marketProductId ? { ...c, qty: c.qty + 1 } : c,
-        );
-      }
-      return [...prev, {
-        id: product.marketProductId,
-        name: product.productName,
-        market: marketName,
-        unit: product.unit,
-        price: product.currentPrice,
-        qty: 1,
-        image: productImage(apiProducts.indexOf(product)),
-      }];
+    globalAddToCart({
+      id: product.marketProductId,
+      name: product.productName,
+      market: marketName,
+      unit: product.unit,
+      price: product.currentPrice,
+      image: productImage(apiProducts.indexOf(product)),
     });
   };
 
@@ -433,6 +420,7 @@ export function OrderListScreen() {
               item.outOfStock && styles.addToCartDisabled,
             ]}
             disabled={item.outOfStock}
+            onPress={() => addToCart(item)}
           >
             <MaterialIcons
               name={item.outOfStock ? "block" : "add-shopping-cart"}
@@ -478,11 +466,7 @@ export function OrderListScreen() {
               {qty > 0 ? (
                 <>
                   <Pressable style={styles.catalogQtyBtn} onPress={() => {
-                    setCart(prev => {
-                      const existing = prev.find(c => c.id === item.marketProductId);
-                      if (existing && existing.qty <= 1) return prev.filter(c => c.id !== item.marketProductId);
-                      return prev.map(c => c.id === item.marketProductId ? { ...c, qty: c.qty - 1 } : c);
-                    });
+                    globalRemoveFromCart(item.marketProductId);
                   }}>
                     <Ionicons name="remove" size={16} color="#FFF" />
                   </Pressable>
@@ -549,281 +533,281 @@ export function OrderListScreen() {
       </View>
 
       {activeTab === 'explore' ? (
-      <FlatList
-        data={PRODUCTS}
-        renderItem={renderProduct}
-        keyExtractor={(p) => p.id}
-        numColumns={2}
-        columnWrapperStyle={styles.productRow}
-        contentContainerStyle={styles.mainScroll}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <>
-            {/* ─── HERO ALERT ────────────────────── */}
-            <View style={styles.heroBox}>
-              <Image source={{ uri: IMAGES.hero }} style={styles.heroImg} />
-              <View style={styles.heroOverlay} />
-              <View style={styles.heroContent}>
-                <View style={styles.heroAlertTag}>
-                  <Text style={styles.heroAlertTagText}>Cảnh báo giá giảm</Text>
-                </View>
-                <Text style={styles.heroTitle}>
-                  Ưu đãi đặt hàng sớm - Giảm 15% tất cả mặt hàng Rau Củ
-                </Text>
-                <Text style={styles.heroSub}>
-                  Đặt hàng trước 22:00 hôm nay để nhận ưu đãi tốt nhất từ Chợ
-                  Đầu Mối Hóc Môn.
-                </Text>
-                <Pressable style={styles.heroButton}>
-                  <Text style={styles.heroButtonText}>Đặt hàng ngay</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {/* ─── BENTO MARKETS ─────────────────── */}
-            <View style={styles.secTitleRow}>
-              <Text style={styles.secTitle}>Thị trường Đầu Mối</Text>
-              <Text style={styles.secAction}>Xem bản đồ giá</Text>
-            </View>
-            <View style={styles.marketBento}>
-              {MARKETS.map((m, i) => (
-                <View
-                  key={m.id}
-                  style={[styles.marketCard, i === 0 && styles.marketCardWide]}
-                >
-                  <Image source={{ uri: m.image }} style={styles.marketImg} />
-                  <View style={styles.marketMask} />
-                  <View style={styles.marketContent}>
-                    <Text style={styles.marketSubText}>{m.subtitle}</Text>
-                    <Text style={styles.marketTitleText}>{m.name}</Text>
-                    <View style={styles.marketTrendRow}>
-                      <MaterialIcons
-                        name={
-                          m.type === "down" ? "trending-down" : "trending-up"
-                        }
-                        size={16}
-                        color={m.type === "down" ? "#4ADE80" : "#FBBF24"}
-                      />
-                      <Text
-                        style={[
-                          styles.marketTrendTxt,
-                          { color: m.type === "down" ? "#4ADE80" : "#FBBF24" },
-                        ]}
-                      >
-                        {m.trend}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            {/* ─── PRODUCT LIST HEADER ────────────── */}
-            <View style={styles.secTitleRow}>
-              <Text style={styles.secTitle}>Hàng Sáng Nay</Text>
-              <Text style={styles.secCount}>24 Items</Text>
-            </View>
-          </>
-        }
-        ListFooterComponent={
-          <>
-            {/* ─── STATS SECTION ─────────────────── */}
-            <View style={styles.statsLayout}>
-              {[
-                {
-                  icon: "verified" as const,
-                  v: "100%",
-                  l: "Kiểm duyệt nguồn gốc",
-                },
-                {
-                  icon: "support-agent" as const,
-                  v: "24/7",
-                  l: "Hỗ trợ thu mua",
-                },
-                {
-                  icon: "payments" as const,
-                  v: "Tiết kiệm",
-                  l: "Chiết khấu tới 15%",
-                },
-                {
-                  icon: "speed" as const,
-                  v: "Thần tốc",
-                  l: "Giao hàng hỏa tốc",
-                },
-              ].map((s, i) => (
-                <View key={i} style={styles.statCell}>
-                  <MaterialIcons
-                    name={s.icon as any}
-                    size={32}
-                    color={Colors.primary}
-                  />
-                  <Text style={styles.statVal}>{s.v}</Text>
-                  <Text style={styles.statLbl}>{s.l}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* ─── FOOTER ──────────────────────────── */}
-            <View style={styles.footerSection}>
-              {/* Brand & Desc */}
-              <View style={styles.footerBrand}>
-                <MaterialIcons name="agriculture" size={28} color={Colors.primary} />
-                <Text style={styles.footerBrandText}>FreshFlow</Text>
-              </View>
-              <Text style={styles.footerDesc}>
-                Nền tảng thu mua thực phẩm B2B thông minh. Kết nối nhà hàng với các chợ đầu mối lớn nhất TP.HCM.
-              </Text>
-
-              {/* Contact info */}
-              <View style={styles.footerInfoSection}>
-                <View style={styles.footerInfoRow}>
-                  <MaterialIcons name="phone" size={16} color={Colors.primary} />
-                  <Text style={styles.footerInfoText}>1900 1234 56</Text>
-                </View>
-                <View style={styles.footerInfoRow}>
-                  <MaterialIcons name="email" size={16} color={Colors.primary} />
-                  <Text style={styles.footerInfoText}>info@freshflow.vn</Text>
-                </View>
-                <View style={styles.footerInfoRow}>
-                  <MaterialIcons name="location-on" size={16} color={Colors.primary} />
-                  <Text style={styles.footerInfoText}>123 Nguyễn Huệ, Quận 1, TP.HCM</Text>
-                </View>
-                <View style={styles.footerInfoRow}>
-                  <MaterialIcons name="schedule" size={16} color={Colors.primary} />
-                  <Text style={styles.footerInfoText}>06:00 - 20:00 • T2 - CN</Text>
-                </View>
-              </View>
-
-              {/* Divider */}
-              <View style={styles.footerDivider} />
-
-              {/* Social + Copy */}
-              <View style={styles.footerSocialRow}>
-                <Ionicons name="logo-facebook" size={22} color={Colors.outline} />
-                <Ionicons name="globe-outline" size={22} color={Colors.outline} />
-                <Ionicons name="call-outline" size={22} color={Colors.outline} />
-              </View>
-              <Text style={styles.footerCopyText}>© 2024 FreshFlow Supply Chain Dynamics.</Text>
-            </View>
-          </>
-        }
-      />
-      ) : (
-      <View style={{ flex: 1 }}>
-        {apiLoading && apiProducts.length === 0 ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Đang tải sản phẩm...</Text>
-          </View>
-        ) : apiError && apiProducts.length === 0 ? (
-          <View style={styles.loadingContainer}>
-            <MaterialIcons name="error-outline" size={48} color={Colors.error} />
-            <Text style={styles.errorText}>{apiError}</Text>
-            <Pressable style={styles.retryBtn} onPress={() => {
-              setApiLoading(true);
-              if (selectedMarketId) {
-                apiLoadProducts(selectedMarketId, activeCategory).finally(() => setApiLoading(false));
-              } else {
-                apiLoadInit().finally(() => setApiLoading(false));
-              }
-            }}>
-              <Text style={styles.retryBtnText}>Thử lại</Text>
-            </Pressable>
-          </View>
-        ) : (
         <FlatList
-          data={filteredApiProducts}
-          renderItem={(props) => renderProductInCatalog({ ...props, index: props.index })}
-          keyExtractor={(p) => p.marketProductId}
+          data={PRODUCTS}
+          renderItem={renderProduct}
+          keyExtractor={(p) => p.id}
           numColumns={2}
           columnWrapperStyle={styles.productRow}
           contentContainerStyle={styles.mainScroll}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={apiRefreshing} onRefresh={handleApiRefresh} colors={[Colors.primary]} />
-          }
           ListHeaderComponent={
-            <View>
-              {/* Search Bar */}
-              <View style={styles.searchBar}>
-                <Ionicons name="search" size={20} color={Colors.outline} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Tìm sản phẩm..."
-                  placeholderTextColor={Colors.outline}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-                {searchQuery.length > 0 && (
-                  <Pressable onPress={() => setSearchQuery('')}>
-                    <Ionicons name="close-circle" size={18} color={Colors.outline} />
+            <>
+              {/* ─── HERO ALERT ────────────────────── */}
+              <View style={styles.heroBox}>
+                <Image source={{ uri: IMAGES.hero }} style={styles.heroImg} />
+                <View style={styles.heroOverlay} />
+                <View style={styles.heroContent}>
+                  <View style={styles.heroAlertTag}>
+                    <Text style={styles.heroAlertTagText}>Cảnh báo giá giảm</Text>
+                  </View>
+                  <Text style={styles.heroTitle}>
+                    Ưu đãi đặt hàng sớm - Giảm 15% tất cả mặt hàng Rau Củ
+                  </Text>
+                  <Text style={styles.heroSub}>
+                    Đặt hàng trước 22:00 hôm nay để nhận ưu đãi tốt nhất từ Chợ
+                    Đầu Mối Hóc Môn.
+                  </Text>
+                  <Pressable style={styles.heroButton}>
+                    <Text style={styles.heroButtonText}>Đặt hàng ngay</Text>
                   </Pressable>
-                )}
+                </View>
               </View>
 
-              {/* Market Chips */}
-              <FlatList
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                data={apiMarkets}
-                keyExtractor={(m) => m.id}
-                contentContainerStyle={styles.chipRow}
-                renderItem={({ item }) => {
-                  const active = selectedMarketId === item.id;
-                  return (
-                    <Pressable
-                      style={[styles.chip, active && styles.chipActive]}
-                      onPress={() => setSelectedMarketId(item.id === selectedMarketId ? null : item.id)}
-                    >
-                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.name}</Text>
-                    </Pressable>
-                  );
-                }}
-              />
+              {/* ─── BENTO MARKETS ─────────────────── */}
+              <View style={styles.secTitleRow}>
+                <Text style={styles.secTitle}>Thị trường Đầu Mối</Text>
+                <Text style={styles.secAction}>Xem bản đồ giá</Text>
+              </View>
+              <View style={styles.marketBento}>
+                {MARKETS.map((m, i) => (
+                  <View
+                    key={m.id}
+                    style={[styles.marketCard, i === 0 && styles.marketCardWide]}
+                  >
+                    <Image source={{ uri: m.image }} style={styles.marketImg} />
+                    <View style={styles.marketMask} />
+                    <View style={styles.marketContent}>
+                      <Text style={styles.marketSubText}>{m.subtitle}</Text>
+                      <Text style={styles.marketTitleText}>{m.name}</Text>
+                      <View style={styles.marketTrendRow}>
+                        <MaterialIcons
+                          name={
+                            m.type === "down" ? "trending-down" : "trending-up"
+                          }
+                          size={16}
+                          color={m.type === "down" ? "#4ADE80" : "#FBBF24"}
+                        />
+                        <Text
+                          style={[
+                            styles.marketTrendTxt,
+                            { color: m.type === "down" ? "#4ADE80" : "#FBBF24" },
+                          ]}
+                        >
+                          {m.trend}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
 
-              {/* Category Chips */}
-              <FlatList
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                data={apiCategories}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.chipRow}
-                renderItem={({ item }) => {
-                  const active = activeCategory === item.name;
-                  return (
-                    <Pressable
-                      style={[styles.chip, active && styles.chipActive]}
-                      onPress={() => setActiveCategory(item.name === activeCategory ? '' : item.name)}
-                    >
-                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.name}</Text>
-                    </Pressable>
-                  );
-                }}
-              />
-            </View>
+              {/* ─── PRODUCT LIST HEADER ────────────── */}
+              <View style={styles.secTitleRow}>
+                <Text style={styles.secTitle}>Hàng Sáng Nay</Text>
+                <Text style={styles.secCount}>24 Items</Text>
+              </View>
+            </>
           }
-          ListEmptyComponent={
-            !apiLoading ? (
-              <View style={styles.emptyCatalog}>
-                <Ionicons name="search-outline" size={48} color={Colors.outline} />
-                <Text style={styles.emptyCatalogText}>Không tìm thấy sản phẩm</Text>
-                <Text style={styles.emptyCatalogSub}>Thử thay đổi bộ lọc hoặc từ khoá</Text>
+          ListFooterComponent={
+            <>
+              {/* ─── STATS SECTION ─────────────────── */}
+              <View style={styles.statsLayout}>
+                {[
+                  {
+                    icon: "verified" as const,
+                    v: "100%",
+                    l: "Kiểm duyệt nguồn gốc",
+                  },
+                  {
+                    icon: "support-agent" as const,
+                    v: "24/7",
+                    l: "Hỗ trợ thu mua",
+                  },
+                  {
+                    icon: "payments" as const,
+                    v: "Tiết kiệm",
+                    l: "Chiết khấu tới 15%",
+                  },
+                  {
+                    icon: "speed" as const,
+                    v: "Thần tốc",
+                    l: "Giao hàng hỏa tốc",
+                  },
+                ].map((s, i) => (
+                  <View key={i} style={styles.statCell}>
+                    <MaterialIcons
+                      name={s.icon as any}
+                      size={32}
+                      color={Colors.primary}
+                    />
+                    <Text style={styles.statVal}>{s.v}</Text>
+                    <Text style={styles.statLbl}>{s.l}</Text>
+                  </View>
+                ))}
               </View>
-            ) : null
+
+              {/* ─── FOOTER ──────────────────────────── */}
+              <View style={styles.footerSection}>
+                {/* Brand & Desc */}
+                <View style={styles.footerBrand}>
+                  <MaterialIcons name="agriculture" size={28} color={Colors.primary} />
+                  <Text style={styles.footerBrandText}>FreshFlow</Text>
+                </View>
+                <Text style={styles.footerDesc}>
+                  Nền tảng thu mua thực phẩm B2B thông minh. Kết nối nhà hàng với các chợ đầu mối lớn nhất TP.HCM.
+                </Text>
+
+                {/* Contact info */}
+                <View style={styles.footerInfoSection}>
+                  <View style={styles.footerInfoRow}>
+                    <MaterialIcons name="phone" size={16} color={Colors.primary} />
+                    <Text style={styles.footerInfoText}>1900 1234 56</Text>
+                  </View>
+                  <View style={styles.footerInfoRow}>
+                    <MaterialIcons name="email" size={16} color={Colors.primary} />
+                    <Text style={styles.footerInfoText}>info@freshflow.vn</Text>
+                  </View>
+                  <View style={styles.footerInfoRow}>
+                    <MaterialIcons name="location-on" size={16} color={Colors.primary} />
+                    <Text style={styles.footerInfoText}>123 Nguyễn Huệ, Quận 1, TP.HCM</Text>
+                  </View>
+                  <View style={styles.footerInfoRow}>
+                    <MaterialIcons name="schedule" size={16} color={Colors.primary} />
+                    <Text style={styles.footerInfoText}>06:00 - 20:00 • T2 - CN</Text>
+                  </View>
+                </View>
+
+                {/* Divider */}
+                <View style={styles.footerDivider} />
+
+                {/* Social + Copy */}
+                <View style={styles.footerSocialRow}>
+                  <Ionicons name="logo-facebook" size={22} color={Colors.outline} />
+                  <Ionicons name="globe-outline" size={22} color={Colors.outline} />
+                  <Ionicons name="call-outline" size={22} color={Colors.outline} />
+                </View>
+                <Text style={styles.footerCopyText}>© 2024 FreshFlow Supply Chain Dynamics.</Text>
+              </View>
+            </>
           }
         />
-        )}
-      </View>
+      ) : (
+        <View style={{ flex: 1 }}>
+          {apiLoading && apiProducts.length === 0 ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.loadingText}>Đang tải sản phẩm...</Text>
+            </View>
+          ) : apiError && apiProducts.length === 0 ? (
+            <View style={styles.loadingContainer}>
+              <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+              <Text style={styles.errorText}>{apiError}</Text>
+              <Pressable style={styles.retryBtn} onPress={() => {
+                setApiLoading(true);
+                if (selectedMarketId) {
+                  apiLoadProducts(selectedMarketId, activeCategory).finally(() => setApiLoading(false));
+                } else {
+                  apiLoadInit().finally(() => setApiLoading(false));
+                }
+              }}>
+                <Text style={styles.retryBtnText}>Thử lại</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredApiProducts}
+              renderItem={(props) => renderProductInCatalog({ ...props, index: props.index })}
+              keyExtractor={(p) => p.marketProductId}
+              numColumns={2}
+              columnWrapperStyle={styles.productRow}
+              contentContainerStyle={styles.mainScroll}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl refreshing={apiRefreshing} onRefresh={handleApiRefresh} colors={[Colors.primary]} />
+              }
+              ListHeaderComponent={
+                <View>
+                  {/* Search Bar */}
+                  <View style={styles.searchBar}>
+                    <Ionicons name="search" size={20} color={Colors.outline} />
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Tìm sản phẩm..."
+                      placeholderTextColor={Colors.outline}
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                    />
+                    {searchQuery.length > 0 && (
+                      <Pressable onPress={() => setSearchQuery('')}>
+                        <Ionicons name="close-circle" size={18} color={Colors.outline} />
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {/* Market Chips */}
+                  <FlatList
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    data={apiMarkets}
+                    keyExtractor={(m) => m.id}
+                    contentContainerStyle={styles.chipRow}
+                    renderItem={({ item }) => {
+                      const active = selectedMarketId === item.id;
+                      return (
+                        <Pressable
+                          style={[styles.chip, active && styles.chipActive]}
+                          onPress={() => setSelectedMarketId(item.id === selectedMarketId ? null : item.id)}
+                        >
+                          <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.name}</Text>
+                        </Pressable>
+                      );
+                    }}
+                  />
+
+                  {/* Category Chips */}
+                  <FlatList
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    data={apiCategories}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.chipRow}
+                    renderItem={({ item }) => {
+                      const active = activeCategory === item.name;
+                      return (
+                        <Pressable
+                          style={[styles.chip, active && styles.chipActive]}
+                          onPress={() => setActiveCategory(item.name === activeCategory ? '' : item.name)}
+                        >
+                          <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.name}</Text>
+                        </Pressable>
+                      );
+                    }}
+                  />
+                </View>
+              }
+              ListEmptyComponent={
+                !apiLoading ? (
+                  <View style={styles.emptyCatalog}>
+                    <Ionicons name="search-outline" size={48} color={Colors.outline} />
+                    <Text style={styles.emptyCatalogText}>Không tìm thấy sản phẩm</Text>
+                    <Text style={styles.emptyCatalogSub}>Thử thay đổi bộ lọc hoặc từ khoá</Text>
+                  </View>
+                ) : null
+              }
+            />
+          )}
+        </View>
       )}
 
       {/* ─── FLOATING CART FAB ─────────────── */}
       {cartCount > 0 && (
-      <Pressable style={styles.cartFab} onPress={() => setShowCart(true)}>
-        <MaterialIcons name="shopping-cart" size={24} color="#FFF" />
-        <View style={styles.cartFabBadge}>
-          <Text style={styles.cartFabBadgeText}>{cartCount}</Text>
-        </View>
-      </Pressable>
+        <Pressable style={styles.cartFab} onPress={() => setShowCart(true)}>
+          <MaterialIcons name="shopping-cart" size={24} color="#FFF" />
+          <View style={styles.cartFabBadge}>
+            <Text style={styles.cartFabBadgeText}>{cartCount}</Text>
+          </View>
+        </Pressable>
       )}
 
       {/* ─── CART FULL SCREEN MODAL ────────── */}
@@ -839,7 +823,7 @@ export function OrderListScreen() {
               <MaterialIcons name="arrow-back" size={24} color={Colors.onSurface} />
             </Pressable>
             <Text style={styles.cartScreenTitle}>Giỏ hàng ({cartCount})</Text>
-            <Pressable onPress={() => setCart([])}>
+            <Pressable onPress={clearCart}>
               <Text style={styles.cartScreenClear}>Xoá tất cả</Text>
             </Pressable>
           </View>
@@ -867,7 +851,7 @@ export function OrderListScreen() {
                     </Pressable>
                     <Text style={styles.cartScreenQtyText}>{item.qty}</Text>
                     <Pressable style={styles.cartScreenQtyBtn} onPress={() => {
-                      setCart(prev => prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c));
+                      globalAddToCart(item);
                     }}>
                       <MaterialIcons name="add" size={16} color={Colors.primary} />
                     </Pressable>
@@ -906,16 +890,16 @@ export function OrderListScreen() {
                 </View>
                 <View style={styles.cartScreenSummaryRow}>
                   <Text style={styles.cartScreenSummaryLabel}>Phí vận chuyển</Text>
-                  <Text style={styles.cartScreenSummaryValue}>15.000đ</Text>
+                  <Text style={styles.cartScreenSummaryValue}>Sẽ xác nhận sau</Text>
                 </View>
                 <View style={styles.cartScreenSummaryRow}>
                   <Text style={styles.cartScreenSummaryLabel}>Giảm giá</Text>
-                  <Text style={[styles.cartScreenSummaryValue, { color: Colors.error }]}>–0đ</Text>
+                  <Text style={[styles.cartScreenSummaryValue, { color: Colors.error }]}>– 0đ</Text>
                 </View>
                 <View style={styles.cartScreenSummaryDivider} />
                 <View style={styles.cartScreenSummaryRow}>
                   <Text style={styles.cartScreenSummaryTotal}>Tổng cộng</Text>
-                  <Text style={styles.cartScreenSummaryTotalValue}>{(cartTotal + 15000).toLocaleString('vi-VN')}đ</Text>
+                  <Text style={styles.cartScreenSummaryTotalValue}>{(cartTotal).toLocaleString('vi-VN')}đ</Text>
                 </View>
               </View>
             }
@@ -925,7 +909,7 @@ export function OrderListScreen() {
           <View style={styles.cartScreenCheckoutBar}>
             <View>
               <Text style={styles.cartScreenCheckoutLabel}>Tạm tính</Text>
-              <Text style={styles.cartScreenCheckoutTotal}>{(cartTotal + 15000).toLocaleString('vi-VN')}đ</Text>
+              <Text style={styles.cartScreenCheckoutTotal}>{(cartTotal).toLocaleString('vi-VN')}đ</Text>
             </View>
             <Pressable
               style={styles.cartScreenCheckoutBtn}

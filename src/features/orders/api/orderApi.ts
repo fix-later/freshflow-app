@@ -21,6 +21,7 @@ export interface OrderItemDto {
 
 export interface OrderDto {
   id: string;
+  orderId?: string;
   restaurantId: string;
   restaurantName?: string;
   status: OrderStatus;
