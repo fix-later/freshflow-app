@@ -105,6 +105,7 @@ export function OrderDetailScreen({ route }: Props) {
   const [customReason, setCustomReason] = useState('');
   const [cancelReasonError, setCancelReasonError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [confirmingReceipt, setConfirmingReceipt] = useState(false);
 
   const openCancelModal = () => {
     setSelectedReasonId(null);
@@ -178,6 +179,39 @@ export function OrderDetailScreen({ route }: Props) {
     );
   };
 
+  const performConfirmReceipt = async () => {
+    setConfirmingReceipt(true);
+    try {
+      const result = await orderApi.confirmReceipt(orderId);
+      setOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              confirmedReceiptAt: result.confirmedReceiptAt ?? new Date().toISOString(),
+              status: result.status ?? prev.status,
+            }
+          : prev,
+      );
+      Alert.alert('Đã xác nhận', 'Bạn đã xác nhận nhận hàng cho đơn này.');
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      Alert.alert('Không thể xác nhận', message ?? 'Đơn hàng chưa ở trạng thái đã giao.');
+    } finally {
+      setConfirmingReceipt(false);
+    }
+  };
+
+  const handleConfirmReceipt = () => {
+    Alert.alert(
+      'Xác nhận đã nhận hàng',
+      'Bạn xác nhận đã nhận đủ sản phẩm cho đơn hàng này?',
+      [
+        { text: 'Chưa', style: 'cancel' },
+        { text: 'Đã nhận hàng', onPress: performConfirmReceipt },
+      ],
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -209,6 +243,7 @@ export function OrderDetailScreen({ route }: Props) {
   const items = order.items ?? [];
   const itemCount = items.reduce((sum, it) => sum + (it.quantity ?? 0), 0);
   const canCancel = CANCELLABLE_STATUSES.includes(order.status);
+  const canConfirmReceipt = order.status === 'delivered' && !order.confirmedReceiptAt;
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -233,6 +268,12 @@ export function OrderDetailScreen({ route }: Props) {
             <View style={styles.metaRow}>
               <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
               <Text style={styles.metaText}>Hẹn giao {formatDateTime(order.scheduledFor)}</Text>
+            </View>
+          ) : null}
+          {order.confirmedReceiptAt ? (
+            <View style={styles.metaRow}>
+              <Ionicons name="checkmark-circle-outline" size={13} color={Colors.success} />
+              <Text style={styles.metaText}>Đã nhận hàng lúc {formatDateTime(order.confirmedReceiptAt)}</Text>
             </View>
           ) : null}
           {order.status === 'cancelled' && order.cancellationReason ? (
@@ -286,6 +327,27 @@ export function OrderDetailScreen({ route }: Props) {
           <Pressable style={styles.cancelBtn} onPress={openCancelModal}>
             <Ionicons name="close-circle-outline" size={18} color={Colors.error} />
             <Text style={styles.cancelBtnText}>Hủy đơn hàng</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* ── Confirm receipt footer ── */}
+      {canConfirmReceipt ? (
+        <View style={styles.footer}>
+          <Pressable
+            style={[styles.confirmReceiptBtn, confirmingReceipt && styles.confirmReceiptBtnDisabled]}
+            onPress={handleConfirmReceipt}
+            disabled={confirmingReceipt}
+          >
+            {confirmingReceipt
+              ? <ActivityIndicator color={Colors.onPrimary} size="small" />
+              : (
+                <>
+                  <Ionicons name="checkmark-circle-outline" size={18} color={Colors.onPrimary} />
+                  <Text style={styles.confirmReceiptBtnText}>Xác nhận đã nhận hàng</Text>
+                </>
+              )
+            }
           </Pressable>
         </View>
       ) : null}
@@ -494,6 +556,19 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   cancelBtnText: { color: Colors.error, fontWeight: '700', fontSize: 15 },
+
+  // Confirm receipt footer
+  confirmReceiptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  confirmReceiptBtnDisabled: { opacity: 0.6 },
+  confirmReceiptBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
 
   // Cancel modal
   modalBackdrop: {

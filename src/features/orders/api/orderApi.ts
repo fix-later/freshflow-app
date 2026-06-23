@@ -115,4 +115,10 @@ export const orderApi = {
     const { data } = await apiClient.patch(`/api/v1/orders/${orderId}/cancel`, { reason });
     return data;
   },
+
+  /** PATCH /api/v1/orders/{orderId}/receipt — only allowed once the order status is 'delivered'. */
+  async confirmReceipt(orderId: string): Promise<{ confirmedReceiptAt: string; status?: OrderStatus }> {
+    const { data } = await apiClient.patch(`/api/v1/orders/${orderId}/receipt`);
+    return data;
+  },
 };
