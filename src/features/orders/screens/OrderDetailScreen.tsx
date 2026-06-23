@@ -2,9 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -29,8 +33,19 @@ import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'OrderDetail'>;
 
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 // Order can only be cancelled by the restaurant before the market/hub starts processing it.
 const CANCELLABLE_STATUSES: OrderStatus[] = ['draft', 'pending', 'confirmed'];
+
+const OTHER_REASON_ID = 'other';
+const CANCEL_REASON_OPTIONS = [
+  { id: 'wrong_item', label: 'Đặt nhầm sản phẩm hoặc số lượng' },
+  { id: 'change_items', label: 'Muốn thay đổi sản phẩm trong đơn hàng' },
+  { id: 'change_schedule', label: 'Muốn đổi thời gian giao hàng' },
+  { id: 'changed_address', label: 'Thay đổi địa chỉ giao hàng' },
+  { id: OTHER_REASON_ID, label: 'Khác' },
+];
 
 // No product image API yet — reuse the same deterministic placeholder set as the catalog screens.
 const PRODUCT_PLACEHOLDERS = [
@@ -86,12 +101,14 @@ export function OrderDetailScreen({ route }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
+  const [selectedReasonId, setSelectedReasonId] = useState<string | null>(null);
+  const [customReason, setCustomReason] = useState('');
   const [cancelReasonError, setCancelReasonError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
   const openCancelModal = () => {
-    setCancelReason('');
+    setSelectedReasonId(null);
+    setCustomReason('');
     setCancelReasonError(null);
     setCancelModalVisible(true);
   };
@@ -113,12 +130,7 @@ export function OrderDetailScreen({ route }: Props) {
     fetchOrder();
   }, [fetchOrder]);
 
-  const handleCancel = async () => {
-    const reason = cancelReason.trim();
-    if (!reason) {
-      setCancelReasonError('Vui lòng nhập lý do hủy đơn.');
-      return;
-    }
+  const performCancel = async (reason: string) => {
     setCancelling(true);
     try {
       const result = await orderApi.cancel(orderId, reason);
@@ -133,7 +145,6 @@ export function OrderDetailScreen({ route }: Props) {
           : prev,
       );
       setCancelModalVisible(false);
-      setCancelReason('');
       Alert.alert('Đã hủy đơn', 'Đơn hàng của bạn đã được hủy thành công.');
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -141,6 +152,30 @@ export function OrderDetailScreen({ route }: Props) {
     } finally {
       setCancelling(false);
     }
+  };
+
+  const handleCancel = () => {
+    Keyboard.dismiss();
+    if (!selectedReasonId) {
+      setCancelReasonError('Vui lòng chọn lý do hủy đơn.');
+      return;
+    }
+    const isOther = selectedReasonId === OTHER_REASON_ID;
+    const reason = isOther
+      ? customReason.trim()
+      : CANCEL_REASON_OPTIONS.find((o) => o.id === selectedReasonId)?.label ?? '';
+    if (!reason) {
+      setCancelReasonError('Vui lòng nhập lý do hủy đơn.');
+      return;
+    }
+    Alert.alert(
+      'Xác nhận hủy đơn',
+      `Bạn có chắc chắn muốn hủy đơn #${code}? Hành động này không thể hoàn tác.`,
+      [
+        { text: 'Không', style: 'cancel' },
+        { text: 'Hủy đơn', style: 'destructive', onPress: () => performCancel(reason) },
+      ],
+    );
   };
 
   if (loading) {
@@ -262,54 +297,92 @@ export function OrderDetailScreen({ route }: Props) {
         animationType="slide"
         onRequestClose={() => setCancelModalVisible(false)}
       >
-        <TouchableWithoutFeedback onPress={() => setCancelModalVisible(false)}>
-          <View style={styles.modalBackdrop}>
-            <TouchableWithoutFeedback>
+        <View style={styles.modalBackdrop}>
+          <TouchableWithoutFeedback onPress={() => setCancelModalVisible(false)}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Hủy đơn hàng?</Text>
-                <Text style={styles.modalSub}>Đơn #{code} sẽ bị hủy và không thể hoàn tác.</Text>
-                <Text style={styles.modalFieldLabel}>Lý do hủy đơn *</Text>
-                <TextInput
-                  style={[styles.modalInput, cancelReasonError && styles.modalInputError]}
-                  placeholder="Nhập lý do hủy đơn..."
-                  placeholderTextColor={Colors.outline}
-                  value={cancelReason}
-                  onChangeText={(text) => {
-                    setCancelReason(text);
-                    if (cancelReasonError) setCancelReasonError(null);
-                  }}
-                  multiline
-                  maxLength={200}
-                />
-                <View style={styles.modalInputFooter}>
-                  {cancelReasonError ? (
-                    <Text style={styles.modalErrorText}>{cancelReasonError}</Text>
-                  ) : <View />}
-                  <Text style={styles.modalCharCount}>{cancelReason.length}/200</Text>
-                </View>
-                <View style={styles.modalActions}>
+                <View style={styles.modalHeaderRow}>
+                  <Text style={styles.modalTitle}>Chọn lý do hủy</Text>
                   <Pressable
-                    style={styles.modalSecondaryBtn}
+                    style={styles.modalCloseBtn}
                     onPress={() => setCancelModalVisible(false)}
                     disabled={cancelling}
                   >
-                    <Text style={styles.modalSecondaryBtnText}>Đóng</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.modalDangerBtn, cancelling && styles.modalDangerBtnDisabled]}
-                    onPress={handleCancel}
-                    disabled={cancelling}
-                  >
-                    {cancelling
-                      ? <ActivityIndicator color={Colors.onError} size="small" />
-                      : <Text style={styles.modalDangerBtnText}>Xác nhận hủy</Text>
-                    }
+                    <Ionicons name="close" size={20} color={Colors.onSurface} />
                   </Pressable>
                 </View>
+
+                <ScrollView
+                  style={styles.modalScrollArea}
+                  contentContainerStyle={styles.modalScrollContent}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <View style={styles.modalWarningBox}>
+                    <Ionicons name="warning-outline" size={16} color={Colors.warning} />
+                    <Text style={styles.modalWarningText}>
+                      Đơn #{code} sẽ bị hủy toàn bộ sản phẩm và không thể hoàn tác sau khi xác nhận.
+                    </Text>
+                  </View>
+
+                  {CANCEL_REASON_OPTIONS.map((option) => {
+                    const selected = selectedReasonId === option.id;
+                    return (
+                      <Pressable
+                        key={option.id}
+                        style={styles.modalReasonRow}
+                        onPress={() => {
+                          setSelectedReasonId(option.id);
+                          if (cancelReasonError) setCancelReasonError(null);
+                        }}
+                      >
+                        <Ionicons
+                          name={selected ? 'radio-button-on' : 'radio-button-off'}
+                          size={20}
+                          color={selected ? Colors.primary : Colors.outline}
+                        />
+                        <Text style={styles.modalReasonText}>{option.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+
+                  {selectedReasonId === OTHER_REASON_ID ? (
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Nhập lý do khác..."
+                      placeholderTextColor={Colors.outline}
+                      value={customReason}
+                      onChangeText={(text) => {
+                        setCustomReason(text);
+                        if (cancelReasonError) setCancelReasonError(null);
+                      }}
+                      multiline
+                      maxLength={200}
+                    />
+                  ) : null}
+
+                  {cancelReasonError ? (
+                    <Text style={styles.modalErrorText}>{cancelReasonError}</Text>
+                  ) : null}
+                </ScrollView>
+
+                <Pressable
+                  style={[styles.modalDangerBtn, cancelling && styles.modalDangerBtnDisabled]}
+                  onPress={handleCancel}
+                  disabled={cancelling}
+                >
+                  {cancelling
+                    ? <ActivityIndicator color={Colors.onError} size="small" />
+                    : <Text style={styles.modalDangerBtnText}>ĐỒNG Ý</Text>
+                  }
+                </Pressable>
               </View>
             </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -429,6 +502,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
+    maxHeight: SCREEN_HEIGHT * 0.8,
     backgroundColor: Colors.surfaceContainerLowest,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -436,9 +510,40 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
     gap: 12,
   },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   modalTitle: { fontSize: 17, fontWeight: '800', color: Colors.onSurface },
-  modalSub: { fontSize: 13, color: Colors.textMuted, lineHeight: 18 },
-  modalFieldLabel: { fontSize: 13, fontWeight: '700', color: Colors.onSurface, marginTop: 4 },
+  modalCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerHigh,
+  },
+  modalWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: Colors.warningLight,
+    padding: 10,
+    borderRadius: 10,
+  },
+  modalWarningText: { flex: 1, fontSize: 12, color: Colors.textSecondary, lineHeight: 17 },
+  modalScrollArea: { maxHeight: SCREEN_HEIGHT * 0.4 },
+  modalScrollContent: { gap: 12 },
+  modalReasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceVariant,
+  },
+  modalReasonText: { flex: 1, fontSize: 14, color: Colors.onSurface },
   modalInput: {
     minHeight: 70,
     borderWidth: 1,
@@ -449,26 +554,8 @@ const styles = StyleSheet.create({
     color: Colors.onSurface,
     textAlignVertical: 'top',
   },
-  modalInputError: { borderColor: Colors.error },
-  modalInputFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginTop: -6,
-  },
-  modalErrorText: { flex: 1, fontSize: 12, color: Colors.error },
-  modalCharCount: { fontSize: 11, color: Colors.outline },
-  modalActions: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  modalSecondaryBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  modalSecondaryBtnText: { color: Colors.onSurface, fontWeight: '700', fontSize: 14 },
+  modalErrorText: { fontSize: 12, color: Colors.error },
   modalDangerBtn: {
-    flex: 1,
     alignItems: 'center',
     paddingVertical: 14,
     borderRadius: 12,
