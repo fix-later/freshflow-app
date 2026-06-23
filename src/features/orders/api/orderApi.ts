@@ -1,6 +1,7 @@
 import { apiClient } from '../../../services/api/client';
 
 export type OrderStatus =
+  | 'draft'
   | 'pending'
   | 'confirmed'
   | 'processing'
@@ -10,21 +11,20 @@ export type OrderStatus =
   | 'cancelled';
 
 export interface OrderItemDto {
-  id: string;
+  orderItemId: string;
   marketProductId: string;
-  productName: string;
-  marketName: string;
+  productNameSnapshot: string;
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  actualQuantity: number | null;
 }
 
 export interface OrderDto {
-  id: string;
-  orderId?: string;
+  orderId: string;
   restaurantId: string;
-  restaurantName?: string;
   status: OrderStatus;
+  paymentStatus: string;
   orderGroupId: string | null;
   scheduledOrderId: string | null;
   items: OrderItemDto[];
@@ -33,6 +33,7 @@ export interface OrderDto {
   notes: string | null;
   cancelledAt: string | null;
   cancellationReason: string | null;
+  confirmedReceiptAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -61,6 +62,7 @@ export interface CreateOrderPayload {
 }
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  draft: 'Bản nháp',
   pending: 'Chờ xác nhận',
   confirmed: 'Đã xác nhận',
   processing: 'Đang xử lý',
@@ -71,6 +73,7 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
 };
 
 export const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
+  draft: '#9CA3AF',
   pending: '#F59E0B',
   confirmed: '#3B82F6',
   processing: '#8B5CF6',
