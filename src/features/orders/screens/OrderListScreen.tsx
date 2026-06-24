@@ -7,6 +7,7 @@ import {
   Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -197,12 +198,8 @@ export function OrderListScreen() {
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState('');
 
-  // ── Real cart state (seeded with demo) ───
-  const [cart, setCart] = useState<CartItem[]>([
-    { id: '1', name: 'Cà chua VietGAP Hóc Môn', market: 'Hóc Môn', unit: 'Kg', price: 25000, qty: 2, image: IMAGES.product1 },
-    { id: '2', name: 'Khoai tây Đà Lạt Loại 1', market: 'Đà Lạt', unit: 'Kg', price: 18500, qty: 1, image: IMAGES.product2 },
-    { id: '3', name: 'Nấm đùi gà xuất khẩu', market: 'Hóc Môn', unit: 'Kg', price: 65000, qty: 1, image: IMAGES.product3 },
-  ]);
+  // ── Cart state ─────────────────────────────
+  const [cart, setCart] = useState<CartItem[]>([]);
 
   // ── Cart helpers ─────────────────────────
   const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.qty, 0), [cart]);
@@ -230,6 +227,9 @@ export function OrderListScreen() {
 
   const getCartQty = (productName: string) => cart.find(c => c.name === productName)?.qty ?? 0;
 
+  // ── Explore tab demo detail state ────────
+  const [demoDetailProduct, setDemoDetailProduct] = useState<(typeof PRODUCTS)[0] | null>(null);
+
   // ── API state for products tab ────────────
   const [apiMarkets, setApiMarkets] = useState<MarketDto[]>([]);
   const [apiCategories, setApiCategories] = useState<CategoryDto[]>([]);
@@ -237,6 +237,9 @@ export function OrderListScreen() {
   const [apiLoading, setApiLoading] = useState(true);
   const [apiRefreshing, setApiRefreshing] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // ── Product detail state ──────────────────
+  const [detailProduct, setDetailProduct] = useState<{ product: MarketProductDto; image: string; marketName: string } | null>(null);
 
   const apiLoadInit = useCallback(async () => {
     try {
@@ -322,6 +325,15 @@ export function OrderListScreen() {
 
   const getApiCartQty = (productId: string) => cart.find(c => c.id === productId)?.qty ?? 0;
 
+  const openApiProductDetail = useCallback((product: MarketProductDto, index: number) => {
+    const marketName = apiMarkets.find(m => m.id === product.marketId)?.name ?? '';
+    setDetailProduct({ product, image: productImage(index), marketName });
+  }, [apiMarkets]);
+
+  const closeProductDetail = useCallback(() => {
+    setDetailProduct(null);
+  }, []);
+
   // ── Filtered products for catalog tab ────
   const filteredProducts = useMemo(() => {
     return PRODUCTS.filter(p => {
@@ -343,11 +355,13 @@ export function OrderListScreen() {
   };
 
   const renderProduct = ({ item }: { item: (typeof PRODUCTS)[0] }) => (
-    <View
-      style={[
+    <Pressable
+      style={({ pressed }) => [
         styles.productCard,
         item.outOfStock && styles.productCardDisabled,
+        pressed && { opacity: 0.9 },
       ]}
+      onPress={() => setDemoDetailProduct(item)}
     >
       {/* Image Area */}
       <View style={styles.productImageArea}>
@@ -365,13 +379,13 @@ export function OrderListScreen() {
             <Text style={styles.pBadgeText}>{item.badge}</Text>
           </View>
         )}
-        <Pressable style={styles.heartBtn}>
+        <View style={styles.heartBtn}>
           <Ionicons
             name="heart-outline"
             size={16}
             color={Colors.onSurfaceVariant}
           />
-        </Pressable>
+        </View>
       </View>
 
       {/* Info Area */}
@@ -424,6 +438,23 @@ export function OrderListScreen() {
               item.outOfStock && styles.addToCartDisabled,
             ]}
             disabled={item.outOfStock}
+            onPress={() => {
+              setCart(prev => {
+                const existing = prev.find(c => c.name === item.name);
+                if (existing) {
+                  return prev.map(c => c.name === item.name ? { ...c, qty: c.qty + 1 } : c);
+                }
+                return [...prev, {
+                  id: item.id,
+                  name: item.name,
+                  market: item.market,
+                  unit: 'Kg',
+                  price: item.price,
+                  qty: 1,
+                  image: item.image,
+                }];
+              });
+            }}
           >
             <MaterialIcons
               name={item.outOfStock ? "block" : "add-shopping-cart"}
@@ -433,7 +464,7 @@ export function OrderListScreen() {
           </Pressable>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 
   const renderProductInCatalog = ({ item, index }: { item: MarketProductDto; index: number }) => {
@@ -441,56 +472,83 @@ export function OrderListScreen() {
     const outOfStock = item.availableQuantity <= 0;
     const marketName = apiMarkets.find(m => m.id === item.marketId)?.name ?? '';
     return (
-      <View style={[styles.productCard, outOfStock && styles.productCardDisabled]}>
-        <View style={styles.productImageArea}>
-          <Image source={{ uri: productImage(index) }} style={styles.productImg} />
-          {outOfStock && (
-            <View style={[styles.pBadge, styles.pBadgeMuted]}>
-              <Text style={styles.pBadgeText}>Hết hàng</Text>
-            </View>
-          )}
-          <Pressable style={styles.heartBtn}>
-            <Ionicons name="heart-outline" size={16} color={Colors.onSurfaceVariant} />
-          </Pressable>
-        </View>
-        <View style={styles.productInfo}>
-          <Text style={styles.productMarketText}>{marketName}</Text>
-          <Text style={styles.productNameText} numberOfLines={2}>{item.productName}</Text>
-          <Text style={styles.productUnit}>{item.unit}</Text>
-          <View style={styles.cardFooter}>
-            <View>
-              <Text style={styles.cardPrice}>
-                {outOfStock ? "--" : formatPrice(item.currentPrice)}
-              </Text>
+      <Pressable
+        style={({ pressed }) => [
+          styles.catalogListCard,
+          pressed && styles.catalogListCardPressed,
+          outOfStock && styles.productCardDisabled,
+        ]}
+        onPress={() => openApiProductDetail(item, index)}
+      >
+        <View style={styles.catalogListHeader}>
+          <Image source={{ uri: productImage(index) }} style={styles.catalogListImage} />
+          <View style={styles.catalogListInfo}>
+            <Text style={styles.catalogMarketText}>{marketName}</Text>
+            <Text style={styles.catalogListName} numberOfLines={2}>{item.productName}</Text>
+            <View style={styles.catalogTagsRow}>
+              {!!item.category && (
+                <View style={styles.catalogCategoryTag}>
+                  <Text style={styles.catalogCategoryText}>{item.category}</Text>
+                </View>
+              )}
+              <View style={styles.catalogUnitTag}>
+                <Text style={styles.catalogUnitText}>{item.unit}</Text>
+              </View>
             </View>
           </View>
+          {outOfStock ? (
+            <View style={styles.catalogOutBadge}>
+              <Text style={styles.catalogOutText}>HẾT HÀNG</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.catalogListFooter}>
+          <View>
+            <Text style={styles.catalogPriceLabel}>Giá hiện tại</Text>
+            <Text style={[styles.catalogListPrice, outOfStock && styles.priceOutOfStock]}>
+              {outOfStock ? '—' : formatPrice(item.currentPrice)}
+            </Text>
+          </View>
+
+          <View style={styles.catalogStockSection}>
+            <Ionicons
+              name={outOfStock ? 'alert-circle' : 'cube-outline'}
+              size={16}
+              color={outOfStock ? Colors.danger : Colors.textMuted}
+            />
+            <Text style={[styles.catalogStockText, outOfStock && styles.catalogStockTextDanger]}>
+              Kho: {item.availableQuantity} {item.unit}
+            </Text>
+          </View>
+
           {!outOfStock && (
-            <View style={styles.catalogQtyRow}>
+            <View style={styles.catalogInlineQtyRow}>
               {qty > 0 ? (
                 <>
-                  <Pressable style={styles.catalogQtyBtn} onPress={() => {
+                  <Pressable style={styles.catalogInlineQtyBtn} onPress={() => {
                     setCart(prev => {
                       const existing = prev.find(c => c.id === item.marketProductId);
                       if (existing && existing.qty <= 1) return prev.filter(c => c.id !== item.marketProductId);
                       return prev.map(c => c.id === item.marketProductId ? { ...c, qty: c.qty - 1 } : c);
                     });
                   }}>
-                    <Ionicons name="remove" size={16} color="#FFF" />
+                    <Ionicons name="remove" size={16} color={Colors.primary} />
                   </Pressable>
-                  <Text style={styles.catalogQtyText}>{qty}</Text>
-                  <Pressable style={styles.catalogQtyBtn} onPress={() => addApiToCart(item)}>
+                  <Text style={styles.catalogInlineQtyText}>{qty}</Text>
+                  <Pressable style={styles.catalogInlineAddBtn} onPress={() => addApiToCart(item)}>
                     <Ionicons name="add" size={16} color="#FFF" />
                   </Pressable>
                 </>
               ) : (
-                <Pressable style={styles.catalogAddBtn} onPress={() => addApiToCart(item)}>
+                <Pressable style={styles.catalogInlineAddBtn} onPress={() => addApiToCart(item)}>
                   <Ionicons name="add" size={18} color="#FFF" />
                 </Pressable>
               )}
             </View>
           )}
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -726,8 +784,6 @@ export function OrderListScreen() {
           data={filteredApiProducts}
           renderItem={(props) => renderProductInCatalog({ ...props, index: props.index })}
           keyExtractor={(p) => p.marketProductId}
-          numColumns={2}
-          columnWrapperStyle={styles.productRow}
           contentContainerStyle={styles.mainScroll}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -817,7 +873,144 @@ export function OrderListScreen() {
       </Pressable>
       )}
 
-      {/* ─── CART FULL SCREEN MODAL ────────── */}
+      {/* ─── DEMO PRODUCT DETAIL MODAL (Explore tab) ─── */}
+      <Modal
+        visible={demoDetailProduct !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setDemoDetailProduct(null)}
+      >
+        <View style={styles.productDetailOverlay}>
+          <Pressable style={styles.productDetailBackdrop} onPress={() => setDemoDetailProduct(null)} />
+          <View style={styles.productDetailSheet}>
+            <View style={styles.productDetailHandle} />
+            {demoDetailProduct && (
+              <ScrollView contentContainerStyle={styles.productDetailContent} showsVerticalScrollIndicator={false}>
+                <View style={styles.productDetailImageWrap}>
+                  <Image source={{ uri: demoDetailProduct.image }} style={styles.productDetailImage} />
+                  <Pressable style={styles.productDetailClose} onPress={() => setDemoDetailProduct(null)}>
+                    <Ionicons name="close" size={22} color={Colors.textPrimary} />
+                  </Pressable>
+                </View>
+
+                <View style={styles.productDetailTitleRow}>
+                  <Text style={styles.productDetailMarketText}>{demoDetailProduct.market}</Text>
+                  {demoDetailProduct.badge && (
+                    <View style={[styles.pBadge, demoDetailProduct.badgeType === 'secondary' && styles.pBadgeSecondary, demoDetailProduct.badgeType === 'error' && styles.pBadgeError, demoDetailProduct.badgeType === 'muted' && styles.pBadgeMuted]}>
+                      <Text style={styles.pBadgeText}>{demoDetailProduct.badge}</Text>
+                    </View>
+                  )}
+                </View>
+
+                <Text style={styles.productDetailName}>{demoDetailProduct.name}</Text>
+
+                <View style={styles.productDetailPriceCard}>
+                  <Text style={styles.productDetailPriceLabel}>Giá hiện tại</Text>
+                  <Text style={styles.productDetailPrice}>{demoDetailProduct.outOfStock ? '—' : formatPrice(demoDetailProduct.price)}</Text>
+                  {!demoDetailProduct.outOfStock && <Text style={styles.productDetailUnit}>/kg</Text>}
+                </View>
+
+                <View style={styles.productDetailInfoCard}>
+                  <View style={styles.productDetailInfoRow}>
+                    <Text style={styles.productDetailInfoLabel}>Xu hướng</Text>
+                    <Text style={styles.productDetailInfoValue}>{demoDetailProduct.trend || 'Ổn định'}</Text>
+                  </View>
+                </View>
+
+                <Pressable
+                  style={[styles.productDetailAddBtn, demoDetailProduct.outOfStock && styles.productDetailAddBtnDisabled]}
+                  disabled={demoDetailProduct.outOfStock}
+                  onPress={() => {
+                    setCart(prev => {
+                      const existing = prev.find(c => c.name === demoDetailProduct.name);
+                      if (existing) return prev.map(c => c.name === demoDetailProduct.name ? { ...c, qty: c.qty + 1 } : c);
+                      return [...prev, { id: demoDetailProduct.id, name: demoDetailProduct.name, market: demoDetailProduct.market, unit: 'Kg', price: demoDetailProduct.price, qty: 1, image: demoDetailProduct.image }];
+                    });
+                    setDemoDetailProduct(null);
+                  }}
+                >
+                  <Ionicons name="cart" size={18} color="#FFF" />
+                  <Text style={styles.productDetailAddText}>
+                    {demoDetailProduct.outOfStock ? 'Tạm hết hàng' : 'Thêm vào giỏ'}
+                  </Text>
+                </Pressable>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── API PRODUCT DETAIL MODAL (Products tab) ─── */}
+      <Modal
+        visible={detailProduct !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={closeProductDetail}
+      >
+        <View style={styles.productDetailOverlay}>
+          <Pressable style={styles.productDetailBackdrop} onPress={closeProductDetail} />
+          <View style={styles.productDetailSheet}>
+            <View style={styles.productDetailHandle} />
+            {detailProduct && (
+              <ScrollView contentContainerStyle={styles.productDetailContent} showsVerticalScrollIndicator={false}>
+                <View style={styles.productDetailImageWrap}>
+                  <Image source={{ uri: detailProduct.image }} style={styles.productDetailImage} />
+                  <Pressable style={styles.productDetailClose} onPress={closeProductDetail}>
+                    <Ionicons name="close" size={22} color={Colors.textPrimary} />
+                  </Pressable>
+                </View>
+
+                <View style={styles.productDetailTitleRow}>
+                  <View style={styles.productDetailCategoryTag}>
+                    <Text style={styles.productDetailCategoryText}>{detailProduct.product.category || 'Khác'}</Text>
+                  </View>
+                  <Text style={styles.productDetailMarketText}>{detailProduct.marketName}</Text>
+                </View>
+
+                <Text style={styles.productDetailName}>{detailProduct.product.productName}</Text>
+
+                <View style={styles.productDetailPriceCard}>
+                  <Text style={styles.productDetailPriceLabel}>Giá hiện tại</Text>
+                  <Text style={styles.productDetailPrice}>{formatPrice(detailProduct.product.currentPrice)}</Text>
+                  <Text style={styles.productDetailUnit}>/{detailProduct.product.unit}</Text>
+                </View>
+
+                <View style={styles.productDetailStatsGrid}>
+                  <View style={styles.productDetailStatCard}>
+                    <Text style={styles.productDetailStatLabel}>Số lượng tại chợ</Text>
+                    <Text style={styles.productDetailStatValue}>{detailProduct.product.currentQuantity}</Text>
+                  </View>
+                  <View style={styles.productDetailStatCard}>
+                    <Text style={styles.productDetailStatLabel}>Có thể đặt</Text>
+                    <Text style={styles.productDetailStatValue}>{Math.max(0, detailProduct.product.availableQuantity)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.productDetailInfoCard}>
+                  <View style={styles.productDetailInfoRow}>
+                    <Text style={styles.productDetailInfoLabel}>Mã sản phẩm</Text>
+                    <Text style={styles.productDetailInfoValue} numberOfLines={1}>{detailProduct.product.productId}</Text>
+                  </View>
+                </View>
+
+                <Pressable
+                  style={[
+                    styles.productDetailAddBtn,
+                    detailProduct.product.availableQuantity <= 0 && styles.productDetailAddBtnDisabled,
+                  ]}
+                  disabled={detailProduct.product.availableQuantity <= 0}
+                  onPress={() => addApiToCart(detailProduct.product)}
+                >
+                  <Ionicons name="cart" size={18} color="#FFF" />
+                  <Text style={styles.productDetailAddText}>
+                    {detailProduct.product.availableQuantity <= 0 ? 'Tạm hết hàng' : 'Thêm vào giỏ'}
+                  </Text>
+                </Pressable>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
       <Modal
         visible={showCart}
         animationType="slide"
@@ -886,17 +1079,13 @@ export function OrderListScreen() {
                   <Text style={styles.cartScreenSummaryValue}>{cartTotal.toLocaleString('vi-VN')}đ</Text>
                 </View>
                 <View style={styles.cartScreenSummaryRow}>
-                  <Text style={styles.cartScreenSummaryLabel}>Phí vận chuyển</Text>
-                  <Text style={styles.cartScreenSummaryValue}>15.000đ</Text>
-                </View>
-                <View style={styles.cartScreenSummaryRow}>
                   <Text style={styles.cartScreenSummaryLabel}>Giảm giá</Text>
                   <Text style={[styles.cartScreenSummaryValue, { color: Colors.error }]}>–0đ</Text>
                 </View>
                 <View style={styles.cartScreenSummaryDivider} />
                 <View style={styles.cartScreenSummaryRow}>
                   <Text style={styles.cartScreenSummaryTotal}>Tổng cộng</Text>
-                  <Text style={styles.cartScreenSummaryTotalValue}>{(cartTotal + 15000).toLocaleString('vi-VN')}đ</Text>
+                  <Text style={styles.cartScreenSummaryTotalValue}>{cartTotal.toLocaleString('vi-VN')}đ</Text>
                 </View>
               </View>
             }
@@ -906,7 +1095,7 @@ export function OrderListScreen() {
           <View style={styles.cartScreenCheckoutBar}>
             <View>
               <Text style={styles.cartScreenCheckoutLabel}>Tạm tính</Text>
-              <Text style={styles.cartScreenCheckoutTotal}>{(cartTotal + 15000).toLocaleString('vi-VN')}đ</Text>
+              <Text style={styles.cartScreenCheckoutTotal}>{cartTotal.toLocaleString('vi-VN')}đ</Text>
             </View>
             <Pressable
               style={styles.cartScreenCheckoutBtn}
@@ -926,7 +1115,6 @@ export function OrderListScreen() {
         visible={showPayment}
         cart={cart}
         subtotal={cartTotal}
-        shippingFee={15000}
         discount={0}
         onBack={() => {
           setShowPayment(false);
@@ -1753,6 +1941,333 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // ─── Catalog List Card (single-column) ──
+  catalogListCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginHorizontal: CONTAINER_PADDING,
+    marginBottom: 12,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  catalogListCardPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
+  },
+  catalogListHeader: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  catalogListImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerHigh,
+  },
+  catalogListInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  catalogMarketText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  catalogListName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    lineHeight: 20,
+  },
+  catalogTagsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 2,
+  },
+  catalogCategoryTag: {
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  catalogCategoryText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  catalogUnitTag: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  catalogUnitText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  catalogOutBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  catalogOutText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.danger,
+    letterSpacing: 0.3,
+  },
+  catalogListFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 10,
+    marginTop: 10,
+  },
+  catalogPriceLabel: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: '500',
+  },
+  catalogListPrice: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.primary,
+    marginTop: 1,
+  },
+  priceOutOfStock: {
+    color: Colors.textMuted,
+  },
+  catalogStockSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginRight: 8,
+  },
+  catalogStockText: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontWeight: '500',
+  },
+  catalogStockTextDanger: {
+    color: Colors.danger,
+  },
+  catalogInlineQtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  catalogInlineQtyBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  catalogInlineQtyText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  catalogInlineAddBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ─── Product Detail Modal ───────────────
+  productDetailOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  productDetailBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  productDetailSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '88%',
+    paddingBottom: 18,
+  },
+  productDetailHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.outlineVariant,
+    alignSelf: 'center',
+    marginTop: 10,
+  },
+  productDetailContent: {
+    padding: 20,
+    paddingBottom: 24,
+  },
+  productDetailImageWrap: {
+    marginBottom: 14,
+  },
+  productDetailImage: {
+    width: '100%',
+    height: 190,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceContainerHigh,
+  },
+  productDetailClose: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productDetailTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  productDetailCategoryTag: {
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 100,
+  },
+  productDetailCategoryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  productDetailMarketText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.onSurfaceVariant,
+  },
+  productDetailName: {
+    marginTop: 10,
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    lineHeight: 28,
+  },
+  productDetailPriceCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  productDetailPriceLabel: {
+    position: 'absolute',
+    top: 10,
+    left: 16,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  productDetailPrice: {
+    marginTop: 14,
+    fontSize: 28,
+    fontWeight: '900',
+    color: Colors.primary,
+  },
+  productDetailUnit: {
+    marginBottom: 5,
+    marginLeft: 4,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  productDetailStatsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  productDetailStatCard: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  productDetailStatLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  productDetailStatValue: {
+    marginTop: 6,
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  productDetailInfoCard: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    gap: 10,
+  },
+  productDetailInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 14,
+  },
+  productDetailInfoLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  productDetailInfoValue: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  productDetailAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 18,
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    paddingVertical: 15,
+  },
+  productDetailAddBtnDisabled: {
+    backgroundColor: Colors.outline,
+  },
+  productDetailAddText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.onPrimary,
   },
 
   // ─── Empty Catalog ─────────────────────
