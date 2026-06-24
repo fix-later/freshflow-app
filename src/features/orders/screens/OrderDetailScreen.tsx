@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
 import {
@@ -93,7 +94,7 @@ function ItemRow({ item, index }: { item: OrderItemDto; index: number }) {
   );
 }
 
-export function OrderDetailScreen({ route }: Props) {
+export function OrderDetailScreen({ route, navigation }: Props) {
   const { orderId } = route.params;
 
   const [order, setOrder] = useState<OrderDto | null>(null);
@@ -126,10 +127,12 @@ export function OrderDetailScreen({ route }: Props) {
     }
   }, [orderId]);
 
-  useEffect(() => {
-    setLoading(true);
-    fetchOrder();
-  }, [fetchOrder]);
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchOrder();
+    }, [fetchOrder]),
+  );
 
   const performCancel = async (reason: string) => {
     setCancelling(true);
@@ -244,6 +247,7 @@ export function OrderDetailScreen({ route }: Props) {
   const itemCount = items.reduce((sum, it) => sum + (it.quantity ?? 0), 0);
   const canCancel = CANCELLABLE_STATUSES.includes(order.status);
   const canConfirmReceipt = order.status === 'delivered' && !order.confirmedReceiptAt;
+  const canReportIssue = order.status === 'delivered';
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -331,24 +335,34 @@ export function OrderDetailScreen({ route }: Props) {
         </View>
       ) : null}
 
-      {/* ── Confirm receipt footer ── */}
-      {canConfirmReceipt ? (
+      {/* ── Confirm receipt / report issue footer ── */}
+      {canConfirmReceipt || canReportIssue ? (
         <View style={styles.footer}>
-          <Pressable
-            style={[styles.confirmReceiptBtn, confirmingReceipt && styles.confirmReceiptBtnDisabled]}
-            onPress={handleConfirmReceipt}
-            disabled={confirmingReceipt}
-          >
-            {confirmingReceipt
-              ? <ActivityIndicator color={Colors.onPrimary} size="small" />
-              : (
-                <>
-                  <Ionicons name="checkmark-circle-outline" size={18} color={Colors.onPrimary} />
-                  <Text style={styles.confirmReceiptBtnText}>Xác nhận đã nhận hàng</Text>
-                </>
-              )
-            }
-          </Pressable>
+          <View style={styles.footerRow}>
+            {canReportIssue ? (
+              <Pressable style={styles.reportIssueBtn} onPress={() => navigation.navigate('ReportIssue', { orderId })}>
+                <Ionicons name="alert-circle-outline" size={18} color={Colors.warning} />
+                <Text style={styles.reportIssueBtnText}>Báo sự cố</Text>
+              </Pressable>
+            ) : null}
+            {canConfirmReceipt ? (
+              <Pressable
+                style={[styles.confirmReceiptBtn, confirmingReceipt && styles.confirmReceiptBtnDisabled]}
+                onPress={handleConfirmReceipt}
+                disabled={confirmingReceipt}
+              >
+                {confirmingReceipt
+                  ? <ActivityIndicator color={Colors.onPrimary} size="small" />
+                  : (
+                    <>
+                      <Ionicons name="checkmark-circle-outline" size={18} color={Colors.onPrimary} />
+                      <Text style={styles.confirmReceiptBtnText}>Xác nhận đã nhận hàng</Text>
+                    </>
+                  )
+                }
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       ) : null}
 
@@ -557,8 +571,10 @@ const styles = StyleSheet.create({
   },
   cancelBtnText: { color: Colors.error, fontWeight: '700', fontSize: 15 },
 
-  // Confirm receipt footer
+  // Confirm receipt / report issue footer
+  footerRow: { flexDirection: 'row', gap: 12 },
   confirmReceiptBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -569,6 +585,18 @@ const styles = StyleSheet.create({
   },
   confirmReceiptBtnDisabled: { opacity: 0.6 },
   confirmReceiptBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  reportIssueBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.warning,
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  reportIssueBtnText: { color: Colors.warning, fontWeight: '700', fontSize: 15 },
 
   // Cancel modal
   modalBackdrop: {

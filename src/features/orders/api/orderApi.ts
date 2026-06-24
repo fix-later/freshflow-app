@@ -61,6 +61,35 @@ export interface CreateOrderPayload {
   notes?: string;
 }
 
+export type IssueType = 'missing' | 'wrong' | 'damaged';
+export type OrderIssueStatus = 'open' | 'resolved';
+
+export interface ReportIssuePayload {
+  orderItemId: string;
+  issueType: IssueType;
+  affectedQuantity: number;
+  description: string;
+}
+
+export interface OrderIssueDto {
+  issueId: string;
+  orderId: string;
+  orderItemId: string | null;
+  reportedBy: string;
+  issueType: IssueType;
+  affectedQuantity: number;
+  description: string;
+  status: OrderIssueStatus;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export const ISSUE_TYPE_LABEL: Record<IssueType, string> = {
+  missing: 'Thiếu hàng',
+  wrong: 'Sai hàng',
+  damaged: 'Hư hỏng',
+};
+
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   draft: 'Bản nháp',
   pending: 'Chờ xác nhận',
@@ -119,6 +148,12 @@ export const orderApi = {
   /** PATCH /api/v1/orders/{orderId}/receipt — only allowed once the order status is 'delivered'. */
   async confirmReceipt(orderId: string): Promise<{ confirmedReceiptAt: string; status?: OrderStatus }> {
     const { data } = await apiClient.patch(`/api/v1/orders/${orderId}/receipt`);
+    return data;
+  },
+
+  /** POST /api/v1/orders/{orderId}/issues — only allowed once the order status is 'delivered'. */
+  async reportIssue(orderId: string, payload: ReportIssuePayload): Promise<OrderIssueDto> {
+    const { data } = await apiClient.post<OrderIssueDto>(`/api/v1/orders/${orderId}/issues`, payload);
     return data;
   },
 };
