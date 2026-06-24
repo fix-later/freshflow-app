@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -12,11 +13,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
 import { Colors } from '../../../constants/colors';
 import { inventoryApi } from '../../inventory/api/inventoryApi';
 import type { MarketProductDto } from '../../../types/api.types';
+import type { PriceHistoryEntry } from '../../inventory/api/inventoryApi';
 import { PriceDashboardHeader } from '../components/PriceDashboardHeader';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -32,6 +34,34 @@ interface AssignedMarket {
 
 function formatPrice(value: number): string {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'Vừa xong';
+  if (diffMin < 60) return `${diffMin} phút trước`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} giờ trước`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay} ngày trước`;
+  return new Date(dateStr).toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function formatFullDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -56,9 +86,15 @@ export function UpdatePriceScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
 
-  // ── Batch price changes: productId → newPrice ──
-  const [pendingChanges, setPendingChanges] = useState<Map<string, number>>(new Map());
+  // ── Batch changes: productId → { price, quantity } ──
+  const [pendingChanges, setPendingChanges] = useState<Map<string, { price: number; quantity: number }>>(new Map());
   const [saving, setSaving] = useState(false);
+
+  // ── Detail modal state ──
+  const [detailProduct, setDetailProduct] = useState<MarketProductDto | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryEntry[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // ── FAB animation ──
   const fabScale = useRef(new Animated.Value(0)).current;
@@ -163,6 +199,18 @@ export function UpdatePriceScreen() {
     loadProducts(selectedMarketId);
   }, [selectedMarketId, loadProducts]);
 
+  // ── Fetch price history when detail modal opens ──
+  useEffect(() => {
+    if (showDetail && detailProduct && selectedMarketId) {
+      setLoadingHistory(true);
+      inventoryApi
+        .getPriceHistory(selectedMarketId, detailProduct.productId, { pageSize: 50 })
+        .then((result) => setPriceHistory(result.items ?? []))
+        .catch(() => setPriceHistory([]))
+        .finally(() => setLoadingHistory(false));
+    }
+  }, [showDetail, detailProduct, selectedMarketId]);
+
   // ── Pull-to-refresh ──
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -178,10 +226,30 @@ export function UpdatePriceScreen() {
     setPendingChanges((prev) => {
       const next = new Map(prev);
       const product = products.find((p) => p.productId === productId);
-      if (product && newPrice === product.currentPrice) {
+      const existing = prev.get(productId);
+      const currentQty = existing?.quantity ?? product?.availableQuantity ?? 0;
+
+      if (product && newPrice === product.currentPrice && currentQty === product.availableQuantity) {
         next.delete(productId);
       } else {
-        next.set(productId, newPrice);
+        next.set(productId, { price: newPrice, quantity: currentQty });
+      }
+      return next;
+    });
+  }, [products]);
+
+  // ── Quantity change handler ──
+  const handleQuantityChange = useCallback((productId: string, newQty: number) => {
+    setPendingChanges((prev) => {
+      const next = new Map(prev);
+      const product = products.find((p) => p.productId === productId);
+      const existing = prev.get(productId);
+      const currentPrice = existing?.price ?? product?.currentPrice ?? 0;
+
+      if (product && newQty === product.availableQuantity && currentPrice === product.currentPrice) {
+        next.delete(productId);
+      } else {
+        next.set(productId, { price: currentPrice, quantity: newQty });
       }
       return next;
     });
@@ -198,7 +266,7 @@ export function UpdatePriceScreen() {
 
     Alert.alert(
       'Lưu tất cả thay đổi',
-      `Bạn muốn lưu ${total} thay đổi giá?`,
+      `Bạn muốn lưu ${total} thay đổi?`,
       [
         { text: 'Hủy', style: 'cancel' },
         {
@@ -206,11 +274,12 @@ export function UpdatePriceScreen() {
           onPress: async () => {
             try {
               setSaving(true);
-              for (const [productId, newPrice] of entries) {
+              for (const [productId, changes] of entries) {
                 try {
-                  await inventoryApi.updateProductPrice(selectedMarketId, productId, {
-                    price: newPrice,
-                  });
+                  const payload: { price?: number; quantity?: number } = {};
+                  if (changes.price !== undefined) payload.price = changes.price;
+                  if (changes.quantity !== undefined) payload.quantity = changes.quantity;
+                  await inventoryApi.updateProductPrice(selectedMarketId, productId, payload);
                   completed++;
                 } catch {
                   failed++;
@@ -242,6 +311,18 @@ export function UpdatePriceScreen() {
     setPendingChanges(new Map());
     setActiveCategory('');
     setSearchQuery('');
+  };
+
+  // ── Detail modal open/close ──
+  const openDetail = (product: MarketProductDto) => {
+    setDetailProduct(product);
+    setShowDetail(true);
+  };
+
+  const closeDetail = () => {
+    setShowDetail(false);
+    setPriceHistory([]);
+    setDetailProduct(null);
   };
 
   // ── Price step helper ──
@@ -401,15 +482,23 @@ export function UpdatePriceScreen() {
         ) : filteredProducts.length > 0 ? (
           filteredProducts.map((product) => {
             const outOfStock = product.availableQuantity <= 0;
-            const displayPrice = pendingChanges.get(product.productId) ?? product.currentPrice;
-            const isChanged =
-              pendingChanges.has(product.productId) &&
-              pendingChanges.get(product.productId) !== product.currentPrice;
+            const pending = pendingChanges.get(product.productId);
+            const displayPrice = pending?.price ?? product.currentPrice;
+            const displayQuantity = pending?.quantity ?? product.availableQuantity;
+            const isPriceChanged = pending?.price !== undefined && pending.price !== product.currentPrice;
+            const isQtyChanged = pending?.quantity !== undefined && pending.quantity !== product.availableQuantity;
+            const isChanged = isPriceChanged || isQtyChanged;
 
             return (
               <View key={product.marketProductId} style={styles.productCard}>
-                {/* ─── Product Header ─── */}
-                <View style={styles.productHeader}>
+                {/* ─── Product Header (tappable) ─── */}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.productHeader,
+                    pressed && styles.productHeaderPressed,
+                  ]}
+                  onPress={() => openDetail(product)}
+                >
                   <View style={styles.productTitleBlock}>
                     <Text style={styles.productName} numberOfLines={2}>
                       {product.productName}
@@ -425,12 +514,14 @@ export function UpdatePriceScreen() {
                       </View>
                     </View>
                   </View>
-                  {outOfStock && (
+                  {outOfStock ? (
                     <View style={styles.outOfStockBadge}>
                       <Text style={styles.outOfStockText}>HẾT HÀNG</Text>
                     </View>
+                  ) : (
+                    <MaterialIcons name="info-outline" size={20} color={Colors.textMuted} style={{ marginLeft: 4, marginTop: 2 }} />
                   )}
-                </View>
+                </Pressable>
 
                 {/* ─── Price Adjustment (inline, matching MarketKiosksScreen card style) ─── */}
                 <View style={styles.priceAdjustSection}>
@@ -445,7 +536,7 @@ export function UpdatePriceScreen() {
                     <TextInput
                       style={[
                         styles.priceInput,
-                        isChanged && styles.priceInputChanged,
+                        isPriceChanged && styles.priceInputChanged,
                         outOfStock && styles.priceInputDisabled,
                       ]}
                       value={displayPrice === 0 && !isChanged ? '' : String(displayPrice)}
@@ -465,12 +556,46 @@ export function UpdatePriceScreen() {
                   {isChanged && (
                     <Pressable
                       style={styles.resetBtn}
-                      onPress={() => handlePriceChange(product.productId, product.currentPrice)}
+                      onPress={() => {
+                        handlePriceChange(product.productId, product.currentPrice);
+                        handleQuantityChange(product.productId, product.availableQuantity);
+                      }}
                     >
                       <Ionicons name="refresh" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
-                      <Text style={styles.resetText}>Đặt lại giá gốc</Text>
+                      <Text style={styles.resetText}>Đặt lại</Text>
                     </Pressable>
                   )}
+                </View>
+
+                {/* ─── Quantity Adjustment ─── */}
+                <View style={styles.qtyAdjustSection}>
+                  <View style={styles.priceAdjustHeader}>
+                    <Text style={styles.priceAdjustLabel}>Số lượng hiện tại</Text>
+                    <Text style={[styles.priceAdjustCurrent, outOfStock && styles.priceOutOfStock]}>
+                      {outOfStock ? '—' : `${displayQuantity} ${product.unit}`}
+                    </Text>
+                  </View>
+
+                  <View style={styles.priceInputRow}>
+                    <TextInput
+                      style={[
+                        styles.priceInput,
+                        isQtyChanged && styles.priceInputChanged,
+                        outOfStock && styles.priceInputDisabled,
+                      ]}
+                      value={String(displayQuantity)}
+                      onChangeText={(text) => {
+                        const cleaned = text.replace(/[^0-9]/g, '');
+                        const num = cleaned === '' ? 0 : Number(cleaned);
+                        handleQuantityChange(product.productId, num);
+                      }}
+                      keyboardType="numeric"
+                      placeholder="Nhập số lượng..."
+                      placeholderTextColor={Colors.textMuted}
+                      editable={!outOfStock}
+                    />
+                    <Text style={styles.priceInputCurrency}>{product.unit}</Text>
+                  </View>
                 </View>
 
                 {/* ─── Product Footer (matching MarketKiosksScreen) ─── */}
@@ -552,6 +677,158 @@ export function UpdatePriceScreen() {
           </Text>
         </Pressable>
       </Animated.View>
+
+      {/* ─── Product Detail Modal ─── */}
+      <Modal
+        visible={showDetail}
+        animationType="slide"
+        transparent
+        onRequestClose={closeDetail}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <Ionicons name="cube" size={20} color={Colors.primary} />
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  {detailProduct?.productName ?? ''}
+                </Text>
+              </View>
+              <Pressable
+                style={styles.modalCloseBtn}
+                onPress={closeDetail}
+              >
+                <Ionicons name="close" size={22} color={Colors.textMuted} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.modalScroll}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+            >
+              {detailProduct && (
+                <>
+                  {/* ─── Product Info Section ─── */}
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionTitle}>Thông tin sản phẩm</Text>
+                    <View style={styles.modalInfoCard}>
+                      {/* Tags row */}
+                      <View style={styles.modalTagsRow}>
+                        {detailProduct.category ? (
+                          <View style={styles.categoryTag}>
+                            <Text style={styles.categoryTagText}>{detailProduct.category}</Text>
+                          </View>
+                        ) : null}
+                        <View style={styles.unitTag}>
+                          <Text style={styles.unitTagText}>{detailProduct.unit}</Text>
+                        </View>
+                      </View>
+
+                      {/* Info grid */}
+                      <View style={styles.modalInfoGrid}>
+                        <View style={styles.modalInfoItem}>
+                          <Text style={styles.modalInfoLabel}>Giá hiện tại</Text>
+                          <Text style={styles.modalInfoValue}>
+                            {formatPrice(detailProduct.currentPrice)}
+                          </Text>
+                        </View>
+                        <View style={styles.modalInfoDivider} />
+                        <View style={styles.modalInfoItem}>
+                          <Text style={styles.modalInfoLabel}>Số lượng</Text>
+                          <Text style={styles.modalInfoValue}>
+                            {detailProduct.currentQuantity} {detailProduct.unit}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.modalInfoGrid}>
+                        <View style={styles.modalInfoItem}>
+                          <Text style={styles.modalInfoLabel}>Kho khả dụng</Text>
+                          <Text style={[
+                            styles.modalInfoValue,
+                            detailProduct.availableQuantity <= 0 && { color: Colors.danger },
+                          ]}>
+                            {detailProduct.availableQuantity} {detailProduct.unit}
+                          </Text>
+                        </View>
+                        <View style={styles.modalInfoDivider} />
+                        <View style={styles.modalInfoItem}>
+                          <Text style={styles.modalInfoLabel}>Cập nhật lần cuối</Text>
+                          <Text style={styles.modalInfoValueSmall} numberOfLines={2}>
+                            {formatRelativeTime(detailProduct.updatedAt)}
+                            {detailProduct.updatedBy ? `\nbởi ${detailProduct.updatedBy}` : ''}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* ─── Price History Section ─── */}
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <Ionicons name="time-outline" size={18} color={Colors.primary} />
+                      <Text style={styles.modalSectionTitle}>Lịch sử giá</Text>
+                    </View>
+
+                    {loadingHistory ? (
+                      <View style={styles.modalLoading}>
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                        <Text style={styles.modalLoadingText}>Đang tải lịch sử...</Text>
+                      </View>
+                    ) : priceHistory.length > 0 ? (
+                      <View style={styles.historyList}>
+                        {/* Table header */}
+                        <View style={styles.historyRowHeader}>
+                          <Text style={[styles.historyColHeader, { flex: 2 }]}>Giá</Text>
+                          <Text style={[styles.historyColHeader, { flex: 1.5 }]}>Số lượng</Text>
+                          <Text style={[styles.historyColHeader, { flex: 2, textAlign: 'right' }]}>Thời gian</Text>
+                        </View>
+
+                        {priceHistory.map((entry, index) => (
+                          <View
+                            key={`${entry.recordedAt}-${index}`}
+                            style={[
+                              styles.historyRow,
+                              index === priceHistory.length - 1 && styles.historyRowLast,
+                            ]}
+                          >
+                            <Text style={[styles.historyCol, { flex: 2, color: Colors.primary, fontWeight: '700' }]}>
+                              {formatPrice(entry.price)}
+                            </Text>
+                            <Text style={[styles.historyCol, { flex: 1.5 }]}>
+                              {entry.quantity} {detailProduct.unit}
+                            </Text>
+                            <View style={{ flex: 2, alignItems: 'flex-end' }}>
+                              <Text style={[styles.historyCol, { textAlign: 'right' }]}>
+                                {formatFullDate(entry.recordedAt)}
+                              </Text>
+                              {entry.recordedBy ? (
+                                <Text style={styles.historyBy}>{entry.recordedBy}</Text>
+                              ) : null}
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <View style={styles.modalEmpty}>
+                        <Ionicons name="document-text-outline" size={36} color={Colors.textMuted} />
+                        <Text style={styles.modalEmptyText}>Chưa có lịch sử giá</Text>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <Pressable style={styles.modalFooterBtn} onPress={closeDetail}>
+              <Text style={styles.modalFooterBtnText}>Đóng</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -744,6 +1021,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 12,
   },
+  productHeaderPressed: {
+    opacity: 0.6,
+  },
   productTitleBlock: {
     flex: 1,
     paddingRight: 10,
@@ -795,6 +1075,12 @@ const styles = StyleSheet.create({
 
   // ─── Price Adjustment (inline in card) ───────────────
   priceAdjustSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  qtyAdjustSection: {
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
     padding: 12,
@@ -971,5 +1257,192 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 60,
+  },
+
+  // ─── Product Detail Modal ──────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '88%',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 10,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+  modalScroll: {
+    flexGrow: 0,
+  },
+  modalScrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  modalSection: {
+    marginTop: 20,
+  },
+  modalSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  modalSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 12,
+  },
+  modalInfoCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+  },
+  modalTagsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  modalInfoGrid: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  modalInfoItem: {
+    flex: 1,
+  },
+  modalInfoDivider: {
+    width: 1,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 14,
+    alignSelf: 'stretch',
+  },
+  modalInfoLabel: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  modalInfoValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  modalInfoValueSmall: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    lineHeight: 17,
+  },
+  modalLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    gap: 8,
+  },
+  modalLoadingText: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    fontWeight: '500',
+  },
+  historyList: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  historyRowHeader: {
+    flexDirection: 'row',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#F1F5F9',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  historyColHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  historyRowLast: {
+    borderBottomWidth: 0,
+  },
+  historyCol: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+  },
+  historyBy: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  modalEmpty: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    gap: 8,
+  },
+  modalEmptyText: {
+    fontSize: 14,
+    color: Colors.textMuted,
+    fontWeight: '500',
+  },
+  modalFooterBtn: {
+    marginHorizontal: 20,
+    marginVertical: 14,
+    paddingVertical: 14,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalFooterBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
 });
