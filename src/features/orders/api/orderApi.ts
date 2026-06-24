@@ -61,6 +61,11 @@ export interface CreateOrderPayload {
   notes?: string;
 }
 
+export interface ReorderPayload {
+  scheduledFor?: string;
+  notes?: string;
+}
+
 export type IssueType = 'missing' | 'wrong' | 'damaged';
 export type OrderIssueStatus = 'open' | 'resolved';
 
@@ -154,6 +159,12 @@ export const orderApi = {
   /** POST /api/v1/orders/{orderId}/issues — only allowed once the order status is 'delivered'. */
   async reportIssue(orderId: string, payload: ReportIssuePayload): Promise<OrderIssueDto> {
     const { data } = await apiClient.post<OrderIssueDto>(`/api/v1/orders/${orderId}/issues`, payload);
+    return data;
+  },
+
+  /** POST /api/v1/orders/{orderId}/reorder — creates a new draft order from a past order's items. */
+  async reorder(orderId: string, payload?: ReorderPayload): Promise<OrderDto> {
+    const { data } = await apiClient.post<OrderDto>(`/api/v1/orders/${orderId}/reorder`, payload ?? {});
     return data;
   },
 };

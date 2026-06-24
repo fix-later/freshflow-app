@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -98,6 +99,7 @@ export function OrderHistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   const fetchOrders = useCallback(
     async (resetList = false, showSpinner = false) => {
@@ -154,6 +156,32 @@ export function OrderHistoryScreen() {
     }
   };
 
+  const performReorder = async (orderId: string) => {
+    setReorderingId(orderId);
+    try {
+      const newOrder = await orderApi.reorder(orderId);
+      Alert.alert('Đã tạo đơn mới', 'Đơn hàng mới đã được tạo từ đơn này.', [
+        { text: 'Xem đơn mới', onPress: () => navigation.navigate('OrderDetail', { orderId: newOrder.orderId }) },
+      ]);
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      Alert.alert('Không thể đặt lại đơn', message ?? 'Đơn hàng này hiện không thể đặt lại.');
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
+  const handleReorder = (orderId: string) => {
+    Alert.alert(
+      'Đặt lại đơn hàng',
+      'Tạo một đơn hàng mới với các sản phẩm giống đơn này?',
+      [
+        { text: 'Không', style: 'cancel' },
+        { text: 'Đặt lại', onPress: () => performReorder(orderId) },
+      ],
+    );
+  };
+
   const renderItem = ({ item }: { item: OrderListItemDto }) => {
     const statusLabel = ORDER_STATUS_LABEL[item.status] || item.status;
     const statusColor = ORDER_STATUS_COLOR[item.status] || Colors.outline;
@@ -168,6 +196,8 @@ export function OrderHistoryScreen() {
       .padStart(2, '0')}`;
 
     const orderId = item.orderId || item.id || '';
+    const isReordering = reorderingId === orderId;
+    const canReorder = item.status === 'delivered';
 
     return (
       <Pressable
@@ -217,6 +247,23 @@ export function OrderHistoryScreen() {
             <Text style={styles.totalAmount}>{(item.totalAmount || 0).toLocaleString('vi-VN')}đ</Text>
           </View>
         </View>
+
+        {canReorder ? (
+          <Pressable
+            style={[styles.reorderBtn, isReordering && styles.reorderBtnDisabled]}
+            onPress={() => handleReorder(orderId)}
+            disabled={isReordering}
+          >
+            {isReordering ? (
+              <ActivityIndicator size="small" color={Colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="repeat-outline" size={14} color={Colors.primary} />
+                <Text style={styles.reorderBtnText}>Đặt lại đơn này</Text>
+              </>
+            )}
+          </Pressable>
+        ) : null}
       </Pressable>
     );
   };
@@ -598,6 +645,26 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 16,
     fontWeight: '800',
+    color: Colors.primary,
+  },
+  reorderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.primary + '40',
+    backgroundColor: Colors.primaryLight,
+  },
+  reorderBtnDisabled: {
+    opacity: 0.6,
+  },
+  reorderBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: Colors.primary,
   },
 });
