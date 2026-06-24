@@ -16,7 +16,6 @@ interface PaymentScreenProps {
   visible: boolean;
   cart: CartItem[];
   subtotal: number;
-  shippingFee: number;
   discount: number;
   onBack: () => void;
   onClose: () => void;
@@ -27,7 +26,6 @@ export function PaymentScreen({
   visible,
   cart,
   subtotal,
-  shippingFee,
   discount,
   onBack,
   onClose,
@@ -38,7 +36,7 @@ export function PaymentScreen({
   const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState(false);
 
-  const total = subtotal + shippingFee - discount;
+  const total = subtotal - discount;
   const itemCount = cart.reduce((sum, item) => sum + item.qty, 0);
 
   const handleConfirm = () => {
@@ -112,10 +110,6 @@ export function PaymentScreen({
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Tạm tính ({itemCount} sản phẩm)</Text>
                   <Text style={styles.summaryValue}>{subtotal.toLocaleString('vi-VN')}đ</Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Phí vận chuyển</Text>
-                  <Text style={styles.summaryValue}>{shippingFee.toLocaleString('vi-VN')}đ</Text>
                 </View>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Giảm giá</Text>

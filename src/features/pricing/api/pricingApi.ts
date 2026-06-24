@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { apiClient, TOKEN_KEY } from '../../../services/api/client';
 import { ENV } from '../../../config/env';
-import type { MarketDto, MarketProductDto, CategoryDto } from '../../../types/api.types';
+import type { MarketDto, MarketProductDto, CategoryDto, PriceHistoryItemDto } from '../../../types/api.types';
 
 export interface GetMarketProductsParams {
   category?: string;
@@ -12,6 +12,12 @@ export interface GetMarketProductsParams {
 
 export interface MarketProductsResponse {
   items: MarketProductDto[];
+  nextCursor: string | null;
+  pageSize: number;
+}
+
+export interface PriceHistoryResponse {
+  items: PriceHistoryItemDto[];
   nextCursor: string | null;
   pageSize: number;
 }
@@ -70,6 +76,29 @@ export const pricingApi = {
       items: raw.data,
       nextCursor: raw.meta?.nextCursor ?? null,
       pageSize: raw.meta?.pageSize ?? 50,
+    };
+  },
+
+  /**
+   * GET /api/v1/markets/{marketId}/products/{productId}/price-history
+   * Used on Restaurant product detail to show recent price/stock changes.
+   */
+  async getPriceHistory(
+    marketId: string,
+    productId: string,
+    params?: { cursor?: string; pageSize?: number; from?: string; to?: string },
+  ): Promise<PriceHistoryResponse> {
+    type Raw = { success: boolean; data: PriceHistoryItemDto[]; meta: { pageSize: number; nextCursor: string | null } };
+    const raw = await rawGet<Raw>(`/api/v1/markets/${marketId}/products/${productId}/price-history`, {
+      cursor: params?.cursor,
+      pageSize: params?.pageSize ?? 10,
+      from: params?.from,
+      to: params?.to,
+    });
+    return {
+      items: raw.data,
+      nextCursor: raw.meta?.nextCursor ?? null,
+      pageSize: raw.meta?.pageSize ?? 10,
     };
   },
 };
