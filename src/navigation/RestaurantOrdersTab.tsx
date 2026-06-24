@@ -5,6 +5,7 @@ import { ConfirmOrderScreen } from '../features/orders/screens/ConfirmOrderScree
 import { OrderDetailScreen } from '../features/orders/screens/OrderDetailScreen';
 import { OrderHistoryScreen } from '../features/orders/screens/OrderHistoryScreen';
 import { ReportIssueScreen } from '../features/orders/screens/ReportIssueScreen';
+import { CreateRecurringOrderScreen } from '../features/orders/screens/CreateRecurringOrderScreen';
 import { type RestaurantOrdersStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RestaurantOrdersStackParamList>();
@@ -41,6 +42,11 @@ export function RestaurantOrdersTab() {
         name="ReportIssue"
         component={ReportIssueScreen}
         options={{ title: 'Báo sự cố', animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="CreateRecurringOrder"
+        component={CreateRecurringOrderScreen}
+        options={{ title: 'Đặt hàng định kỳ', animation: 'slide_from_right' }}
       />
     </Stack.Navigator>
   );

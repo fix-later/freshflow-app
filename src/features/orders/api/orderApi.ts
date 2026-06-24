@@ -66,6 +66,26 @@ export interface ReorderPayload {
   notes?: string;
 }
 
+export type RecurrenceType = 'daily' | 'weekly';
+
+export interface CreateScheduledOrderPayload {
+  recurrenceType: RecurrenceType;
+  firstRunAt: string;
+  notes?: string;
+}
+
+export interface ScheduledOrderDto {
+  scheduledOrderId: string;
+  restaurantId: string;
+  recurrenceType: RecurrenceType;
+  firstRunAt: string;
+  lastExecutedAt: string | null;
+  cancelledAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type IssueType = 'missing' | 'wrong' | 'damaged';
 export type OrderIssueStatus = 'open' | 'resolved';
 
@@ -165,6 +185,12 @@ export const orderApi = {
   /** POST /api/v1/orders/{orderId}/reorder — creates a new draft order from a past order's items. */
   async reorder(orderId: string, payload?: ReorderPayload): Promise<OrderDto> {
     const { data } = await apiClient.post<OrderDto>(`/api/v1/orders/${orderId}/reorder`, payload ?? {});
+    return data;
+  },
+
+  /** POST /api/v1/orders/scheduled — creates a recurring scheduled order. */
+  async createScheduledOrder(payload: CreateScheduledOrderPayload): Promise<ScheduledOrderDto> {
+    const { data } = await apiClient.post<ScheduledOrderDto>('/api/v1/orders/scheduled', payload);
     return data;
   },
 };
