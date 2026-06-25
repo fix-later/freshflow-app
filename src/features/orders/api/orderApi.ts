@@ -74,6 +74,8 @@ export interface CreateScheduledOrderPayload {
   notes?: string;
 }
 
+export type UpdateScheduledOrderPayload = CreateScheduledOrderPayload;
+
 export interface ScheduledOrderDto {
   scheduledOrderId: string;
   restaurantId: string;
@@ -84,6 +86,17 @@ export interface ScheduledOrderDto {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ScheduledOrderListMeta {
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ScheduledOrderListResponse {
+  data: ScheduledOrderDto[];
+  meta: ScheduledOrderListMeta;
 }
 
 export type IssueType = 'missing' | 'wrong' | 'damaged';
@@ -191,6 +204,42 @@ export const orderApi = {
   /** POST /api/v1/orders/scheduled — creates a recurring scheduled order. */
   async createScheduledOrder(payload: CreateScheduledOrderPayload): Promise<ScheduledOrderDto> {
     const { data } = await apiClient.post<ScheduledOrderDto>('/api/v1/orders/scheduled', payload);
+    return data;
+  },
+
+  /** GET /api/v1/orders/scheduled — lists recurring scheduled orders for the current restaurant. */
+  async listScheduledOrders(params?: {
+    includeCancelled?: boolean;
+    page?: number;
+    pageSize?: number;
+  }): Promise<ScheduledOrderListResponse> {
+    const { data } = await apiClient.get<ScheduledOrderListResponse>('/api/v1/orders/scheduled', { params });
+    return data;
+  },
+
+  /** GET /api/v1/orders/scheduled/{scheduledOrderId} — recurring schedule detail. */
+  async getScheduledOrder(scheduledOrderId: string): Promise<ScheduledOrderDto> {
+    const { data } = await apiClient.get<ScheduledOrderDto>(`/api/v1/orders/scheduled/${scheduledOrderId}`);
+    return data;
+  },
+
+  /** PATCH /api/v1/orders/scheduled/{scheduledOrderId} — updates a recurring schedule's recurrence/notes. */
+  async updateScheduledOrder(
+    scheduledOrderId: string,
+    payload: UpdateScheduledOrderPayload,
+  ): Promise<ScheduledOrderDto> {
+    const { data } = await apiClient.patch<ScheduledOrderDto>(
+      `/api/v1/orders/scheduled/${scheduledOrderId}`,
+      payload,
+    );
+    return data;
+  },
+
+  /** PATCH /api/v1/orders/scheduled/{scheduledOrderId}/cancel — cancels a recurring schedule. */
+  async cancelScheduledOrder(scheduledOrderId: string): Promise<ScheduledOrderDto> {
+    const { data } = await apiClient.patch<ScheduledOrderDto>(
+      `/api/v1/orders/scheduled/${scheduledOrderId}/cancel`,
+    );
     return data;
   },
 };

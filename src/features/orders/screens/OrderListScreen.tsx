@@ -501,7 +501,7 @@ export function OrderListScreen() {
             <Text style={styles.headerLogoText}>FreshFlow</Text>
           </View>
           <View style={styles.headerIcons}>
-            <Pressable style={styles.hIconButton} onPress={() => navigation.navigate('CreateRecurringOrder')}>
+            <Pressable style={styles.hIconButton} onPress={() => navigation.navigate('ManageRecurringOrders')}>
               <Ionicons
                 name="repeat-outline"
                 size={23}

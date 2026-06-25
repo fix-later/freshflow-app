@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -49,13 +49,39 @@ function formatTime(d: Date): string {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
-export function CreateRecurringOrderScreen({ navigation }: Props) {
+export function CreateRecurringOrderScreen({ navigation, route }: Props) {
+  const editingId = route.params?.scheduledOrderId;
+  const isEditMode = !!editingId;
+
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType | null>(null);
   const [firstRunAt, setFirstRunAt] = useState<Date>(getDefaultFirstRun);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(isEditMode);
+
+  useEffect(() => {
+    navigation.setOptions({ title: isEditMode ? 'Sửa lịch đặt hàng' : 'Đặt hàng định kỳ' });
+  }, [navigation, isEditMode]);
+
+  useEffect(() => {
+    if (!editingId) return;
+    (async () => {
+      try {
+        const existing = await orderApi.getScheduledOrder(editingId);
+        setRecurrenceType(existing.recurrenceType);
+        setFirstRunAt(new Date(existing.firstRunAt));
+        setNotes(existing.notes ?? '');
+      } catch {
+        Alert.alert('Lỗi', 'Không thể tải thông tin lịch đặt hàng.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      } finally {
+        setLoadingExisting(false);
+      }
+    })();
+  }, [editingId, navigation]);
 
   const applyPicked = (mode: 'date' | 'time', selected: Date) => {
     const merged = new Date(firstRunAt);
@@ -100,23 +126,46 @@ export function CreateRecurringOrderScreen({ navigation }: Props) {
       return;
     }
 
+    const payload = {
+      recurrenceType,
+      firstRunAt: firstRunAt.toISOString(),
+      notes: notes.trim() || undefined,
+    };
+
     setSubmitting(true);
     try {
-      await orderApi.createScheduledOrder({
-        recurrenceType,
-        firstRunAt: firstRunAt.toISOString(),
-        notes: notes.trim() || undefined,
-      });
-      Alert.alert('Đã tạo lịch đặt hàng', 'Đơn hàng sẽ được tự động tạo theo chu kỳ bạn chọn.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      if (editingId) {
+        await orderApi.updateScheduledOrder(editingId, payload);
+        Alert.alert('Đã lưu thay đổi', 'Lịch đặt hàng định kỳ đã được cập nhật.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      } else {
+        await orderApi.createScheduledOrder(payload);
+        Alert.alert('Đã tạo lịch đặt hàng', 'Đơn hàng sẽ được tự động tạo theo chu kỳ bạn chọn.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      }
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      Alert.alert('Không thể tạo lịch đặt hàng', message ?? 'Vui lòng kiểm tra lại thông tin và thử lại.');
+      Alert.alert(
+        editingId ? 'Không thể lưu thay đổi' : 'Không thể tạo lịch đặt hàng',
+        message ?? 'Vui lòng kiểm tra lại thông tin và thử lại.',
+      );
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (loadingExisting) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['bottom']}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Đang tải thông tin lịch đặt hàng...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -195,7 +244,7 @@ export function CreateRecurringOrderScreen({ navigation }: Props) {
         >
           {submitting
             ? <ActivityIndicator color={Colors.onPrimary} size="small" />
-            : <Text style={styles.submitBtnText}>Tạo lịch đặt hàng</Text>
+            : <Text style={styles.submitBtnText}>{editingId ? 'Lưu thay đổi' : 'Tạo lịch đặt hàng'}</Text>
           }
         </Pressable>
       </View>
@@ -240,6 +289,8 @@ export function CreateRecurringOrderScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   body: { padding: 16 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
+  loadingText: { fontSize: 14, color: Colors.outline, fontWeight: '500' },
 
   infoBox: {
     flexDirection: 'row',

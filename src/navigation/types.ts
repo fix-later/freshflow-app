@@ -36,7 +36,8 @@ export type RestaurantOrdersStackParamList = {
   OrderDetail: { orderId: string };
   OrderHistory: undefined;
   ReportIssue: { orderId: string };
-  CreateRecurringOrder: undefined;
+  CreateRecurringOrder: { scheduledOrderId?: string } | undefined;
+  ManageRecurringOrders: undefined;
 };
 
 export type MarketHomeStackParamList = {
