@@ -19,7 +19,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Colors } from "../../../constants/colors";
 import { useAuthStore } from "../../../store/authStore";
 import { pricingApi } from "../../pricing/api/pricingApi";
-import type { MarketDto, MarketProductDto, CategoryDto } from "../../../types/api.types";
+import type { MarketDto, MarketProductDto, CategoryDto, PriceHistoryItemDto } from "../../../types/api.types";
 import { PaymentScreen } from "./PaymentScreen";
 
 // ─── Configuration ─────────────────────────
@@ -173,6 +173,16 @@ function formatPrice(p: number) {
 }
 
 // ─── Cart Item Type ────────────────────────────
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export interface CartItem {
   id: string;
   name: string;
@@ -204,6 +214,7 @@ export function OrderListScreen() {
   // ── Cart helpers ─────────────────────────
   const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.qty, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.qty, 0), [cart]);
+  const isCartEmpty = cart.length === 0;
 
   const addToCart = (product: typeof PRODUCTS[0]) => {
     setCart(prev => {
@@ -240,6 +251,10 @@ export function OrderListScreen() {
 
   // ── Product detail state ──────────────────
   const [detailProduct, setDetailProduct] = useState<{ product: MarketProductDto; image: string; marketName: string } | null>(null);
+  const [detailHistory, setDetailHistory] = useState<PriceHistoryItemDto[]>([]);
+  const [detailHistoryLoading, setDetailHistoryLoading] = useState(false);
+  const [detailHistoryError, setDetailHistoryError] = useState<string | null>(null);
+  const [detailOrderQuantity, setDetailOrderQuantity] = useState(1);
 
   const apiLoadInit = useCallback(async () => {
     try {
@@ -302,13 +317,15 @@ export function OrderListScreen() {
   }, [searchQuery, apiProducts]);
 
   // ── Add API product to cart ───────────────
-  const addApiToCart = (product: MarketProductDto) => {
+  const addApiToCart = (product: MarketProductDto, quantity = 1) => {
+    if (quantity <= 0) return;
+
     const marketName = apiMarkets.find(m => m.id === product.marketId)?.name ?? '';
     setCart(prev => {
       const existing = prev.find(c => c.id === product.marketProductId);
       if (existing) {
         return prev.map(c =>
-          c.id === product.marketProductId ? { ...c, qty: c.qty + 1 } : c,
+          c.id === product.marketProductId ? { ...c, qty: c.qty + quantity } : c,
         );
       }
       return [...prev, {
@@ -317,7 +334,7 @@ export function OrderListScreen() {
         market: marketName,
         unit: product.unit,
         price: product.currentPrice,
-        qty: 1,
+        qty: quantity,
         image: productImage(apiProducts.indexOf(product)),
       }];
     });
@@ -325,13 +342,32 @@ export function OrderListScreen() {
 
   const getApiCartQty = (productId: string) => cart.find(c => c.id === productId)?.qty ?? 0;
 
-  const openApiProductDetail = useCallback((product: MarketProductDto, index: number) => {
+  const openApiProductDetail = useCallback(async (product: MarketProductDto, index: number) => {
     const marketName = apiMarkets.find(m => m.id === product.marketId)?.name ?? '';
     setDetailProduct({ product, image: productImage(index), marketName });
+    setDetailOrderQuantity(product.availableQuantity > 0 ? 1 : 0);
+    setDetailHistory([]);
+    setDetailHistoryError(null);
+    setDetailHistoryLoading(true);
+
+    try {
+      const history = await pricingApi.getPriceHistory(product.marketId, product.productId, {
+        pageSize: 5,
+      });
+      setDetailHistory(history.items);
+    } catch {
+      setDetailHistoryError('Khong the tai lich su gia');
+    } finally {
+      setDetailHistoryLoading(false);
+    }
   }, [apiMarkets]);
 
   const closeProductDetail = useCallback(() => {
     setDetailProduct(null);
+    setDetailOrderQuantity(1);
+    setDetailHistory([]);
+    setDetailHistoryError(null);
+    setDetailHistoryLoading(false);
   }, []);
 
   // ── Filtered products for catalog tab ────
@@ -438,22 +474,9 @@ export function OrderListScreen() {
               item.outOfStock && styles.addToCartDisabled,
             ]}
             disabled={item.outOfStock}
-            onPress={() => {
-              setCart(prev => {
-                const existing = prev.find(c => c.name === item.name);
-                if (existing) {
-                  return prev.map(c => c.name === item.name ? { ...c, qty: c.qty + 1 } : c);
-                }
-                return [...prev, {
-                  id: item.id,
-                  name: item.name,
-                  market: item.market,
-                  unit: 'Kg',
-                  price: item.price,
-                  qty: 1,
-                  image: item.image,
-                }];
-              });
+            onPress={(event) => {
+              event.stopPropagation();
+              setDemoDetailProduct(item);
             }}
           >
             <MaterialIcons
@@ -524,27 +547,16 @@ export function OrderListScreen() {
 
           {!outOfStock && (
             <View style={styles.catalogInlineQtyRow}>
-              {qty > 0 ? (
-                <>
-                  <Pressable style={styles.catalogInlineQtyBtn} onPress={() => {
-                    setCart(prev => {
-                      const existing = prev.find(c => c.id === item.marketProductId);
-                      if (existing && existing.qty <= 1) return prev.filter(c => c.id !== item.marketProductId);
-                      return prev.map(c => c.id === item.marketProductId ? { ...c, qty: c.qty - 1 } : c);
-                    });
-                  }}>
-                    <Ionicons name="remove" size={16} color={Colors.primary} />
-                  </Pressable>
-                  <Text style={styles.catalogInlineQtyText}>{qty}</Text>
-                  <Pressable style={styles.catalogInlineAddBtn} onPress={() => addApiToCart(item)}>
-                    <Ionicons name="add" size={16} color="#FFF" />
-                  </Pressable>
-                </>
-              ) : (
-                <Pressable style={styles.catalogInlineAddBtn} onPress={() => addApiToCart(item)}>
-                  <Ionicons name="add" size={18} color="#FFF" />
-                </Pressable>
-              )}
+              {qty > 0 && <Text style={styles.catalogInlineQtyText}>{qty}</Text>}
+              <Pressable
+                style={styles.catalogInlineAddBtn}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  openApiProductDetail(item, index);
+                }}
+              >
+                <Ionicons name="add" size={18} color="#FFF" />
+              </Pressable>
             </View>
           )}
         </View>
@@ -993,17 +1005,120 @@ export function OrderListScreen() {
                   </View>
                 </View>
 
+                <View style={styles.productDetailInfoCard}>
+                  <View style={styles.productPurchaseHeader}>
+                    <View style={styles.productPurchaseHeaderText}>
+                      <Text style={styles.productPurchaseTitle}>Chọn số lượng mua</Text>
+                      <Text style={styles.productPurchaseSub}>
+                        Mua theo số nguyên: 1, 2, 3 {detailProduct.product.unit}
+                      </Text>
+                    </View>
+                    <Text style={styles.productPurchaseAvailable}>
+                      Còn {Math.max(0, detailProduct.product.availableQuantity)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.productQuantityPicker}>
+                    <Pressable
+                      style={[
+                        styles.productQuantityBtn,
+                        detailOrderQuantity <= 1 && styles.productQuantityBtnDisabled,
+                      ]}
+                      disabled={detailOrderQuantity <= 1}
+                      onPress={() => setDetailOrderQuantity((qty) => Math.max(1, qty - 1))}
+                    >
+                      <MaterialIcons
+                        name="remove"
+                        size={18}
+                        color={detailOrderQuantity <= 1 ? Colors.outline : Colors.primary}
+                      />
+                    </Pressable>
+
+                    <View style={styles.productQuantityValueWrap}>
+                      <Text style={styles.productQuantityValue}>{detailOrderQuantity}</Text>
+                      <Text style={styles.productQuantityUnit}>{detailProduct.product.unit}</Text>
+                    </View>
+
+                    <Pressable
+                      style={[
+                        styles.productQuantityBtn,
+                        detailOrderQuantity >= Math.max(0, detailProduct.product.availableQuantity) &&
+                          styles.productQuantityBtnDisabled,
+                      ]}
+                      disabled={detailOrderQuantity >= Math.max(0, detailProduct.product.availableQuantity)}
+                      onPress={() =>
+                        setDetailOrderQuantity((qty) =>
+                          Math.min(Math.max(0, detailProduct.product.availableQuantity), qty + 1),
+                        )
+                      }
+                    >
+                      <MaterialIcons
+                        name="add"
+                        size={18}
+                        color={
+                          detailOrderQuantity >= Math.max(0, detailProduct.product.availableQuantity)
+                            ? Colors.outline
+                            : Colors.primary
+                        }
+                      />
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.productPurchaseTotalRow}>
+                    <Text style={styles.productPurchaseTotalLabel}>Tạm tính</Text>
+                    <Text style={styles.productPurchaseTotalValue}>
+                      {formatPrice(detailProduct.product.currentPrice * detailOrderQuantity)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.productDetailInfoCard}>
+                  <View style={styles.productHistoryHeader}>
+                    <Text style={styles.productHistoryTitle}>Lịch sử cập nhật giá</Text>
+                    <Text style={styles.productHistorySub}>5 lần gần nhất</Text>
+                  </View>
+
+                  {detailHistoryLoading ? (
+                    <View style={styles.productHistoryLoading}>
+                      <ActivityIndicator size="small" color={Colors.primary} />
+                      <Text style={styles.productHistoryLoadingText}>Đang tải lịch sử...</Text>
+                    </View>
+                  ) : detailHistoryError ? (
+                    <Text style={styles.productHistoryError}>{detailHistoryError}</Text>
+                  ) : detailHistory.length === 0 ? (
+                    <Text style={styles.productHistoryEmpty}>Chưa có lịch sử cập nhật giá</Text>
+                  ) : (
+                    detailHistory.map((history) => (
+                      <View key={history.id} style={styles.productHistoryRow}>
+                        <View style={styles.productHistoryLeft}>
+                          <Text style={styles.productHistoryPrice}>{formatPrice(history.price)}</Text>
+                          <Text style={styles.productHistoryDate}>{formatDateTime(history.recordedAt)}</Text>
+                        </View>
+                        <View style={styles.productHistoryQtyBadge}>
+                          <Text style={styles.productHistoryQty}>{history.quantity}</Text>
+                          <Text style={styles.productHistoryQtyLabel}>SL</Text>
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </View>
+
                 <Pressable
                   style={[
                     styles.productDetailAddBtn,
-                    detailProduct.product.availableQuantity <= 0 && styles.productDetailAddBtnDisabled,
+                    detailOrderQuantity <= 0 && styles.productDetailAddBtnDisabled,
                   ]}
-                  disabled={detailProduct.product.availableQuantity <= 0}
-                  onPress={() => addApiToCart(detailProduct.product)}
+                  disabled={detailOrderQuantity <= 0}
+                  onPress={() => {
+                    addApiToCart(detailProduct.product, detailOrderQuantity);
+                    closeProductDetail();
+                  }}
                 >
                   <Ionicons name="cart" size={18} color="#FFF" />
                   <Text style={styles.productDetailAddText}>
-                    {detailProduct.product.availableQuantity <= 0 ? 'Tạm hết hàng' : 'Thêm vào giỏ'}
+                    {detailOrderQuantity <= 0
+                      ? 'Tạm hết hàng'
+                      : `Thêm ${detailOrderQuantity} ${detailProduct.product.unit} vào giỏ`}
                   </Text>
                 </Pressable>
               </ScrollView>
@@ -1098,13 +1213,20 @@ export function OrderListScreen() {
               <Text style={styles.cartScreenCheckoutTotal}>{cartTotal.toLocaleString('vi-VN')}đ</Text>
             </View>
             <Pressable
-              style={styles.cartScreenCheckoutBtn}
+              style={[
+                styles.cartScreenCheckoutBtn,
+                isCartEmpty && styles.cartScreenCheckoutBtnDisabled,
+              ]}
+              disabled={isCartEmpty}
               onPress={() => {
+                if (isCartEmpty) return;
                 setShowCart(false);
                 setShowPayment(true);
               }}
             >
-              <Text style={styles.cartScreenCheckoutBtnText}>Tiến hành thanh toán</Text>
+              <Text style={styles.cartScreenCheckoutBtnText}>
+                {isCartEmpty ? 'Thêm sản phẩm trước' : 'Tiến hành thanh toán'}
+              </Text>
             </Pressable>
           </View>
         </SafeAreaView>
@@ -1824,6 +1946,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
   },
+  cartScreenCheckoutBtnDisabled: {
+    backgroundColor: Colors.surfaceVariant,
+  },
   cartScreenCheckoutBtnText: {
     color: "#FFF",
     fontFamily: "Inter-Bold",
@@ -2069,16 +2194,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  catalogInlineQtyBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
   catalogInlineQtyText: {
     fontSize: 14,
     fontWeight: '700',
@@ -2250,6 +2365,156 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: Colors.textPrimary,
+  },
+  productPurchaseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  productPurchaseHeaderText: {
+    flex: 1,
+  },
+  productPurchaseTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  productPurchaseSub: {
+    marginTop: 3,
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  productPurchaseAvailable: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  productQuantityPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    paddingVertical: 4,
+  },
+  productQuantityBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
+  },
+  productQuantityBtnDisabled: {
+    borderColor: Colors.outlineVariant,
+    backgroundColor: Colors.surfaceContainerHigh,
+  },
+  productQuantityValueWrap: {
+    minWidth: 92,
+    alignItems: 'center',
+  },
+  productQuantityValue: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: Colors.textPrimary,
+  },
+  productQuantityUnit: {
+    marginTop: -2,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textMuted,
+  },
+  productPurchaseTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.outlineVariant,
+  },
+  productPurchaseTotalLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  productPurchaseTotalValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: Colors.primary,
+  },
+  productHistoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  productHistoryTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  productHistorySub: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  productHistoryLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  productHistoryLoadingText: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  productHistoryError: {
+    fontSize: 12,
+    color: Colors.error,
+  },
+  productHistoryEmpty: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  productHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.outlineVariant,
+    gap: 12,
+  },
+  productHistoryLeft: {
+    flex: 1,
+  },
+  productHistoryPrice: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  productHistoryDate: {
+    marginTop: 2,
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  productHistoryQtyBadge: {
+    minWidth: 48,
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerLow,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  productHistoryQty: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  productHistoryQtyLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textMuted,
   },
   productDetailAddBtn: {
     flexDirection: 'row',
