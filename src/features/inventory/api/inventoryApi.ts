@@ -82,7 +82,7 @@ export const inventoryApi = {
   async updateProductPrice(
     marketId: string,
     productId: string,
-    payload: { price: number; quantity?: number; expectedVersion?: string },
+    payload: { price?: number; quantity?: number; expectedVersion?: string },
   ): Promise<void> {
     await apiClient.patch(`/api/v1/markets/${marketId}/products/${productId}/price`, payload);
   },
