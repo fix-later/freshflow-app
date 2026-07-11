@@ -12,6 +12,33 @@ export type RestaurantTabParamList = {
   RestaurantProfile: undefined;
 };
 
+export type CreateOrderItem = {
+  marketProductId: string;
+  productName: string;
+  marketName: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  image: string;
+  note?: string;
+};
+
+export type RestaurantOrdersStackParamList = {
+  OrderList: undefined;
+  CreateOrder: { items: CreateOrderItem[] };
+  ConfirmOrder: {
+    items: CreateOrderItem[];
+    scheduledFor?: string;
+    deliveryLabel: string;
+    notes?: string;
+  };
+  OrderDetail: { orderId: string };
+  OrderHistory: undefined;
+  ReportIssue: { orderId: string };
+  CreateRecurringOrder: { scheduledOrderId?: string } | undefined;
+  ManageRecurringOrders: undefined;
+};
+
 export type MarketHomeStackParamList = {
   MarketAgentHomeMain: undefined;
   MarketKiosks: { marketId: string; marketName: string };

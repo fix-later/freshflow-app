@@ -33,7 +33,8 @@
           "photosPermission": "FreshFlow cần truy cập ảnh để cập nhật ảnh đại diện.",
           "cameraPermission": "FreshFlow cần truy cập camera để chụp ảnh đại diện."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }
