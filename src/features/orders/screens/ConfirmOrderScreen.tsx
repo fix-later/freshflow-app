@@ -128,7 +128,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
       console.log('Order creation result:', result);
 
       // Extract order ID with robust envelope fallback check
-      const orderId = result?.orderId || (result as any)?.id || (result as any)?.data?.orderId || (result as any)?.data?.id || 'SUCCESS';
+      const orderId = result?.orderId || (result as any)?.id || (result as any)?.data?.orderId || (result as any)?.data?.id || '';
       clearCart();
       setPlacedOrderId(orderId);
     } catch (err: unknown) {

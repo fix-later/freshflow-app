@@ -102,12 +102,11 @@ export function OrderHistoryScreen() {
   const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   const fetchOrders = useCallback(
-    async (resetList = false, showSpinner = false) => {
+    async (resetList = false, showSpinner = false, cursorOverride?: string | null) => {
       if (showSpinner) setLoading(true);
       try {
-        const currentCursor = resetList ? undefined : (nextCursor || undefined);
+        const currentCursor = resetList ? undefined : ((cursorOverride !== undefined ? cursorOverride : nextCursor) || undefined);
 
-        // Calculate date filters
         let fromDate: string | undefined = undefined;
         if (dateRange === 'today') fromDate = getStartOfToday();
         else if (dateRange === '7days') fromDate = getSevenDaysAgo();
@@ -134,14 +133,14 @@ export function OrderHistoryScreen() {
         setLoadingMore(false);
       }
     },
-    [statusFilter, dateRange, nextCursor]
+    [statusFilter, dateRange],
   );
 
   // Trigger reload when filters change
   useEffect(() => {
     setNextCursor(null);
-    fetchOrders(true, true);
-  }, [statusFilter, dateRange]);
+    fetchOrders(true, true, null);
+  }, [statusFilter, dateRange, fetchOrders]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -152,7 +151,7 @@ export function OrderHistoryScreen() {
   const handleLoadMore = () => {
     if (nextCursor && !loadingMore && !loading) {
       setLoadingMore(true);
-      fetchOrders(false, false);
+      fetchOrders(false, false, nextCursor);
     }
   };
 

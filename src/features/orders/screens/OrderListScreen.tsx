@@ -22,7 +22,7 @@ import { Colors } from "../../../constants/colors";
 import { useAuthStore } from "../../../store/authStore";
 import { useCartStore } from "../../../store/cartStore";
 import { pricingApi } from "../../pricing/api/pricingApi";
-import type { MarketDto, MarketProductDto, CategoryDto } from "../../../types/api.types";
+import type { MarketDto, MarketProductDto, CategoryDto, PriceHistoryItemDto } from "../../../types/api.types";
 import { type RestaurantOrdersStackParamList } from "../../../navigation/types";
 
 type OrdersNav = NativeStackNavigationProp<RestaurantOrdersStackParamList>;
@@ -236,6 +236,8 @@ export function OrderListScreen() {
       image: product.image,
     });
   };
+
+  const isCartEmpty = cart.length === 0;
 
   const removeFromCart = (productName: string) => {
     const item = cart.find(c => c.name === productName);
@@ -813,8 +815,7 @@ export function OrderListScreen() {
               data={filteredApiProducts}
               renderItem={(props) => renderProductInCatalog({ ...props, index: props.index })}
               keyExtractor={(p) => p.marketProductId}
-              numColumns={2}
-              columnWrapperStyle={styles.productRow}
+              numColumns={1}
               contentContainerStyle={styles.mainScroll}
               showsVerticalScrollIndicator={false}
               refreshControl={
@@ -952,11 +953,7 @@ export function OrderListScreen() {
                   style={[styles.productDetailAddBtn, demoDetailProduct.outOfStock && styles.productDetailAddBtnDisabled]}
                   disabled={demoDetailProduct.outOfStock}
                   onPress={() => {
-                    setCart(prev => {
-                      const existing = prev.find(c => c.name === demoDetailProduct.name);
-                      if (existing) return prev.map(c => c.name === demoDetailProduct.name ? { ...c, qty: c.qty + 1 } : c);
-                      return [...prev, { id: demoDetailProduct.id, name: demoDetailProduct.name, market: demoDetailProduct.market, unit: 'Kg', price: demoDetailProduct.price, qty: 1, image: demoDetailProduct.image }];
-                    });
+                    addToCart(demoDetailProduct);
                     setDemoDetailProduct(null);
                   }}
                 >
