@@ -8,7 +8,6 @@ export type AuthStackParamList = {
 
 export type RestaurantTabParamList = {
   RestaurantOrders: undefined;
-  RestaurantPricing: undefined;
   RestaurantTracking: undefined;
   RestaurantProfile: undefined;
 };

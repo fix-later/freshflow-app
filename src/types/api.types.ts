@@ -90,6 +90,16 @@ export interface MarketProductDto {
   updatedBy: string;
 }
 
+/** A price/quantity change record for a market product. */
+export interface PriceHistoryItemDto {
+  id: string;
+  marketProductId: string;
+  price: number;
+  quantity: number;
+  recordedBy: string | null;
+  recordedAt: string;
+}
+
 /** Cursor-pagination metadata returned by the BE. */
 export interface CursorMeta {
   pageSize: number;

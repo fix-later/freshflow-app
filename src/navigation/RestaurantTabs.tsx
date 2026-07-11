@@ -2,7 +2,7 @@ import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PriceListScreen } from '../features/pricing/screens/PriceListScreen';
+
 import { TrackOrderScreen } from '../features/delivery/screens/TrackOrderScreen';
 import { RestaurantProfileTab } from './RestaurantProfileTab';
 import { RestaurantOrdersTab } from './RestaurantOrdersTab';
@@ -13,7 +13,6 @@ const Tab = createBottomTabNavigator<RestaurantTabParamList>();
 
 const TAB_CONFIG = {
   RestaurantOrders: { label: 'Chợ', icon: 'storefront-outline' as const, activeIcon: 'storefront' as const },
-  RestaurantPricing: { label: 'Mua hàng', icon: 'cart-outline' as const, activeIcon: 'cart' as const },
   RestaurantTracking: { label: 'Giao hàng', icon: 'car-outline' as const, activeIcon: 'car' as const },
   RestaurantProfile: { label: 'Hồ sơ', icon: 'person-circle-outline' as const, activeIcon: 'person-circle' as const },
 } as const;
@@ -70,11 +69,6 @@ export function RestaurantTabs() {
         name="RestaurantOrders"
         component={RestaurantOrdersTab}
         options={{ headerShown: false }}
-      />
-      <Tab.Screen
-        name="RestaurantPricing"
-        component={PriceListScreen}
-        options={{ title: 'Mua hàng' }}
       />
       <Tab.Screen
         name="RestaurantTracking"

@@ -7,6 +7,7 @@ import {
   Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -18,7 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../../constants/colors';
 import { pricingApi } from '../api/pricingApi';
 import { useCartStore } from '../../../store/cartStore';
-import type { MarketDto, MarketProductDto, CategoryDto } from '../../../types/api.types';
+import type { MarketDto, MarketProductDto, CategoryDto, PriceHistoryItemDto } from '../../../types/api.types';
 
 // ─── Assets ────────────────────────────────
 const MARKET_IMAGES: Record<string, string> = {
@@ -78,6 +79,26 @@ function formatPrice(amount: number): string {
   return amount.toLocaleString('vi-VN') + 'đ';
 }
 
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatRelativeTime(value: string): string {
+  const diffMs = Date.now() - new Date(value).getTime();
+  const minutes = Math.max(0, Math.floor(diffMs / 60000));
+  if (minutes < 1) return 'Vừa cập nhật';
+  if (minutes < 60) return `${minutes} phút trước`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} giờ trước`;
+  return `${Math.floor(hours / 24)} ngày trước`;
+}
+
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 // ─── Screen ────────────────────────────────
@@ -106,6 +127,13 @@ export function PriceListScreen() {
     clearCart,
   } = useCartStore();
 
+  // ── Product detail state ─────────────────
+  const [detailProduct, setDetailProduct] = useState<{ product: MarketProductDto; imageUri: string } | null>(null);
+  const [detailHistory, setDetailHistory] = useState<PriceHistoryItemDto[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  // ── Cart state ──────────────────────────
   const [showCart, setShowCart] = useState(false);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -187,6 +215,29 @@ export function PriceListScreen() {
   const removeFromCart = (productId: string) => {
     globalRemoveFromCart(productId);
   };
+
+  const openProductDetail = useCallback(async (product: MarketProductDto, index: number) => {
+    setDetailProduct({ product, imageUri: productImage(index) });
+    setDetailHistory([]);
+    setDetailError(null);
+    setDetailLoading(true);
+
+    try {
+      const history = await pricingApi.getPriceHistory(product.marketId, product.productId, { pageSize: 8 });
+      setDetailHistory(history.items);
+    } catch {
+      setDetailError('Không thể tải lịch sử giá');
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
+  const closeProductDetail = useCallback(() => {
+    setDetailProduct(null);
+    setDetailHistory([]);
+    setDetailError(null);
+    setDetailLoading(false);
+  }, []);
 
   // ── Render: Loading ──────────────────────
   if (loading && markets.length === 0) {
@@ -321,18 +372,24 @@ export function PriceListScreen() {
           const outOfStock = item.availableQuantity <= 0;
           return (
             <View style={styles.productCard}>
-              {/* Image */}
-              <Image source={{ uri: productImage(index) }} style={styles.productImage} />
+              <Pressable
+                style={styles.productTapArea}
+                onPress={() => openProductDetail(item, index)}
+              >
+                {/* Image */}
+                <Image source={{ uri: productImage(index) }} style={styles.productImage} />
 
-              {/* Info */}
-              <View style={styles.productInfo}>
-                <Text style={styles.productMarket}>{selectedMarketName}</Text>
-                <Text style={styles.productName}>{item.productName}</Text>
-                <Text style={styles.productUnit}>{item.unit}</Text>
-                <Text style={styles.productPrice}>
-                  {outOfStock ? 'Tạm hết' : formatPrice(item.currentPrice)}
-                </Text>
-              </View>
+                {/* Info */}
+                <View style={styles.productInfo}>
+                  <Text style={styles.productMarket}>{selectedMarketName}</Text>
+                  <Text style={styles.productName}>{item.productName}</Text>
+                  <Text style={styles.productUnit}>{item.unit}</Text>
+                  <Text style={styles.productPrice}>
+                    {outOfStock ? 'Tạm hết' : formatPrice(item.currentPrice)}
+                  </Text>
+                  <Text style={styles.productDetailHint}>Chạm để xem chi tiết</Text>
+                </View>
+              </Pressable>
 
               {/* Quantity */}
               <View style={styles.qtyCol}>
@@ -392,6 +449,107 @@ export function PriceListScreen() {
       )}
 
       {/* ─── CART FULL SCREEN MODAL ────────── */}
+      <Modal
+        visible={detailProduct !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={closeProductDetail}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={closeProductDetail} />
+          <View style={styles.productDetailSheet}>
+            <View style={styles.modalHandle} />
+
+            {detailProduct && (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.productDetailContent}>
+                <View style={styles.productDetailHeader}>
+                  <Image source={{ uri: detailProduct.imageUri }} style={styles.productDetailImage} />
+                  <Pressable style={styles.productDetailClose} onPress={closeProductDetail}>
+                    <Ionicons name="close" size={22} color={Colors.textPrimary} />
+                  </Pressable>
+                </View>
+
+                <View style={styles.productDetailTitleRow}>
+                  <View style={styles.productDetailCategoryBadge}>
+                    <Ionicons name={getCategoryIcon(detailProduct.product.category || '')} size={14} color={Colors.primary} />
+                    <Text style={styles.productDetailCategoryText}>{detailProduct.product.category || 'Khác'}</Text>
+                  </View>
+                  <Text style={styles.productDetailMarket}>{selectedMarketName}</Text>
+                </View>
+
+                <Text style={styles.productDetailName}>{detailProduct.product.productName}</Text>
+                <Text style={styles.productDetailUpdated}>Cập nhật {formatRelativeTime(detailProduct.product.updatedAt)}</Text>
+
+                <View style={styles.productDetailPriceCard}>
+                  <Text style={styles.productDetailPriceLabel}>Giá hiện tại</Text>
+                  <Text style={styles.productDetailPrice}>{formatPrice(detailProduct.product.currentPrice)}</Text>
+                  <Text style={styles.productDetailUnit}>/{detailProduct.product.unit}</Text>
+                </View>
+
+                <View style={styles.productDetailStatsGrid}>
+                  <View style={styles.productDetailStatCard}>
+                    <Text style={styles.productDetailStatLabel}>Số lượng tại chợ</Text>
+                    <Text style={styles.productDetailStatValue}>{detailProduct.product.currentQuantity}</Text>
+                  </View>
+                  <View style={styles.productDetailStatCard}>
+                    <Text style={styles.productDetailStatLabel}>Có thể đặt</Text>
+                    <Text style={styles.productDetailStatValue}>{Math.max(0, detailProduct.product.availableQuantity)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.productDetailInfoCard}>
+                  <View style={styles.productDetailInfoRow}>
+                    <Text style={styles.productDetailInfoLabel}>Mã hàng hóa</Text>
+                    <Text style={styles.productDetailInfoValue} numberOfLines={1}>{detailProduct.product.productId}</Text>
+                  </View>
+                  <View style={styles.productDetailInfoRow}>
+                    <Text style={styles.productDetailInfoLabel}>Lần cập nhật cuối</Text>
+                    <Text style={styles.productDetailInfoValue}>{formatDateTime(detailProduct.product.updatedAt)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.productHistoryHeader}>
+                  <Text style={styles.productHistoryTitle}>Lịch sử giá gần đây</Text>
+                  {detailLoading && <ActivityIndicator size="small" color={Colors.primary} />}
+                </View>
+
+                {detailError ? (
+                  <Text style={styles.productHistoryError}>{detailError}</Text>
+                ) : detailHistory.length > 0 ? (
+                  <View style={styles.productHistoryList}>
+                    {detailHistory.map((history) => (
+                      <View key={history.id} style={styles.productHistoryItem}>
+                        <View>
+                          <Text style={styles.productHistoryPrice}>{formatPrice(history.price)}</Text>
+                          <Text style={styles.productHistoryDate}>{formatDateTime(history.recordedAt)}</Text>
+                        </View>
+                        <Text style={styles.productHistoryQty}>SL: {history.quantity}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : !detailLoading ? (
+                  <Text style={styles.productHistoryEmpty}>Chưa có lịch sử thay đổi giá.</Text>
+                ) : null}
+
+                <Pressable
+                  style={[
+                    styles.productDetailAddBtn,
+                    detailProduct.product.availableQuantity <= 0 && styles.productDetailAddBtnDisabled,
+                  ]}
+                  disabled={detailProduct.product.availableQuantity <= 0}
+                  onPress={() => addToCart(detailProduct.product)}
+                >
+                  <Ionicons name="cart" size={18} color={Colors.onPrimary} />
+                  <Text style={styles.productDetailAddText}>
+                    {detailProduct.product.availableQuantity <= 0 ? 'Tạm hết hàng' : 'Thêm vào giỏ'}
+                  </Text>
+                </Pressable>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         visible={showCart}
         animationType="slide"
@@ -726,6 +884,11 @@ const styles = StyleSheet.create({
     padding: 12,
     alignItems: 'center',
   },
+  productTapArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   productImage: {
     width: 64,
     height: 64,
@@ -758,6 +921,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.primary,
     marginTop: 2,
+  },
+  productDetailHint: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.secondary,
+    marginTop: 3,
   },
   qtyCol: {
     alignItems: 'center',
@@ -855,11 +1024,256 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  cartFabBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    borderWidth: 2.5,
+    borderColor: Colors.background,
+  },
+  cartFabBadgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // ─── Product detail modal ───────────────
+  productDetailSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '88%',
+    paddingBottom: 18,
+  },
+  productDetailContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  productDetailHeader: {
+    marginTop: 14,
+  },
+  productDetailImage: {
+    width: '100%',
+    height: 190,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceContainerHigh,
+  },
+  productDetailClose: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productDetailTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    gap: 12,
+  },
+  productDetailCategoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 100,
+  },
+  productDetailCategoryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  productDetailMarket: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.onSurfaceVariant,
+  },
+  productDetailName: {
+    marginTop: 12,
+    fontSize: 24,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    lineHeight: 31,
+  },
+  productDetailUpdated: {
+    marginTop: 4,
+    fontSize: 13,
+    color: Colors.textMuted,
+  },
+  productDetailPriceCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  productDetailPriceLabel: {
+    position: 'absolute',
+    top: 10,
+    left: 16,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  productDetailPrice: {
+    marginTop: 14,
+    fontSize: 30,
+    fontWeight: '900',
+    color: Colors.primary,
+  },
+  productDetailUnit: {
+    marginBottom: 5,
+    marginLeft: 4,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  productDetailStatsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  productDetailStatCard: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  productDetailStatLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  productDetailStatValue: {
+    marginTop: 6,
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  productDetailInfoCard: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    gap: 10,
+  },
+  productDetailInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 14,
+  },
+  productDetailInfoLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  productDetailInfoValue: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  productHistoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 18,
+    marginBottom: 10,
+  },
+  productHistoryTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  productHistoryList: {
+    gap: 8,
+  },
+  productHistoryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  productHistoryPrice: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  productHistoryDate: {
+    marginTop: 2,
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  productHistoryQty: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.onSurfaceVariant,
+  },
+  productHistoryError: {
+    fontSize: 13,
+    color: Colors.error,
+  },
+  productHistoryEmpty: {
+    fontSize: 13,
+    color: Colors.textMuted,
+  },
+  productDetailAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 18,
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    paddingVertical: 15,
+  },
+  productDetailAddBtnDisabled: {
+    backgroundColor: Colors.outline,
+  },
+  productDetailAddText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.onPrimary,
+  },
+
+  // ─── Cart Modal ─────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+
   // ─── Cart Full Screen ───────────────────
   cartScreen: {
     flex: 1,
     backgroundColor: Colors.background,
   },
+
   cartScreenHeader: {
     flexDirection: 'row',
     alignItems: 'center',
