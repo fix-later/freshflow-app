@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import { Colors } from '../../../constants/colors';
 import { GoongMap } from '../../../components/GoongMap';
 import { type DriverStackParamList } from '../../../navigation/types';
 import { MOCK_STOP_MAP, type StopStatus } from '../mockData';
-import { updateStopStatus } from '../stopStatusStore';
+import { stopStatusStore, updateStopStatus } from '../stopStatusStore';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'DriverNavigation'>;
 
@@ -19,6 +20,13 @@ export function NavigationScreen({ route, navigation }: Props) {
   const [localStatus, setLocalStatus] = useState<StopStatus>(stop?.status ?? 'pending');
   const [currentLat, setCurrentLat] = useState<number | undefined>(undefined);
   const [currentLng, setCurrentLng] = useState<number | undefined>(undefined);
+
+  // Sync status from shared store when returning from ProofOfDelivery
+  useFocusEffect(
+    useCallback(() => {
+      if (stop) setLocalStatus(stopStatusStore[stop.id] ?? stop.status);
+    }, [stop]),
+  );
 
   useEffect(() => {
     (async () => {
@@ -63,20 +71,7 @@ export function NavigationScreen({ route, navigation }: Props) {
   };
 
   const handleDelivered = () => {
-    Alert.alert(
-      'Xác nhận đã giao',
-      `Xác nhận đã giao hàng thành công tại ${stop.restaurantName}?`,
-      [
-        { text: 'Huỷ', style: 'cancel' },
-        {
-          text: 'Xác nhận',
-          onPress: () => {
-            updateStopStatus(stop.id, 'delivered');
-            setLocalStatus('delivered');
-          },
-        },
-      ],
-    );
+    navigation.navigate('ProofOfDelivery', { stopId: stop.id });
   };
 
   const handleFailed = () => {

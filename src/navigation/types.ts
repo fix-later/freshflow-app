@@ -70,5 +70,6 @@ export type DriverStackParamList = {
   PickupConfirm: { routeId: string };
   StopList: { routeId: string };
   DriverNavigation: { stopId: string };
+  ProofOfDelivery: { stopId: string };
   DriverProfile: undefined;
 };
