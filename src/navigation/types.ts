@@ -1,3 +1,5 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
@@ -58,11 +60,20 @@ export type MarketAgentStackParamList = {
   MarketAgentProfile: undefined;
 };
 
-export type HubStackParamList = {
+export type HubTabParamList = {
   HubDashboard: undefined;
-  CheckIn: undefined;
+  InboundQueue: undefined;
   Sorting: undefined;
   HubProfile: undefined;
+};
+
+export type HubStackParamList = {
+  HubTabs: NavigatorScreenParams<HubTabParamList> | undefined;
+  MarketDispatch: undefined;
+  CheckIn: { batchId: string };
+  QualityCheck: { batchId: string };
+  DriverHandoff: { routeId: string };
+  IncidentReport: { batchId?: string; orderId?: string } | undefined;
 };
 
 export type DriverStackParamList = {
