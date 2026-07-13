@@ -75,20 +75,7 @@ export function NavigationScreen({ route, navigation }: Props) {
   };
 
   const handleFailed = () => {
-    const markFailed = () => {
-      updateStopStatus(stop.id, 'failed');
-      setLocalStatus('failed');
-    };
-    Alert.alert(
-      'Không giao được',
-      'Lý do không giao được?',
-      [
-        { text: 'Huỷ', style: 'cancel' },
-        { text: 'Không có người nhận', onPress: markFailed },
-        { text: 'Địa chỉ sai', onPress: markFailed },
-        { text: 'Lý do khác', onPress: markFailed },
-      ],
-    );
+    navigation.navigate('ReportDeliveryIssue', { stopId: stop.id });
   };
 
   return (

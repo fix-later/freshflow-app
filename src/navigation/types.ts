@@ -71,5 +71,6 @@ export type DriverStackParamList = {
   StopList: { routeId: string };
   DriverNavigation: { stopId: string };
   ProofOfDelivery: { stopId: string };
+  ReportDeliveryIssue: { stopId: string };
   DriverProfile: undefined;
 };
