@@ -2,6 +2,7 @@ import { type PropsWithChildren, useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../store/AuthProvider';
 import { CartProvider } from '../store/CartProvider';
+import { FavoritesProvider } from '../store/FavoritesProvider';
 
 type AppProvidersProps = PropsWithChildren;
 
@@ -10,7 +11,9 @@ export function AppProviders({ children }: AppProvidersProps) {
     <SafeAreaProvider>
       <AuthProvider>
         <CartProvider>
-          {children}
+          <FavoritesProvider>
+            {children}
+          </FavoritesProvider>
         </CartProvider>
       </AuthProvider>
     </SafeAreaProvider>
