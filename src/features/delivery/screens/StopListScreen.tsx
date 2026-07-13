@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,18 +6,16 @@ import { useFocusEffect } from '@react-navigation/native';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
 import { type DriverStackParamList } from '../../../navigation/types';
-import { MOCK_STOPS, type MockStop, type StopStatus } from '../mockData';
+import { MOCK_STOPS, MOCK_ROUTE, type MockStop, type StopStatus } from '../mockData';
 import { stopStatusStore, isRouteComplete } from '../stopStatusStore';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'StopList'>;
-
 const STATUS_CONFIG: Record<StopStatus, { label: string; color: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
   pending: { label: 'Chờ giao', color: '#6B7280', icon: 'time-outline' },
   arrived: { label: 'Đã tới', color: Colors.warning, icon: 'location' },
   delivered: { label: 'Đã giao', color: Colors.success, icon: 'checkmark-circle' },
   failed: { label: 'Không giao được', color: Colors.danger, icon: 'close-circle' },
 };
-
 function StopCard({
   stop,
   status,
@@ -30,7 +28,6 @@ function StopCard({
   const cfg = STATUS_CONFIG[status];
   const isDone = status === 'delivered' || status === 'failed';
   const totalQty = stop.items.reduce((s, i) => s + i.quantity, 0);
-
   return (
     <Pressable
       style={({ pressed }) => [styles.card, isDone && styles.cardDone, pressed && { opacity: 0.75 }]}
@@ -39,7 +36,6 @@ function StopCard({
       <View style={[styles.numBadge, { backgroundColor: cfg.color + '18', borderColor: cfg.color + '50' }]}>
         <Text style={[styles.numText, { color: cfg.color }]}>{stop.order}</Text>
       </View>
-
       <View style={styles.info}>
         <View style={styles.infoTop}>
           <Text style={[styles.name, isDone && styles.nameDone]} numberOfLines={1}>
@@ -50,17 +46,14 @@ function StopCard({
             <Text style={[styles.statusChipText, { color: cfg.color }]}>{cfg.label}</Text>
           </View>
         </View>
-
         <View style={styles.addressRow}>
           <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
           <Text style={styles.address} numberOfLines={1}>{stop.address}</Text>
         </View>
-
         <View style={styles.metaRow}>
           <Ionicons name="cube-outline" size={12} color={Colors.textMuted} />
           <Text style={styles.meta}>{stop.items.length} loại · {totalQty} đơn vị</Text>
         </View>
-
         {!isDone && (
           <Pressable style={styles.navBtn} onPress={onPress}>
             <Ionicons name="navigate-outline" size={13} color={Colors.primary} />
@@ -71,10 +64,11 @@ function StopCard({
     </Pressable>
   );
 }
-
-function RouteCompleteView({ delivered, failed, onGoHome }: {
+function RouteCompleteView({ delivered, failed, durationText, km, onGoHome }: {
   delivered: number;
   failed: number;
+  durationText: string;
+  km: number;
   onGoHome: () => void;
 }) {
   return (
@@ -84,7 +78,7 @@ function RouteCompleteView({ delivered, failed, onGoHome }: {
       </View>
       <Text style={styles.completeTitle}>Tuyến đường hoàn tất!</Text>
       <Text style={styles.completeSub}>Bạn đã hoàn thành ca giao hàng hôm nay.</Text>
-
+      {/* Delivery stats */}
       <View style={styles.completeSummaryCard}>
         <View style={styles.completeStat}>
           <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
@@ -104,7 +98,20 @@ function RouteCompleteView({ delivered, failed, onGoHome }: {
           <Text style={styles.completeStatLbl}>Tổng điểm</Text>
         </View>
       </View>
-
+      {/* Shift stats */}
+      <View style={styles.shiftCard}>
+        <View style={styles.shiftStat}>
+          <Ionicons name="time-outline" size={20} color={Colors.secondary} />
+          <Text style={styles.shiftStatVal}>{durationText}</Text>
+          <Text style={styles.shiftStatLbl}>Thời gian ca</Text>
+        </View>
+        <View style={styles.completeStatDivider} />
+        <View style={styles.shiftStat}>
+          <Ionicons name="navigate-outline" size={20} color={Colors.secondary} />
+          <Text style={styles.shiftStatVal}>{km} km</Text>
+          <Text style={styles.shiftStatLbl}>Quãng đường</Text>
+        </View>
+      </View>
       <Pressable style={styles.goHomeBtn} onPress={onGoHome}>
         <Ionicons name="home-outline" size={18} color={Colors.onPrimary} />
         <Text style={styles.goHomeBtnText}>Về trang chủ</Text>
@@ -112,15 +119,14 @@ function RouteCompleteView({ delivered, failed, onGoHome }: {
     </View>
   );
 }
-
 export function StopListScreen({ route, navigation }: Props) {
   const { routeId: _routeId } = route.params; // reserved for API call
-
+  const shiftStartRef = useRef(Date.now());
   const [statuses, setStatuses] = useState<Record<string, StopStatus>>(
     () => ({ ...stopStatusStore }),
   );
   const [routeCompleted, setRouteCompleted] = useState(false);
-
+  const [durationText, setDurationText] = useState('');
   // Refresh statuses from shared store every time screen is focused
   useFocusEffect(
     useCallback(() => {
@@ -128,18 +134,15 @@ export function StopListScreen({ route, navigation }: Props) {
       if (isRouteComplete()) setRouteCompleted(true);
     }, []),
   );
-
   const stopsWithStatus = MOCK_STOPS.map(s => ({
     ...s,
     status: statuses[s.id] ?? s.status,
   }));
-
   const delivered = stopsWithStatus.filter(s => s.status === 'delivered').length;
   const failed = stopsWithStatus.filter(s => s.status === 'failed').length;
   const done = delivered + failed;
   const allDone = done === stopsWithStatus.length;
   const pct = Math.round((done / stopsWithStatus.length) * 100);
-
   const handleCompleteRoute = () => {
     Alert.alert(
       'Hoàn tất tuyến đường',
@@ -149,6 +152,10 @@ export function StopListScreen({ route, navigation }: Props) {
         {
           text: 'Hoàn tất',
           onPress: () => {
+            const mins = Math.floor((Date.now() - shiftStartRef.current) / 60000);
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            setDurationText(h > 0 ? `${h}g ${m}ph` : `${m} phút`);
             // TODO: await driverApi.completeRoute(routeId)
             setRouteCompleted(true);
           },
@@ -156,19 +163,19 @@ export function StopListScreen({ route, navigation }: Props) {
       ],
     );
   };
-
   if (routeCompleted) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <RouteCompleteView
           delivered={delivered}
           failed={failed}
+          durationText={durationText}
+          km={MOCK_ROUTE.totalDistanceKm}
           onGoHome={() => navigation.popToTop()}
         />
       </SafeAreaView>
     );
   }
-
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <FlatList
@@ -217,7 +224,6 @@ export function StopListScreen({ route, navigation }: Props) {
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         ListFooterComponent={<View style={{ height: allDone ? 120 : 16 }} />}
       />
-
       {/* ── Hoàn tất tuyến footer ── */}
       {allDone && (
         <View style={styles.completeFooter}>
@@ -239,12 +245,10 @@ export function StopListScreen({ route, navigation }: Props) {
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   list: { padding: 16 },
   header: { gap: 14, marginBottom: 8 },
-
   progressCard: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: 14,
@@ -267,13 +271,11 @@ const styles = StyleSheet.create({
   progressMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   progressMetaText: { fontSize: 11, color: Colors.textMuted },
-
   listLabel: {
     fontSize: 12, fontWeight: '700',
     color: Colors.textMuted,
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
-
   card: {
     flexDirection: 'row', alignItems: 'flex-start',
     backgroundColor: Colors.surfaceContainerLowest,
@@ -307,7 +309,6 @@ const styles = StyleSheet.create({
     borderRadius: 8, backgroundColor: Colors.primaryLight,
   },
   navBtnText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
-
   // Complete footer
   completeFooter: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -323,7 +324,6 @@ const styles = StyleSheet.create({
     borderRadius: 14, paddingVertical: 14,
   },
   completeBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
-
   // Route complete view
   completeView: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
@@ -355,4 +355,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32, marginTop: 8,
   },
   goHomeBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  shiftCard: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: Colors.outlineVariant,
+    width: '100%',
+  },
+  shiftStat: { flex: 1, alignItems: 'center', gap: 6 },
+  shiftStatVal: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
+  shiftStatLbl: { fontSize: 11, color: Colors.textMuted, textAlign: 'center' },
 });

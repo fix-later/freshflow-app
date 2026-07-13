@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import { Colors } from '../../../constants/colors';
 import { type DriverStackParamList } from '../../../navigation/types';
-import { MOCK_STOP_MAP } from '../mockData';
+import { MOCK_ROUTE, MOCK_STOP_MAP } from '../mockData';
 import { updateStopStatus } from '../stopStatusStore';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'ProofOfDelivery'>;
@@ -163,6 +163,8 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
   const [otp, setOtp] = useState('');
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [deliveredAt, setDeliveredAt] = useState<string>('');
 
   const proofReady =
     (method === 'photo' && photoUri !== null) ||
@@ -191,8 +193,13 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
     // TODO: await driverApi.submitProof(stopId, { method, photoUri, otp, signatureData })
     setTimeout(() => {
       updateStopStatus(stopId, 'delivered');
+      const now = new Date();
+      setDeliveredAt(
+        now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) +
+        ' · ' + now.toLocaleDateString('vi-VN'),
+      );
       setSubmitting(false);
-      navigation.goBack(); // returns to NavigationScreen which reads from store via useFocusEffect
+      setSuccess(true);
     }, 600);
   };
 
@@ -202,6 +209,47 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={48} color={Colors.error} />
           <Text style={{ color: Colors.error }}>Không tìm thấy điểm giao hàng</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Success state ──────────────────────────────────────────────────────────
+  if (success) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['bottom']}>
+        <View style={styles.successScreen}>
+          <View style={styles.successCircle}>
+            <Ionicons name="checkmark" size={52} color="#fff" />
+          </View>
+          <Text style={styles.successTitle}>Đã giao thành công!</Text>
+          <Text style={styles.successSub}>{stop.restaurantName}</Text>
+          <Text style={styles.successTime}>{deliveredAt}</Text>
+
+          {/* Photo proof thumbnail */}
+          {method === 'photo' && photoUri && (
+            <Image source={{ uri: photoUri }} style={styles.successPhoto} resizeMode="cover" />
+          )}
+
+          {/* Method badge */}
+          <View style={styles.methodBadge}>
+            <Ionicons
+              name={METHODS.find(m => m.id === method)?.icon ?? 'checkmark-circle-outline'}
+              size={14}
+              color={Colors.success}
+            />
+            <Text style={styles.methodBadgeText}>
+              Bằng chứng: {METHODS.find(m => m.id === method)?.label}
+            </Text>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.backNavBtn, pressed && { opacity: 0.85 }]}
+            onPress={() => navigation.navigate('StopList', { routeId: MOCK_ROUTE.id })}
+          >
+            <Ionicons name="list-outline" size={16} color={Colors.onPrimary} />
+            <Text style={styles.backNavBtnText}>Về danh sách điểm dừng</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -421,7 +469,7 @@ const styles = StyleSheet.create({
 
   // Signature
   sigWrap: { gap: 0 },
-  sigCanvas: { height: 200, borderRadius: 12, overflow: 'hidden' },
+  sigCanvas: { height: 320, borderRadius: 12, overflow: 'hidden' },
   clearBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 5, padding: 10,
@@ -466,4 +514,39 @@ const styles = StyleSheet.create({
   },
   submitBtnDisabled: { opacity: 0.4 },
   submitBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+
+  // Success screen
+  successScreen: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    padding: 32, gap: 12,
+  },
+  successCircle: {
+    width: 96, height: 96, borderRadius: 48,
+    backgroundColor: Colors.success,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 8,
+    shadowColor: Colors.success, shadowOpacity: 0.4,
+    shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  successTitle: { fontSize: 24, fontWeight: '900', color: Colors.textPrimary },
+  successSub: { fontSize: 15, fontWeight: '600', color: Colors.textSecondary },
+  successTime: { fontSize: 13, color: Colors.textMuted },
+  successPhoto: {
+    width: '100%', height: 180,
+    borderRadius: 14, marginTop: 4,
+  },
+  methodBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.success + '15',
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+  },
+  methodBadgeText: { fontSize: 12, fontWeight: '600', color: Colors.success },
+  backNavBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: Colors.primary,
+    borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32,
+    marginTop: 8, alignSelf: 'stretch',
+  },
+  backNavBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
 });
