@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,9 +12,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../../../constants/colors';
 import { Button } from '../../../components/ui/Button';
-import { restaurantApi, type RestaurantProfileDto, type ApprovalStatusDto } from '../api/restaurantApi';
+import {
+  restaurantApi,
+  type RestaurantProfileDto,
+  type ApprovalStatusDto,
+} from '../api/restaurantApi';
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
@@ -43,6 +48,24 @@ function formatTimeInput(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 4);
   if (digits.length > 2) return digits.slice(0, 2) + ':' + digits.slice(2);
   return digits;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return (
+    (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+    fallback
+  );
+}
+
+function formatUpdatedAt(value: string): string {
+  if (!value) return 'Chưa có thông tin';
+  return new Date(value).toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────────
@@ -130,7 +153,12 @@ const field = StyleSheet.create({
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────────
 
-const EMPTY_FORM: RestaurantProfileDto = {
+type RestaurantProfileForm = Pick<
+  RestaurantProfileDto,
+  'name' | 'address' | 'contactPerson' | 'pickupStart' | 'pickupEnd'
+>;
+
+const EMPTY_FORM: RestaurantProfileForm = {
   name: '',
   address: '',
   contactPerson: '',
@@ -138,35 +166,59 @@ const EMPTY_FORM: RestaurantProfileDto = {
   pickupEnd: '',
 };
 
+function toForm(profile: RestaurantProfileDto): RestaurantProfileForm {
+  return {
+    name: profile.name,
+    address: profile.address,
+    contactPerson: profile.contactPerson,
+    pickupStart: profile.pickupStart,
+    pickupEnd: profile.pickupEnd,
+  };
+}
+
 export function RestaurantProfileScreen() {
-  const [form, setForm] = useState<RestaurantProfileDto>(EMPTY_FORM);
-  const [original, setOriginal] = useState<RestaurantProfileDto>(EMPTY_FORM);
+  const [form, setForm] = useState<RestaurantProfileForm>(EMPTY_FORM);
+  const [original, setOriginal] = useState<RestaurantProfileForm>(EMPTY_FORM);
+  const [profile, setProfile] = useState<RestaurantProfileDto | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusDto['status'] | null>(null);
 
-  useEffect(() => {
-    restaurantApi
-      .getRestaurantProfile()
-      .then((data) => {
-        setForm(data);
-        setOriginal(data);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-
-    restaurantApi
-      .getApprovalStatus()
-      .then((s) => setApprovalStatus(s.status))
-      .catch(() => {});
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [profileData, statusData] = await Promise.all([
+        restaurantApi.getRestaurantProfile(),
+        restaurantApi.getApprovalStatus().catch(() => null),
+      ]);
+      const nextForm = toForm(profileData);
+      setProfile(profileData);
+      setForm(nextForm);
+      setOriginal(nextForm);
+      setApprovalStatus(statusData?.status ?? profileData.status);
+    } catch (error) {
+      setLoadError(
+        getErrorMessage(error, 'Không thể tải thông tin nhà hàng. Vui lòng thử lại.'),
+      );
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const setField = useCallback(<K extends keyof RestaurantProfileDto>(
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile]),
+  );
+
+  const setField = useCallback(<K extends keyof RestaurantProfileForm>(
     key: K,
-    value: RestaurantProfileDto[K],
+    value: RestaurantProfileForm[K],
   ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setSaveError(null);
@@ -187,12 +239,20 @@ export function RestaurantProfileScreen() {
 
   const pickupStartError = validateTime(form.pickupStart);
   const pickupEndError = validateTime(form.pickupEnd);
+  const pickupRangeError =
+    form.pickupStart &&
+    form.pickupEnd &&
+    !pickupStartError &&
+    !pickupEndError &&
+    form.pickupEnd <= form.pickupStart
+      ? 'Giờ kết thúc phải sau giờ bắt đầu'
+      : null;
   const canSave =
     !saveLoading &&
     !!form.name.trim() &&
-    !!form.address.trim() &&
     !pickupStartError &&
-    !pickupEndError;
+    !pickupEndError &&
+    !pickupRangeError;
 
   const handleSave = useCallback(async () => {
     if (!canSave) return;
@@ -202,13 +262,21 @@ export function RestaurantProfileScreen() {
     try {
       const updated = await restaurantApi.updateRestaurantProfile({
         name: form.name.trim(),
-        address: form.address.trim(),
-        contactPerson: form.contactPerson.trim(),
-        pickupStart: form.pickupStart,
-        pickupEnd: form.pickupEnd,
+        address: form.address.trim() || null,
+        contactPerson: form.contactPerson.trim() || null,
+        pickupStart: form.pickupStart || null,
+        pickupEnd: form.pickupEnd || null,
+        businessLicenseUrl: profile?.businessLicenseUrl ?? null,
       });
-      setForm(updated);
-      setOriginal(updated);
+      const nextForm = toForm(updated);
+      setProfile((previous) => ({
+        ...updated,
+        status: previous?.status ?? approvalStatus,
+        businessLicenseUrl:
+          updated.businessLicenseUrl ?? previous?.businessLicenseUrl ?? null,
+      }));
+      setForm(nextForm);
+      setOriginal(nextForm);
       setIsEditing(false);
       setSavedOk(true);
     } catch (err: unknown) {
@@ -219,13 +287,32 @@ export function RestaurantProfileScreen() {
     } finally {
       setSaveLoading(false);
     }
-  }, [canSave, form]);
+  }, [approvalStatus, canSave, form, profile?.businessLicenseUrl]);
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, styles.loadingScreen]}>
         <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Đang tải thông tin nhà hàng...</Text>
       </View>
+    );
+  }
+
+  if (loadError && !profile) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <View style={styles.center}>
+          <Ionicons name="cloud-offline-outline" size={52} color={Colors.outline} />
+          <Text style={styles.loadErrorText}>{loadError}</Text>
+          <Button
+            title="THỬ LẠI"
+            variant="primary"
+            size="md"
+            icon={<Ionicons name="refresh" size={18} color={Colors.onPrimary} />}
+            onPress={loadProfile}
+          />
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -263,6 +350,13 @@ export function RestaurantProfileScreen() {
           )}
 
           {/* ─── Error banner ───────────────────── */}
+          {loadError && profile && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
+              <Text style={styles.errorBannerText}>{loadError}</Text>
+            </View>
+          )}
+
           {saveError && (
             <View style={styles.errorBanner}>
               <Ionicons name="alert-circle-outline" size={18} color="#EF4444" />
@@ -295,6 +389,12 @@ export function RestaurantProfileScreen() {
                 <ActivityIndicator size="small" color={Colors.textMuted} />
               )}
             </View>
+            <View style={styles.separator} />
+            <InfoView
+              icon="sync-outline"
+              label="Cập nhật gần nhất"
+              value={formatUpdatedAt(profile?.updatedAt ?? '')}
+            />
           </View>
 
           {/* ─── Form card ──────────────────────── */}
@@ -373,7 +473,7 @@ export function RestaurantProfileScreen() {
                     placeholder="17:00"
                     keyboardType="numeric"
                     autoCapitalize="none"
-                    error={pickupEndError}
+                    error={pickupEndError || pickupRangeError}
                     hint="HH:MM"
                   />
                 </View>
@@ -392,6 +492,16 @@ export function RestaurantProfileScreen() {
           </View>
 
           {/* ─── Action buttons ─────────────────── */}
+          <View style={styles.card}>
+            <Text style={styles.cardSection}>Hồ sơ pháp lý</Text>
+            <InfoView
+              icon="document-text-outline"
+              label="Giấy phép kinh doanh"
+              value={profile?.businessLicenseUrl ? 'Đã cập nhật' : 'Chưa cập nhật'}
+              valueColor={profile?.businessLicenseUrl ? Colors.success : Colors.textMuted}
+            />
+          </View>
+
           {isEditing && (
             <View style={styles.actionRow}>
               <Button
@@ -422,10 +532,12 @@ function InfoView({
   icon,
   label,
   value,
+  valueColor,
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   value: string;
+  valueColor?: string;
 }) {
   return (
     <View style={info.row}>
@@ -433,7 +545,7 @@ function InfoView({
         <Ionicons name={icon} size={18} color={Colors.textMuted} />
         <Text style={info.label}>{label}</Text>
       </View>
-      <Text style={info.value} numberOfLines={2}>
+      <Text style={[info.value, valueColor ? { color: valueColor } : null]} numberOfLines={2}>
         {value}
       </Text>
     </View>
@@ -463,6 +575,17 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loadingScreen: { backgroundColor: Colors.background, gap: 10 },
+  loadingText: { fontSize: 13, color: Colors.textMuted },
+  loadErrorText: {
+    maxWidth: 300,
+    marginTop: 12,
+    marginBottom: 18,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    color: Colors.error,
+  },
   content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 },
 
   // ─── Header ──────────────────────────────────
