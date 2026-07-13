@@ -67,7 +67,10 @@ export type HubStackParamList = {
 
 export type DriverStackParamList = {
   DriverHome: undefined;
+  PickupConfirm: { routeId: string };
   StopList: { routeId: string };
   DriverNavigation: { stopId: string };
+  ProofOfDelivery: { stopId: string };
+  ReportDeliveryIssue: { stopId: string };
   DriverProfile: undefined;
 };
