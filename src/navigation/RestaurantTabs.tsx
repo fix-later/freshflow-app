@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrackOrderScreen } from '../features/delivery/screens/TrackOrderScreen';
 import { RestaurantProfileTab } from './RestaurantProfileTab';
 import { RestaurantOrdersTab } from './RestaurantOrdersTab';
+import { FavoritesScreen } from '../features/orders/screens/FavoritesScreen';
 import { type RestaurantTabParamList } from './types';
 import { Colors } from '../constants/colors';
 
@@ -13,6 +14,7 @@ const Tab = createBottomTabNavigator<RestaurantTabParamList>();
 
 const TAB_CONFIG = {
   RestaurantOrders: { label: 'Chợ', icon: 'storefront-outline' as const, activeIcon: 'storefront' as const },
+  RestaurantFavorites: { label: 'Yêu thích', icon: 'heart-outline' as const, activeIcon: 'heart' as const },
   RestaurantTracking: { label: 'Giao hàng', icon: 'car-outline' as const, activeIcon: 'car' as const },
   RestaurantProfile: { label: 'Hồ sơ', icon: 'person-circle-outline' as const, activeIcon: 'person-circle' as const },
 } as const;
@@ -69,6 +71,11 @@ export function RestaurantTabs() {
         name="RestaurantOrders"
         component={RestaurantOrdersTab}
         options={{ headerShown: false }}
+      />
+      <Tab.Screen
+        name="RestaurantFavorites"
+        component={FavoritesScreen}
+        options={{ title: 'Yêu thích' }}
       />
       <Tab.Screen
         name="RestaurantTracking"

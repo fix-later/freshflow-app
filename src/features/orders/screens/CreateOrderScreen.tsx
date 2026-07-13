@@ -3,6 +3,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Colors } from '../../../constants/colors';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';
 
@@ -26,18 +28,22 @@ const TIME_OPTIONS: { id: TimeOption; label: string; sub: string }[] = [
   { id: 'custom', label: 'Tự chọn ngày giờ', sub: 'Nhập thời gian cụ thể' },
 ];
 
-function buildScheduledFor(option: TimeOption, customValue: string): string | undefined {
-  if (option === 'asap') return undefined;
-  if (option === 'tomorrow_morning') {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(5, 0, 0, 0);
-    return d.toISOString();
-  }
-  const match = customValue.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
-  if (!match) return undefined;
-  const [, dd, mm, yyyy, hh, min] = match;
-  return new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:00+07:00`).toISOString();
+function buildScheduledForCustom(date: Date, time: Date): string {
+  const combined = new Date(date);
+  combined.setHours(time.getHours());
+  combined.setMinutes(time.getMinutes());
+  combined.setSeconds(0);
+  combined.setMilliseconds(0);
+  return combined.toISOString();
+}
+
+function formatCustomLabel(date: Date, time: Date): string {
+  const dd = date.getDate().toString().padStart(2, '0');
+  const mm = (date.getMonth() + 1).toString().padStart(2, '0');
+  const yyyy = date.getFullYear();
+  const hh = time.getHours().toString().padStart(2, '0');
+  const min = time.getMinutes().toString().padStart(2, '0');
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
 }
 
 function ItemRow({ item }: { item: CreateOrderItem }) {
@@ -68,26 +74,53 @@ function ItemRow({ item }: { item: CreateOrderItem }) {
 export function CreateOrderScreen({ route, navigation }: Props) {
   const { items } = route.params;
   const [timeOption, setTimeOption] = useState<TimeOption>('asap');
-  const [customTime, setCustomTime] = useState('');
   const [notes, setNotes] = useState('');
+
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1); // default to tomorrow
+    return d;
+  });
+  const [selectedTime, setSelectedTime] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(5, 0, 0, 0); // default to 5:00 AM
+    return d;
+  });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const subtotal = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
   const itemCount = items.reduce((sum, it) => sum + it.quantity, 0);
 
-  const handleNext = () => {
-    if (timeOption === 'custom') {
-      const pattern = /^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/;
-      if (!pattern.test(customTime.trim())) {
-        Alert.alert('Thời gian không hợp lệ', 'Nhập đúng định dạng DD/MM/YYYY HH:MM');
-        return;
-      }
+  const onChangeDate = (event: DateTimePickerEvent, date?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) {
+      setSelectedDate(date);
     }
-    const scheduledFor = buildScheduledFor(timeOption, customTime.trim());
-    const deliveryLabel = timeOption === 'asap'
-      ? 'Sớm nhất có thể'
-      : timeOption === 'tomorrow_morning'
-      ? 'Sáng mai (5:00)'
-      : customTime.trim();
+  };
+
+  const onChangeTime = (event: DateTimePickerEvent, date?: Date) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (date) {
+      setSelectedTime(date);
+    }
+  };
+
+  const handleNext = () => {
+    let scheduledFor: string | undefined = undefined;
+    let deliveryLabel = 'Sớm nhất có thể';
+
+    if (timeOption === 'tomorrow_morning') {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      d.setHours(5, 0, 0, 0);
+      scheduledFor = d.toISOString();
+      deliveryLabel = 'Sáng mai (5:00)';
+    } else if (timeOption === 'custom') {
+      scheduledFor = buildScheduledForCustom(selectedDate, selectedTime);
+      deliveryLabel = formatCustomLabel(selectedDate, selectedTime);
+    }
+
     navigation.navigate('ConfirmOrder', {
       items,
       scheduledFor,
@@ -134,14 +167,51 @@ export function CreateOrderScreen({ route, navigation }: Props) {
             );
           })}
           {timeOption === 'custom' && (
-            <TextInput
-              style={styles.customTimeInput}
-              placeholder="DD/MM/YYYY HH:MM  (vd: 20/06/2026 05:00)"
-              placeholderTextColor={Colors.textMuted}
-              value={customTime}
-              onChangeText={setCustomTime}
-              keyboardType="numbers-and-punctuation"
-              maxLength={16}
+            <View style={styles.customPickerContainer}>
+              <Pressable
+                style={styles.pickerSelector}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+                <View>
+                  <Text style={styles.pickerSelectorLabel}>Ngày giao hàng</Text>
+                  <Text style={styles.pickerSelectorValue}>
+                    {selectedDate.toLocaleDateString('vi-VN')}
+                  </Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                style={styles.pickerSelector}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Ionicons name="time-outline" size={18} color={Colors.primary} />
+                <View>
+                  <Text style={styles.pickerSelectorLabel}>Giờ giao hàng</Text>
+                  <Text style={styles.pickerSelectorValue}>
+                    {selectedTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+          )}
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display="default"
+              minimumDate={new Date()}
+              onChange={onChangeDate}
+            />
+          )}
+
+          {showTimePicker && (
+            <DateTimePicker
+              value={selectedTime}
+              mode="time"
+              display="default"
+              onChange={onChangeTime}
             />
           )}
         </View>
@@ -237,16 +307,33 @@ const styles = StyleSheet.create({
   },
   radioOuterSelected: { borderColor: Colors.primary },
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary },
-  customTimeInput: {
+  customPickerContainer: {
+    flexDirection: 'row',
+    gap: 12,
     marginHorizontal: 14,
-    marginBottom: 12,
+    marginBottom: 14,
+  },
+  pickerSelector: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     borderWidth: 1,
-    borderColor: Colors.primary,
-    borderRadius: 10,
+    borderColor: Colors.outlineVariant,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  pickerSelectorLabel: {
+    fontSize: 10,
+    color: Colors.textMuted,
+  },
+  pickerSelectorValue: {
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.onSurface,
+    marginTop: 1,
   },
 
   // Notes

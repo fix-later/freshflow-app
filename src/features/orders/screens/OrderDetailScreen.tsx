@@ -22,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
+import { useCartStore } from '../../../store/cartStore';
 import {
   orderApi,
   type OrderDto,
@@ -97,6 +98,8 @@ function ItemRow({ item, index }: { item: OrderItemDto; index: number }) {
 export function OrderDetailScreen({ route, navigation }: Props) {
   const { orderId } = route.params;
 
+  const { addToCart, updateItemQty, clearCart } = useCartStore();
+
   const [order, setOrder] = useState<OrderDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +110,38 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const [cancelReasonError, setCancelReasonError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [confirmingReceipt, setConfirmingReceipt] = useState(false);
+
+  const handleReorder = () => {
+    if (!order || !order.items) return;
+    
+    clearCart();
+    
+    order.items.forEach((item, index) => {
+      addToCart({
+        id: item.marketProductId,
+        name: item.productNameSnapshot || 'Sản phẩm',
+        market: 'Chợ đầu mối',
+        unit: 'Kg',
+        price: item.unitPrice,
+        image: productImage(index),
+      });
+      updateItemQty(item.marketProductId, item.quantity);
+    });
+
+    Alert.alert(
+      'Đã sao chép vào giỏ',
+      'Tất cả sản phẩm từ đơn hàng này đã được thêm vào giỏ hàng.',
+      [
+        {
+          text: 'Xem giỏ hàng',
+          onPress: () => {
+            navigation.navigate('OrderList', { openCart: true });
+          },
+        },
+        { text: 'Đóng', style: 'cancel' },
+      ]
+    );
+  };
 
   const openCancelModal = () => {
     setSelectedReasonId(null);
@@ -321,6 +356,15 @@ export function OrderDetailScreen({ route, navigation }: Props) {
             <Text style={styles.summaryTotalValue}>{(order.totalAmount ?? 0).toLocaleString('vi-VN')}đ</Text>
           </View>
         </View>
+
+        {/* ── Reorder Button (B2B Convenience) ── */}
+        <Pressable 
+          style={({ pressed }) => [styles.reorderCardBtn, pressed && { opacity: 0.85 }]}
+          onPress={handleReorder}
+        >
+          <Ionicons name="repeat" size={18} color={Colors.primary} />
+          <Text style={styles.reorderCardBtnText}>Đặt lại đơn hàng này</Text>
+        </Pressable>
 
         <View style={{ height: 16 }} />
       </ScrollView>
@@ -666,4 +710,21 @@ const styles = StyleSheet.create({
   },
   modalDangerBtnDisabled: { opacity: 0.6 },
   modalDangerBtnText: { color: Colors.onError, fontWeight: '700', fontSize: 14 },
+  reorderCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 16,
+  },
+  reorderCardBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
 });

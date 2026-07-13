@@ -10,6 +10,7 @@ export type AuthStackParamList = {
 
 export type RestaurantTabParamList = {
   RestaurantOrders: undefined;
+  RestaurantFavorites: undefined;
   RestaurantTracking: undefined;
   RestaurantProfile: undefined;
 };
@@ -34,7 +35,7 @@ export type CreateOrderItem = {
 };
 
 export type RestaurantOrdersStackParamList = {
-  OrderList: undefined;
+  OrderList: { openCart?: boolean } | undefined;
   CreateOrder: { items: CreateOrderItem[] };
   ConfirmOrder: {
     items: CreateOrderItem[];

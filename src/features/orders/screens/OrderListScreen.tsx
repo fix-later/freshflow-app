@@ -21,6 +21,7 @@ import { type NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Colors } from "../../../constants/colors";
 import { useAuthStore } from "../../../store/authStore";
 import { useCartStore } from "../../../store/cartStore";
+import { useFavoritesStore } from "../../../store/favoritesStore";
 import { pricingApi } from "../../pricing/api/pricingApi";
 import type { MarketDto, MarketProductDto, CategoryDto, PriceHistoryItemDto } from "../../../types/api.types";
 import { type RestaurantOrdersStackParamList } from "../../../navigation/types";
@@ -200,11 +201,18 @@ export interface CartItem {
 }
 
 // ─── Screen ────────────────────────────────
-export function OrderListScreen() {
+export function OrderListScreen({ route }: { route?: any }) {
   const { user, signOut } = useAuthStore();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<OrdersNav>();
   const [showCart, setShowCart] = useState(false);
+
+  useEffect(() => {
+    if (route?.params?.openCart) {
+      setShowCart(true);
+      navigation.setParams({ openCart: undefined } as any);
+    }
+  }, [route?.params?.openCart]);
 
   // ── Tab state ────────────────────────────
   const [activeTab, setActiveTab] = useState<'explore' | 'products'>('explore');
@@ -225,6 +233,8 @@ export function OrderListScreen() {
     updateItemNote,
     clearCart,
   } = useCartStore();
+
+  const { favorites, toggleFavorite, isFavorite } = useFavoritesStore();
 
   const addToCart = (product: typeof PRODUCTS[0]) => {
     globalAddToCart({
@@ -331,14 +341,24 @@ export function OrderListScreen() {
     if (quantity <= 0) return;
 
     const marketName = apiMarkets.find(m => m.id === product.marketId)?.name ?? '';
-    globalAddToCart({
-      id: product.marketProductId,
-      name: product.productName,
-      market: marketName,
-      unit: product.unit,
-      price: product.currentPrice,
-      image: productImage(apiProducts.indexOf(product)),
-    });
+    const existing = cart.find(c => c.id === product.marketProductId);
+
+    if (existing) {
+      const newQty = Math.min(product.availableQuantity, existing.qty + quantity);
+      updateItemQty(product.marketProductId, newQty);
+    } else {
+      globalAddToCart({
+        id: product.marketProductId,
+        name: product.productName,
+        market: marketName,
+        unit: product.unit,
+        price: product.currentPrice,
+        image: productImage(apiProducts.indexOf(product)),
+      });
+      if (quantity > 1) {
+        updateItemQty(product.marketProductId, Math.min(product.availableQuantity, quantity));
+      }
+    }
   };
 
   const getApiCartQty = (productId: string) => cart.find(c => c.id === productId)?.qty ?? 0;
@@ -362,6 +382,17 @@ export function OrderListScreen() {
       setDetailHistoryLoading(false);
     }
   }, [apiMarkets]);
+
+  const handleQuantityInputChange = (text: string) => {
+    if (!detailProduct) return;
+    const parsed = parseInt(text.replace(/\D/g, ''), 10);
+    const maxQty = Math.max(0, detailProduct.product.availableQuantity);
+    if (Number.isNaN(parsed)) {
+      setDetailOrderQuantity(0);
+    } else {
+      setDetailOrderQuantity(Math.min(maxQty, parsed));
+    }
+  };
 
   const closeProductDetail = useCallback(() => {
     setDetailProduct(null);
@@ -416,13 +447,28 @@ export function OrderListScreen() {
             <Text style={styles.pBadgeText}>{item.badge}</Text>
           </View>
         )}
-        <View style={styles.heartBtn}>
+        <Pressable 
+          style={styles.heartBtn}
+          onPress={() => toggleFavorite({
+            id: item.id,
+            productId: item.id,
+            name: item.name,
+            marketId: 'demo',
+            marketName: item.market,
+            category: item.category || 'Khác',
+            price: item.price,
+            unit: 'Kg',
+            image: item.image,
+            availableQuantity: 10,
+            currentQuantity: 10,
+          })}
+        >
           <Ionicons
-            name="heart-outline"
+            name={isFavorite(item.id) ? "heart" : "heart-outline"}
             size={16}
-            color={Colors.onSurfaceVariant}
+            color={isFavorite(item.id) ? Colors.error : Colors.onSurfaceVariant}
           />
-        </View>
+        </Pressable>
       </View>
 
       {/* Info Area */}
@@ -517,11 +563,35 @@ export function OrderListScreen() {
               </View>
             </View>
           </View>
-          {outOfStock ? (
-            <View style={styles.catalogOutBadge}>
-              <Text style={styles.catalogOutText}>HẾT HÀNG</Text>
-            </View>
-          ) : null}
+          <View style={styles.catalogHeaderRight}>
+            <Pressable 
+              style={styles.catalogHeartBtn}
+              onPress={() => toggleFavorite({
+                id: item.marketProductId,
+                productId: item.productId,
+                name: item.productName,
+                marketId: item.marketId,
+                marketName: marketName,
+                category: item.category || 'Khác',
+                price: item.currentPrice,
+                unit: item.unit,
+                image: productImage(index),
+                availableQuantity: item.availableQuantity,
+                currentQuantity: item.currentQuantity,
+              })}
+            >
+              <Ionicons 
+                name={isFavorite(item.marketProductId) ? "heart" : "heart-outline"} 
+                size={22} 
+                color={isFavorite(item.marketProductId) ? Colors.error : Colors.outline} 
+              />
+            </Pressable>
+            {outOfStock ? (
+              <View style={styles.catalogOutBadge}>
+                <Text style={styles.catalogOutText}>HẾT HÀNG</Text>
+              </View>
+            ) : null}
+          </View>
         </View>
 
         <View style={styles.catalogListFooter}>
@@ -887,6 +957,20 @@ export function OrderListScreen() {
                     <Ionicons name="search-outline" size={48} color={Colors.outline} />
                     <Text style={styles.emptyCatalogText}>Không tìm thấy sản phẩm</Text>
                     <Text style={styles.emptyCatalogSub}>Thử thay đổi bộ lọc hoặc từ khoá</Text>
+                    <Pressable
+                      style={styles.clearFiltersBtn}
+                      onPress={() => {
+                        setSearchQuery('');
+                        setActiveCategory('');
+                        if (apiMarkets.length > 0) {
+                          setSelectedMarketId(apiMarkets[0].id);
+                        } else {
+                          setSelectedMarketId(null);
+                        }
+                      }}
+                    >
+                      <Text style={styles.clearFiltersBtnText}>Xoá bộ lọc</Text>
+                    </Pressable>
                   </View>
                 ) : null
               }
@@ -1051,7 +1135,13 @@ export function OrderListScreen() {
                     </Pressable>
 
                     <View style={styles.productQuantityValueWrap}>
-                      <Text style={styles.productQuantityValue}>{detailOrderQuantity}</Text>
+                      <TextInput
+                        style={styles.productQuantityInput}
+                        value={String(detailOrderQuantity || '')}
+                        onChangeText={handleQuantityInputChange}
+                        keyboardType="numeric"
+                        selectTextOnFocus
+                      />
                       <Text style={styles.productQuantityUnit}>{detailProduct.product.unit}</Text>
                     </View>
 
@@ -1997,30 +2087,36 @@ const styles = StyleSheet.create({
   // ─── Tab Bar ──────────────────────────────
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    paddingHorizontal: CONTAINER_PADDING,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.outlineVariant,
-    gap: 8,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: 14,
+    marginHorizontal: CONTAINER_PADDING,
+    marginVertical: 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceContainerHigh,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'transparent',
   },
   tabItemActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Inter-SemiBold',
-    color: Colors.onSurfaceVariant,
+    color: Colors.textSecondary,
   },
   tabTextActive: {
-    color: Colors.onPrimary,
+    color: Colors.primary,
   },
 
   // ─── Search Bar ─────────────────────────
@@ -2457,6 +2553,16 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: Colors.textPrimary,
   },
+  productQuantityInput: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    padding: 0,
+    minWidth: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.outlineVariant,
+  },
   productQuantityUnit: {
     marginTop: -2,
     fontSize: 12,
@@ -2590,5 +2696,28 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: Colors.outline,
     marginTop: 4,
+  },
+  clearFiltersBtn: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  clearFiltersBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  catalogHeaderRight: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  catalogHeartBtn: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceContainerLow,
   },
 });
