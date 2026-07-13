@@ -156,6 +156,11 @@ export const orderApi = {
     return data;
   },
 
+  async confirm(orderId: string): Promise<OrderDto> {
+    const { data } = await apiClient.post<OrderDto>(`/api/v1/orders/${orderId}/confirm`);
+    return data;
+  },
+
   async list(params?: {
     status?: OrderStatus;
     from?: string;
