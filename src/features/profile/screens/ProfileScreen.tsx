@@ -430,18 +430,30 @@ export function ProfileScreen() {
             )}
           </View>
 
-          {/* ─── Restaurant nav row (RESTAURANT role only) ── */}
+          {/* ─── Restaurant nav rows (RESTAURANT role only) ── */}
           {user.role === UserRole.RESTAURANT && (
-            <Pressable
-              style={({ pressed }) => [styles.card, styles.navRow, pressed && { opacity: 0.7 }]}
-              onPress={() => navigation.navigate('RestaurantProfileEdit' as never)}
-            >
-              <View style={styles.rowLeft}>
-                <Ionicons name="business-outline" size={18} color={Colors.textMuted} />
-                <Text style={styles.changePwTitle}>Thông tin nhà hàng</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </Pressable>
+            <>
+              <Pressable
+                style={({ pressed }) => [styles.card, styles.navRow, pressed && { opacity: 0.7 }]}
+                onPress={() => navigation.navigate('RestaurantProfileEdit' as never)}
+              >
+                <View style={styles.rowLeft}>
+                  <Ionicons name="business-outline" size={18} color={Colors.textMuted} />
+                  <Text style={styles.changePwTitle}>Thông tin nhà hàng</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.card, styles.navRow, pressed && { opacity: 0.7 }]}
+                onPress={() => navigation.navigate('CreditOverview' as never)}
+              >
+                <View style={styles.rowLeft}>
+                  <Ionicons name="card-outline" size={18} color={Colors.textMuted} />
+                  <Text style={styles.changePwTitle}>Tín dụng & Thanh toán</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              </Pressable>
+            </>
           )}
 
           {/* ─── Change Password Card ────────────── */}

@@ -12,6 +12,14 @@ export type RestaurantTabParamList = {
   RestaurantProfile: undefined;
 };
 
+export type RestaurantProfileStackParamList = {
+  ProfileMain: undefined;
+  RestaurantProfileEdit: undefined;
+  CreditOverview: undefined;
+  CreditTransactions: { restaurantId: string };
+  CreditStatements: { restaurantId: string };
+};
+
 export type CreateOrderItem = {
   marketProductId: string;
   productName: string;
