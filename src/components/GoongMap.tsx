@@ -132,7 +132,7 @@ export function GoongMap({
   const html = buildHtml(destLat, destLng, currentLat, currentLng, zoom, TILES_KEY, PLACES_KEY);
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={[styles.container, !style && styles.defaultHeight, style]}>
       <WebView
         source={{ html, baseUrl: 'https://tiles.goong.io' }}
         style={styles.map}
@@ -151,6 +151,7 @@ export function GoongMap({
 }
 
 const styles = StyleSheet.create({
-  container: { borderRadius: 16, overflow: 'hidden', height: 260 },
+  container: { borderRadius: 16, overflow: 'hidden' },
+  defaultHeight: { height: 260 },
   map: { flex: 1, backgroundColor: '#e8ecf0' },
 });

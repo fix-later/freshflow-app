@@ -38,7 +38,7 @@ export function DriverStack() {
         options={{ title: 'Nhận hàng tại Hub', animation: 'slide_from_right' }}
       />
       <Stack.Screen name="StopList" component={StopListScreen} options={{ title: 'Danh sách điểm dừng' }} />
-      <Stack.Screen name="DriverNavigation" component={NavigationScreen} options={{ title: 'Điều hướng' }} />
+      <Stack.Screen name="DriverNavigation" component={NavigationScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ProofOfDelivery" component={ProofOfDeliveryScreen} options={{ title: 'Bằng chứng giao hàng' }} />
       <Stack.Screen name="ReportDeliveryIssue" component={ReportDeliveryIssueScreen} options={{ title: 'Báo cáo lỗi giao hàng' }} />
       <Stack.Screen name="DriverProfile" component={ProfileScreen} options={{ title: 'Hồ sơ' }} />

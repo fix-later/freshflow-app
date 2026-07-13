@@ -131,14 +131,21 @@ export function DriverHomeScreen() {
             </View>
           </View>
 
-          {/* Map preview button */}
-          <Pressable
-            style={({ pressed }) => [styles.mapPreviewBtn, pressed && { opacity: 0.8 }]}
-            onPress={handleShowRouteMap}
-          >
-            <Ionicons name="map-outline" size={16} color={Colors.primary} />
-            <Text style={styles.mapPreviewBtnText}>Xem bản đồ tuyến đường</Text>
-            <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+          {/* Map preview thumbnail — tap to open fullscreen */}
+          <Pressable onPress={handleShowRouteMap} style={styles.mapThumbWrap}>
+            <RouteOverviewMap
+              stops={MOCK_STOPS}
+              currentLat={currentLat}
+              currentLng={currentLng}
+              style={styles.mapThumb}
+            />
+            {/* overlay so tap registers over WebView */}
+            <View style={styles.mapThumbOverlay} pointerEvents="none">
+              <View style={styles.mapThumbBadge}>
+                <Ionicons name="expand-outline" size={13} color="#fff" />
+                <Text style={styles.mapThumbBadgeText}>Xem toàn màn hình</Text>
+              </View>
+            </View>
           </Pressable>
 
           {/* CTA */}
@@ -281,18 +288,25 @@ const styles = StyleSheet.create({
   statVal: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
   statLbl: { fontSize: 10, color: Colors.textMuted, textAlign: 'center' },
 
-  mapPreviewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: Colors.primaryLight,
+  mapThumbWrap: {
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    overflow: 'hidden',
+    height: 150,
     borderWidth: 1,
-    borderColor: Colors.primary + '30',
+    borderColor: Colors.outlineVariant,
   },
-  mapPreviewBtnText: { flex: 1, fontSize: 14, fontWeight: '600', color: Colors.primary },
+  mapThumb: { flex: 1, borderRadius: 0 },
+  mapThumbOverlay: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: 10, paddingBottom: 8,
+    alignItems: 'flex-end',
+  },
+  mapThumbBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+  },
+  mapThumbBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
 
   ctaBtn: {
     flexDirection: 'row',

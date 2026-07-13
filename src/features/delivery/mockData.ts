@@ -37,7 +37,7 @@ export const MOCK_STOPS: MockStop[] = [
     address: '123 Nguyễn Huệ, Quận 1, TP.HCM',
     contactName: 'Nguyễn Văn An', contactPhone: '0901234567',
     items: [
-      { name: 'Cà chua', quantity: 10, unit: 'kg' },
+      { name: 'Cà chua', quantity: 20, unit: 'kg' },
       { name: 'Thịt bò', quantity: 5, unit: 'kg' },
     ],
     status: 'delivered', lat: 10.7769, lng: 106.7009,
@@ -58,6 +58,8 @@ export const MOCK_STOPS: MockStop[] = [
     items: [
       { name: 'Gạo jasmine', quantity: 20, unit: 'kg' },
       { name: 'Sườn heo', quantity: 8, unit: 'kg' },
+      { name: 'Gạo', quantity: 20, unit: 'kg' },
+      { name: 'Sườn', quantity: 8, unit: 'kg' },
     ],
     status: 'arrived', lat: 10.7830, lng: 106.6980,
   },
