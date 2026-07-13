@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,8 @@ import { Colors } from '../../../constants/colors';
 import { orderApi } from '../api/orderApi';
 import { useCartStore } from '../../../store/cartStore';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';
+import { creditApi } from '../../credit/api/creditApi';
+import { restaurantApi } from '../../restaurant/api/restaurantApi';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'ConfirmOrder'>;
 
@@ -40,6 +42,28 @@ function getCutoffInfo() {
   const hoursLeft = Math.floor(diff / 3_600_000);
   const minutesLeft = Math.floor((diff % 3_600_000) / 60_000);
   return { isPast: false, isSafe: diff > 2 * 3_600_000, hoursLeft, minutesLeft, nextLabel };
+}
+
+function CreditAlertBanner({ ratio, available }: { ratio: number; available: number }) {
+  if (ratio < 0.7) return null;
+  const isDanger = ratio >= 0.9;
+  const accent = isDanger ? '#EF4444' : '#F59E0B';
+  const bg = isDanger ? '#FEE2E2' : '#FEF3C7';
+  const icon: React.ComponentProps<typeof Ionicons>['name'] = isDanger ? 'warning' : 'alert-circle';
+  const title = isDanger
+    ? 'Hạn mức tín dụng gần cạn!'
+    : `Đã dùng ${Math.round(ratio * 100)}% hạn mức tín dụng`;
+  return (
+    <View style={[styles.alertBanner, { backgroundColor: bg, borderColor: accent + '50' }]}>
+      <Ionicons name={icon} size={20} color={accent} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.alertBannerTitle, { color: accent }]}>{title}</Text>
+        <Text style={styles.alertBannerSub}>
+          Còn {available.toLocaleString('vi-VN')}đ khả dụng. Liên hệ FreshFlow để nâng hạn mức.
+        </Text>
+      </View>
+    </View>
+  );
 }
 
 function CutoffBanner() {
@@ -112,7 +136,23 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
   const { items, scheduledFor, deliveryLabel, notes } = route.params;
   const [loading, setLoading] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
+  const [creditRatio, setCreditRatio] = useState<number | null>(null);
+  const [availableCredit, setAvailableCredit] = useState<number>(0);
   const { clearCart } = useCartStore();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const status = await restaurantApi.getApprovalStatus();
+        const credit = await creditApi.getCredit(status.restaurantId);
+        const ratio = credit.creditLimit > 0 ? credit.usedCredit / credit.creditLimit : 1;
+        setCreditRatio(ratio);
+        setAvailableCredit(credit.availableCredit ?? 0);
+      } catch {
+        // non-critical — silent fail
+      }
+    })();
+  }, []);
 
   const subtotal = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
   const itemCount = items.reduce((sum, it) => sum + it.quantity, 0);
@@ -120,19 +160,19 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const result = await orderApi.create({
+      const draft = await orderApi.create({
         items: items.map(it => ({ marketProductId: it.marketProductId, quantity: it.quantity, note: it.note })),
         scheduledFor,
         notes,
       });
-      console.log('Order creation result:', result);
+      const draftId = draft?.orderId;
+      if (!draftId) throw new Error('Không nhận được mã đơn hàng từ server.');
 
-      // Extract order ID with robust envelope fallback check
-      const orderId = result?.orderId || (result as any)?.id || (result as any)?.data?.orderId || (result as any)?.data?.id || '';
+      await orderApi.confirm(draftId);
+
       clearCart();
-      setPlacedOrderId(orderId);
+      setPlacedOrderId(draftId);
     } catch (err: unknown) {
-      console.error('Order creation error:', err);
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       if (code === 'INSUFFICIENT_STOCK') {
@@ -141,8 +181,17 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         Alert.alert('Tài khoản chưa được duyệt', 'Nhà hàng cần được Admin phê duyệt trước khi đặt hàng.');
       } else if (code === 'SCHEDULED_FOR_TOO_SOON') {
         Alert.alert('Thời gian không hợp lệ', 'Thời gian giao phải cách thời điểm hiện tại ít nhất 2 giờ.');
+      } else if (
+        code === 'CREDIT_LIMIT_EXCEEDED' ||
+        code === 'INSUFFICIENT_CREDIT' ||
+        (message ?? '').toLowerCase().includes('credit')
+      ) {
+        Alert.alert(
+          'Hạn mức tín dụng không đủ',
+          'Đơn hàng vượt quá hạn mức tín dụng hiện tại của nhà hàng. Vui lòng liên hệ FreshFlow để được cấp hạn mức.',
+        );
       } else {
-        Alert.alert('Lỗi', message ?? 'Không thể tạo đơn hàng. Vui lòng thử lại.');
+        Alert.alert('Không thể đặt hàng', message ?? 'Đã xảy ra lỗi. Vui lòng thử lại.');
       }
     } finally {
       setLoading(false);
@@ -163,6 +212,11 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
 
         {/* ── Cutoff banner ── */}
         <CutoffBanner />
+
+        {/* ── Credit alert ── */}
+        {creditRatio !== null && (
+          <CreditAlertBanner ratio={creditRatio} available={availableCredit} />
+        )}
 
         {/* ── Delivery cycle ── */}
         <Text style={styles.sectionTitle}>Chu kỳ giao hàng</Text>
@@ -275,6 +329,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   separator: { height: 1, backgroundColor: Colors.surfaceVariant, marginHorizontal: 12 },
+
+  // Credit alert banner
+  alertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 4,
+  },
+  alertBannerTitle: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
+  alertBannerSub: { fontSize: 12, color: Colors.textMuted, lineHeight: 16 },
 
   // Cutoff banner
   cutoffBanner: {
