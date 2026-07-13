@@ -8,6 +8,7 @@ import { Colors } from '../../../constants/colors';
 import { GoongMap } from '../../../components/GoongMap';
 import { type DriverStackParamList } from '../../../navigation/types';
 import { MOCK_STOP_MAP, type StopStatus } from '../mockData';
+import { updateStopStatus } from '../stopStatusStore';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'DriverNavigation'>;
 
@@ -57,7 +58,7 @@ export function NavigationScreen({ route, navigation }: Props) {
   };
 
   const handleArrived = () => {
-    // TODO: await driverApi.updateStopStatus(stop.id, 'arrived')
+    updateStopStatus(stop.id, 'arrived');
     setLocalStatus('arrived');
   };
 
@@ -70,7 +71,7 @@ export function NavigationScreen({ route, navigation }: Props) {
         {
           text: 'Xác nhận',
           onPress: () => {
-            // TODO: await driverApi.updateStopStatus(stop.id, 'delivered')
+            updateStopStatus(stop.id, 'delivered');
             setLocalStatus('delivered');
           },
         },
@@ -79,23 +80,18 @@ export function NavigationScreen({ route, navigation }: Props) {
   };
 
   const handleFailed = () => {
+    const markFailed = () => {
+      updateStopStatus(stop.id, 'failed');
+      setLocalStatus('failed');
+    };
     Alert.alert(
       'Không giao được',
       'Lý do không giao được?',
       [
         { text: 'Huỷ', style: 'cancel' },
-        {
-          text: 'Không có người nhận',
-          onPress: () => setLocalStatus('failed'),
-        },
-        {
-          text: 'Địa chỉ sai',
-          onPress: () => setLocalStatus('failed'),
-        },
-        {
-          text: 'Lý do khác',
-          onPress: () => setLocalStatus('failed'),
-        },
+        { text: 'Không có người nhận', onPress: markFailed },
+        { text: 'Địa chỉ sai', onPress: markFailed },
+        { text: 'Lý do khác', onPress: markFailed },
       ],
     );
   };
