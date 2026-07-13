@@ -85,6 +85,24 @@ export const MOCK_STOPS: MockStop[] = [
   },
 ];
 
+export interface MockHub {
+  id: string;
+  name: string;
+  address: string;
+  contactPhone: string;
+  lat: number;
+  lng: number;
+}
+
+export const MOCK_HUB: MockHub = {
+  id: 'hub-001',
+  name: 'Trung tâm phân phối Bình Điền',
+  address: '99A Võ Văn Kiệt, Quận 8, TP.HCM',
+  contactPhone: '028 1234 5678',
+  lat: 10.7520,
+  lng: 106.6750,
+};
+
 export const MOCK_STOP_MAP: Record<string, MockStop> = Object.fromEntries(
   MOCK_STOPS.map(s => [s.id, s]),
 );

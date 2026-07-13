@@ -144,10 +144,10 @@ export function DriverHomeScreen() {
           {/* CTA */}
           <Pressable
             style={({ pressed }) => [styles.ctaBtn, pressed && { opacity: 0.8 }]}
-            onPress={() => navigation.navigate('StopList', { routeId: route.id })}
+            onPress={() => navigation.navigate('PickupConfirm', { routeId: route.id })}
           >
-            <Ionicons name="list-outline" size={18} color={Colors.onPrimary} />
-            <Text style={styles.ctaBtnText}>Xem danh sách điểm giao</Text>
+            <Ionicons name="cube-outline" size={18} color={Colors.onPrimary} />
+            <Text style={styles.ctaBtnText}>Nhận hàng tại Hub</Text>
           </Pressable>
         </View>
 
