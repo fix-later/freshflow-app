@@ -77,6 +77,36 @@ function productImage(index: number): string {
   return PRODUCT_PLACEHOLDERS[index % PRODUCT_PLACEHOLDERS.length];
 }
 
+interface ProductCategoryFilter {
+  id: string;
+  name: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}
+
+function getProductCategoryIcon(name: string): keyof typeof Ionicons.glyphMap {
+  const normalizedName = name.toLowerCase();
+
+  if (
+    normalizedName.includes('cá')
+    || normalizedName.includes('hải sản')
+    || normalizedName.includes('cua')
+    || normalizedName.includes('ghẹ')
+  ) {
+    return 'fish-outline';
+  }
+  if (normalizedName.includes('rau') || normalizedName.includes('củ') || normalizedName.includes('quả') || normalizedName.includes('trái cây')) {
+    return 'leaf-outline';
+  }
+  if (normalizedName.includes('thịt')) return 'restaurant-outline';
+  if (normalizedName.includes('trứng') || normalizedName.includes('sữa')) return 'cafe-outline';
+  if (normalizedName.includes('bột')) return 'bag-outline';
+  if (normalizedName.includes('dầu')) return 'water-outline';
+  if (normalizedName.includes('gia vị')) return 'flask-outline';
+  if (normalizedName.includes('khô')) return 'cube-outline';
+
+  return 'basket-outline';
+}
+
 // ─── Data ──────────────────────────────────
 const MARKETS = [
   {
@@ -224,6 +254,7 @@ export function OrderListScreen({ route }: { route?: any }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState('');
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   // ── Global cart state ───
   const {
@@ -316,6 +347,10 @@ export function OrderListScreen({ route }: { route?: any }) {
   }, [apiMarkets]);
 
   const handleSelectMarket = (marketId: string) => {
+    if (marketId !== selectedMarketId) {
+      setActiveCategory('');
+      setShowAllCategories(false);
+    }
     setSelectedMarketId(marketId);
     setShowMarketPicker(false);
     setActiveTab('products');
@@ -353,6 +388,46 @@ export function OrderListScreen({ route }: { route?: any }) {
       p.productName.toLowerCase().includes(searchQuery.toLowerCase()),
     );
   }, [searchQuery, apiProducts]);
+
+  const categoryFilters = useMemo<ProductCategoryFilter[]>(() => [
+    { id: 'all-products', name: 'Tất cả', icon: 'grid-outline' },
+    ...apiCategories
+      .filter(category => category.isActive)
+      .map(category => ({
+        id: category.id,
+        name: category.name,
+        icon: getProductCategoryIcon(category.name),
+      })),
+  ], [apiCategories]);
+
+  const handleCategorySelect = useCallback((categoryName: string) => {
+    setActiveCategory(categoryName === activeCategory ? '' : categoryName);
+  }, [activeCategory]);
+
+  const renderCategoryChip = useCallback(({ item }: { item: ProductCategoryFilter }) => {
+    const categoryName = item.id === 'all-products' ? '' : item.name;
+    const active = activeCategory === categoryName;
+
+    return (
+      <Pressable
+        key={item.id}
+        style={[styles.chip, active && styles.chipActive]}
+        onPress={() => handleCategorySelect(categoryName)}
+        accessibilityRole="button"
+        accessibilityLabel={`Lọc theo ${item.name}`}
+        accessibilityState={{ selected: active }}
+      >
+        <Ionicons
+          name={active ? 'checkmark-circle' : item.icon}
+          size={16}
+          color={active ? Colors.primaryText : Colors.textSecondary}
+        />
+        <Text style={[styles.chipText, active && styles.chipTextActive]}>
+          {item.name}
+        </Text>
+      </Pressable>
+    );
+  }, [activeCategory, handleCategorySelect]);
 
   // ── Add API product to cart ───────────────
   const addApiToCart = (product: MarketProductDto, quantity = 1) => {
@@ -966,25 +1041,55 @@ export function OrderListScreen({ route }: { route?: any }) {
                     }}
                   /> */}
 
-                  {/* Category Chips */}
-                  <FlatList
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    data={apiCategories}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.chipRow}
-                    renderItem={({ item }) => {
-                      const active = activeCategory === item.name;
-                      return (
+                  {/* Product category filter */}
+                  <View style={styles.categoryFilter}>
+                    <View style={styles.categoryFilterHeader}>
+                      <View style={styles.categoryFilterTitleGroup}>
+                        <View style={styles.categoryFilterIcon}>
+                          <Ionicons name="options-outline" size={16} color={Colors.primaryText} />
+                        </View>
+                        <View>
+                          <Text style={styles.categoryFilterTitle}>Danh mục</Text>
+                          <Text style={styles.categoryFilterSubtitle}>
+                            {apiLoading ? 'Đang cập nhật...' : `${filteredApiProducts.length} sản phẩm`}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {categoryFilters.length > 4 && (
                         <Pressable
-                          style={[styles.chip, active && styles.chipActive]}
-                          onPress={() => setActiveCategory(item.name === activeCategory ? '' : item.name)}
+                          style={styles.categoryToggleBtn}
+                          onPress={() => setShowAllCategories(current => !current)}
+                          accessibilityRole="button"
+                          accessibilityLabel={showAllCategories ? 'Thu gọn danh mục' : 'Xem tất cả danh mục'}
                         >
-                          <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.name}</Text>
+                          <Text style={styles.categoryToggleText}>
+                            {showAllCategories ? 'Thu gọn' : 'Xem tất cả'}
+                          </Text>
+                          <Ionicons
+                            name={showAllCategories ? 'chevron-up' : 'chevron-down'}
+                            size={15}
+                            color={Colors.primaryText}
+                          />
                         </Pressable>
-                      );
-                    }}
-                  />
+                      )}
+                    </View>
+
+                    {showAllCategories ? (
+                      <View style={styles.categoryChipWrap}>
+                        {categoryFilters.map(item => renderCategoryChip({ item }))}
+                      </View>
+                    ) : (
+                      <FlatList
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        data={categoryFilters}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={styles.chipRow}
+                        renderItem={renderCategoryChip}
+                      />
+                    )}
+                  </View>
                 </View>
               }
               ListEmptyComponent={
@@ -2256,24 +2361,86 @@ const styles = StyleSheet.create({
   },
 
   // ─── Chip Row ───────────────────────────
+  categoryFilter: {
+    marginHorizontal: CONTAINER_PADDING,
+    marginTop: 10,
+    marginBottom: 12,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    backgroundColor: Colors.surface,
+  },
+  categoryFilterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  categoryFilterTitleGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  categoryFilterIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
+  },
+  categoryFilterTitle: {
+    fontSize: 14,
+    fontFamily: RestaurantFonts.bold,
+    color: Colors.onSurface,
+  },
+  categoryFilterSubtitle: {
+    marginTop: 1,
+    fontSize: 11,
+    fontFamily: RestaurantFonts.medium,
+    color: Colors.textMuted,
+  },
+  categoryToggleBtn: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 9,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+  },
+  categoryToggleText: {
+    fontSize: 11,
+    fontFamily: RestaurantFonts.semibold,
+    color: Colors.primaryText,
+  },
   chipRow: {
-    paddingHorizontal: CONTAINER_PADDING,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
     gap: 8,
+  },
+  categoryChipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 12,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    minHeight: 40,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 100,
-    backgroundColor: Colors.surfaceContainerHigh,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerLow,
     borderWidth: 1,
     borderColor: Colors.outlineVariant,
   },
   chipActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
     borderColor: Colors.primary,
   },
   chipText: {
@@ -2282,7 +2449,7 @@ const styles = StyleSheet.create({
     color: Colors.onSurfaceVariant,
   },
   chipTextActive: {
-    color: Colors.onPrimary,
+    color: Colors.primaryText,
   },
 
   // ─── Catalog Qty Controls ──────────────
