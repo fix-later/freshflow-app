@@ -12,14 +12,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
 import { Button } from '../../../components/ui/Button';
+import { type RestaurantProfileStackParamList } from '../../../navigation/types';
 import {
   restaurantApi,
   type RestaurantProfileDto,
   type ApprovalStatusDto,
 } from '../api/restaurantApi';
+
+type Nav = NativeStackNavigationProp<RestaurantProfileStackParamList>;
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
@@ -177,6 +181,7 @@ function toForm(profile: RestaurantProfileDto): RestaurantProfileForm {
 }
 
 export function RestaurantProfileScreen() {
+  const navigation = useNavigation<Nav>();
   const [form, setForm] = useState<RestaurantProfileForm>(EMPTY_FORM);
   const [original, setOriginal] = useState<RestaurantProfileForm>(EMPTY_FORM);
   const [profile, setProfile] = useState<RestaurantProfileDto | null>(null);
@@ -491,6 +496,25 @@ export function RestaurantProfileScreen() {
             )}
           </View>
 
+          {/* ─── Delivery addresses card ────────── */}
+          <Pressable
+            style={styles.card}
+            onPress={() => navigation.navigate('DeliveryAddresses')}
+          >
+            <View style={styles.navRow}>
+              <View style={styles.navRowLeft}>
+                <View style={styles.navIcon}>
+                  <Ionicons name="location-outline" size={18} color={Colors.primary} />
+                </View>
+                <View style={{ gap: 1 }}>
+                  <Text style={styles.navRowTitle}>Địa chỉ giao hàng</Text>
+                  <Text style={styles.navRowSub}>Quản lý địa chỉ và toạ độ GPS</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            </View>
+          </Pressable>
+
           {/* ─── Action buttons ─────────────────── */}
           <View style={styles.card}>
             <Text style={styles.cardSection}>Hồ sơ pháp lý</Text>
@@ -695,4 +719,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+
+  // ─── Delivery addresses nav row ──────────
+  navRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  navRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  navIcon: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: Colors.primaryLight ?? '#f0faf4',
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  navRowTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  navRowSub: { fontSize: 12, color: Colors.textMuted },
 });

@@ -217,6 +217,9 @@ export function OrderListScreen({ route }: { route?: any }) {
   // ── Tab state ────────────────────────────
   const [activeTab, setActiveTab] = useState<'explore' | 'products'>('explore');
 
+  // ── Market picker ─────────────────────────
+  const [showMarketPicker, setShowMarketPicker] = useState(false);
+
   // ── Product tab filter state ─────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
@@ -304,6 +307,21 @@ export function OrderListScreen({ route }: { route?: any }) {
       setApiError('Không thể tải sản phẩm');
     }
   }, []);
+
+  // ── Auto-open market picker when markets load and none selected ──
+  useEffect(() => {
+    if (apiMarkets.length > 0 && !selectedMarketId) {
+      setShowMarketPicker(true);
+    }
+  }, [apiMarkets]);
+
+  const handleSelectMarket = (marketId: string) => {
+    setSelectedMarketId(marketId);
+    setShowMarketPicker(false);
+    setActiveTab('products');
+  };
+
+  const selectedMarketName = apiMarkets.find(m => m.id === selectedMarketId)?.name;
 
   // ── Init on mount ─────────────────────────
   useEffect(() => {
@@ -645,34 +663,18 @@ export function OrderListScreen({ route }: { route?: any }) {
       <View style={styles.appHeader}>
         <View style={styles.headerTop}>
           <View style={styles.headerLogo}>
-            <MaterialIcons
-              name="agriculture"
-              size={28}
-              color={Colors.primary}
-            />
+            <MaterialIcons name="agriculture" size={28} color={Colors.primary} />
             <Text style={styles.headerLogoText}>FreshFlow</Text>
           </View>
           <View style={styles.headerIcons}>
             <Pressable style={styles.hIconButton} onPress={() => navigation.navigate('ManageRecurringOrders')}>
-              <Ionicons
-                name="repeat-outline"
-                size={23}
-                color={Colors.onSurfaceVariant}
-              />
+              <Ionicons name="repeat-outline" size={23} color={Colors.onSurfaceVariant} />
             </Pressable>
             <Pressable style={styles.hIconButton} onPress={() => navigation.navigate('OrderHistory')}>
-              <Ionicons
-                name="time-outline"
-                size={23}
-                color={Colors.onSurfaceVariant}
-              />
+              <Ionicons name="time-outline" size={23} color={Colors.onSurfaceVariant} />
             </Pressable>
             <Pressable style={styles.hIconButton}>
-              <MaterialIcons
-                name="notifications"
-                size={24}
-                color={Colors.onSurfaceVariant}
-              />
+              <MaterialIcons name="notifications" size={24} color={Colors.onSurfaceVariant} />
               <View style={styles.hBadgeDot} />
             </Pressable>
             <Pressable onPress={handleLogout}>
@@ -680,6 +682,15 @@ export function OrderListScreen({ route }: { route?: any }) {
             </Pressable>
           </View>
         </View>
+
+        {/* Market selector bar */}
+        <Pressable style={styles.marketSelectorBar} onPress={() => setShowMarketPicker(true)}>
+          <Ionicons name="storefront-outline" size={14} color={Colors.primary} />
+          <Text style={styles.marketSelectorText} numberOfLines={1}>
+            {selectedMarketName ?? 'Chọn chợ...'}
+          </Text>
+          <Ionicons name="chevron-down" size={14} color={Colors.primary} />
+        </Pressable>
       </View>
 
       {/* ─── SEGMENTED TAB BAR ──────────────── */}
@@ -853,7 +864,7 @@ export function OrderListScreen({ route }: { route?: any }) {
                   <Ionicons name="globe-outline" size={22} color={Colors.outline} />
                   <Ionicons name="call-outline" size={22} color={Colors.outline} />
                 </View>
-                <Text style={styles.footerCopyText}>© 2024 FreshFlow Supply Chain Dynamics.</Text>
+                <Text style={styles.footerCopyText}>© 2026 FreshFlow Supply Chain Dynamics.</Text>
               </View>
             </>
           }
@@ -911,7 +922,7 @@ export function OrderListScreen({ route }: { route?: any }) {
                   </View>
 
                   {/* Market Chips */}
-                  <FlatList
+                  {/* <FlatList
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     data={apiMarkets}
@@ -928,7 +939,7 @@ export function OrderListScreen({ route }: { route?: any }) {
                         </Pressable>
                       );
                     }}
-                  />
+                  /> */}
 
                   {/* Category Chips */}
                   <FlatList
@@ -1232,6 +1243,59 @@ export function OrderListScreen({ route }: { route?: any }) {
           </View>
         </View>
       </Modal>
+      {/* ─── MARKET PICKER MODAL ──────────── */}
+      <Modal
+        visible={showMarketPicker}
+        animationType="slide"
+        transparent
+        onRequestClose={() => selectedMarketId && setShowMarketPicker(false)}
+      >
+        <View style={styles.pickerOverlay}>
+          <Pressable
+            style={styles.pickerBackdrop}
+            onPress={() => selectedMarketId && setShowMarketPicker(false)}
+          />
+          <View style={styles.pickerSheet}>
+            <View style={styles.pickerHandle} />
+            <Text style={styles.pickerTitle}>Chọn chợ của bạn</Text>
+            <Text style={styles.pickerSub}>Sản phẩm sẽ được lấy từ chợ bạn chọn</Text>
+
+            {apiMarkets.length === 0 ? (
+              <View style={styles.pickerLoading}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.pickerLoadingText}>Đang tải danh sách chợ...</Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.pickerList}>
+                {apiMarkets.map(market => {
+                  const active = selectedMarketId === market.id;
+                  return (
+                    <Pressable
+                      key={market.id}
+                      style={({ pressed }) => [styles.pickerItem, active && styles.pickerItemActive, pressed && { opacity: 0.8 }]}
+                      onPress={() => handleSelectMarket(market.id)}
+                    >
+                      <View style={[styles.pickerItemIcon, active && styles.pickerItemIconActive]}>
+                        <Ionicons name="storefront-outline" size={20} color={active ? '#fff' : Colors.primary} />
+                      </View>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={[styles.pickerItemName, active && styles.pickerItemNameActive]}>{market.name}</Text>
+                        {(market.address ?? market.location) ? (
+                          <Text style={styles.pickerItemAddr} numberOfLines={1}>
+                            {market.address ?? market.location}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {active && <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         visible={showCart}
         animationType="slide"
@@ -2719,5 +2783,119 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 20,
     backgroundColor: Colors.surfaceContainerLow,
+  },
+
+  // ─── Market selector bar (header) ──────
+  marketSelectorBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.primaryLight ?? '#f0faf4',
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    maxWidth: '70%',
+  },
+  marketSelectorText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+
+  // ─── Market picker modal ────────────────
+  pickerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  pickerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  pickerSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    maxHeight: '75%',
+  },
+  pickerHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.outlineVariant,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.onSurface,
+    marginBottom: 4,
+  },
+  pickerSub: {
+    fontSize: 13,
+    color: Colors.onSurfaceVariant,
+    marginBottom: 16,
+  },
+  pickerLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 24,
+    justifyContent: 'center',
+  },
+  pickerLoadingText: {
+    fontSize: 14,
+    color: Colors.onSurfaceVariant,
+  },
+  pickerList: {
+    maxHeight: 400,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    marginBottom: 8,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  pickerItemActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight ?? '#f0faf4',
+  },
+  pickerItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primaryLight ?? '#f0faf4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  pickerItemIconActive: {
+    backgroundColor: Colors.primary,
+  },
+  pickerItemName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  pickerItemNameActive: {
+    color: Colors.primary,
+  },
+  pickerItemAddr: {
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
   },
 });

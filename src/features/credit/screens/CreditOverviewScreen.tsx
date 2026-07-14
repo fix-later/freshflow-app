@@ -177,7 +177,7 @@ export function CreditOverviewScreen() {
         <View style={styles.heroCard}>
           <Text style={styles.heroLabel}>Hạn mức tín dụng</Text>
           <Text style={styles.heroLimit}>{formatVnd(credit.creditLimit)}</Text>
-          <UsageBar used={credit.usedCredit} limit={credit.creditLimit} />
+          <UsageBar used={credit.outstandingBalance} limit={credit.creditLimit} />
         </View>
 
         {/* ── Stat grid ── */}
@@ -191,7 +191,7 @@ export function CreditOverviewScreen() {
           <StatCard
             icon="receipt-outline"
             label="Đã dùng"
-            value={formatVnd(credit.usedCredit)}
+            value={formatVnd(credit.outstandingBalance)}
             color={Colors.danger}
           />
         </View>

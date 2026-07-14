@@ -3,7 +3,7 @@ import { apiClient } from '../../../services/api/client';
 export interface CreditDto {
   restaurantId: string;
   creditLimit: number;
-  usedCredit: number;
+  outstandingBalance: number;
   availableCredit: number;
   updatedAt: string | null;
 }
