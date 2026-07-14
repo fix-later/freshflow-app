@@ -38,7 +38,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
 
 const ROLE_COLOR: Record<UserRole, string> = {
   [UserRole.RESTAURANT]: RestaurantColors.primaryText,
-  [UserRole.MARKET_AGENT]: '#006399',
+  [UserRole.MARKET_AGENT]: RestaurantColors.primaryText,
   [UserRole.HUB_STAFF]: '#825100',
   [UserRole.DRIVER]: '#5c4033',
 };
@@ -279,12 +279,13 @@ export function ProfileScreen() {
 
   const roleColor = ROLE_COLOR[user.role] ?? Colors.primary;
   const isRestaurant = user.role === UserRole.RESTAURANT;
-  const ActionButton = isRestaurant ? RestaurantButton : Button;
+  const isBrandedRole = isRestaurant || user.role === UserRole.MARKET_AGENT;
+  const ActionButton = isBrandedRole ? RestaurantButton : Button;
   const displayAvatarUri = isEditing ? editAvatarUri ?? user.avatarUrl : user.avatarUrl;
 
   return (
     <SafeAreaView
-      style={[styles.safe, isRestaurant && { backgroundColor: RestaurantColors.background }]}
+      style={[styles.safe, isBrandedRole && { backgroundColor: RestaurantColors.background }]}
       edges={['bottom']}
     >
       <KeyboardAvoidingView
@@ -353,16 +354,16 @@ export function ProfileScreen() {
               {/* Edit / Cancel toggle button */}
               {!isEditing ? (
                 <Pressable
-                  style={[styles.editBtn, isRestaurant && styles.restaurantEditBtn]}
+                  style={[styles.editBtn, isBrandedRole && styles.restaurantEditBtn]}
                   onPress={enterEditMode}
                 >
                   <Ionicons
                     name="pencil-outline"
                     size={14}
-                    color={isRestaurant ? RestaurantColors.primaryText : Colors.primary}
+                    color={isBrandedRole ? RestaurantColors.primaryText : Colors.primary}
                   />
                   <Text
-                    style={[styles.editBtnText, isRestaurant && styles.restaurantEditBtnText]}
+                    style={[styles.editBtnText, isBrandedRole && styles.restaurantEditBtnText]}
                   >
                     Chỉnh sửa
                   </Text>
@@ -376,7 +377,7 @@ export function ProfileScreen() {
           </View>
 
           {/* ─── Info / Edit Card ───────────────── */}
-          <View style={[styles.card, isRestaurant && styles.restaurantCard]}>
+          <View style={[styles.card, isBrandedRole && styles.restaurantCard]}>
             <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
 
             {isEditing ? (
@@ -495,7 +496,7 @@ export function ProfileScreen() {
           )}
 
           {/* ─── Change Password Card ────────────── */}
-          <View style={[styles.card, isRestaurant && styles.restaurantCard]}>
+          <View style={[styles.card, isBrandedRole && styles.restaurantCard]}>
             <Pressable style={styles.changePwHeader} onPress={toggleChangePw}>
               <View style={styles.rowLeft}>
                 <Ionicons name="key-outline" size={18} color={Colors.textMuted} />
@@ -517,7 +518,7 @@ export function ProfileScreen() {
                     <Ionicons
                       name="checkmark-circle-outline"
                       size={40}
-                      color={isRestaurant ? RestaurantColors.primaryText : Colors.primary}
+                      color={isBrandedRole ? RestaurantColors.primaryText : Colors.primary}
                     />
                     <Text style={styles.successTitle}>Đổi mật khẩu thành công!</Text>
                     <Text style={styles.successDesc}>Mật khẩu của bạn đã được cập nhật.</Text>
