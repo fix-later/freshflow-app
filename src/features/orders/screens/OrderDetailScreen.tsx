@@ -12,8 +12,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
@@ -21,7 +19,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import {
+  RestaurantText as Text,
+  RestaurantTextInput as TextInput,
+} from '../../restaurant/components/RestaurantText';
 import { useCartStore } from '../../../store/cartStore';
 import {
   orderApi,
@@ -292,7 +294,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         <View style={styles.card}>
           <View style={styles.statusHeaderRow}>
             <View style={styles.headerTitleRow}>
-              <Ionicons name="receipt-outline" size={16} color={Colors.primary} />
+              <Ionicons name="receipt-outline" size={16} color={Colors.primaryText} />
               <Text style={styles.orderCode}>Đơn #{code}</Text>
             </View>
             <View style={[styles.badge, { backgroundColor: statusColor + '12', borderColor: statusColor + '25' }]}>
@@ -341,7 +343,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
             <Text style={styles.sectionTitle}>Ghi chú đơn hàng</Text>
             <View style={styles.card}>
               <View style={styles.infoRow}>
-                <Ionicons name="document-text-outline" size={16} color={Colors.primary} />
+                <Ionicons name="document-text-outline" size={16} color={Colors.primaryText} />
                 <Text style={styles.infoText}>{order.notes}</Text>
               </View>
             </View>
@@ -362,7 +364,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           style={({ pressed }) => [styles.reorderCardBtn, pressed && { opacity: 0.85 }]}
           onPress={handleReorder}
         >
-          <Ionicons name="repeat" size={18} color={Colors.primary} />
+          <Ionicons name="repeat" size={18} color={Colors.primaryText} />
           <Text style={styles.reorderCardBtnText}>Đặt lại đơn hàng này</Text>
         </Pressable>
 
@@ -462,7 +464,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
                         <Ionicons
                           name={selected ? 'radio-button-on' : 'radio-button-off'}
                           size={20}
-                          color={selected ? Colors.primary : Colors.outline}
+                          color={selected ? Colors.primaryText : Colors.outline}
                         />
                         <Text style={styles.modalReasonText}>{option.label}</Text>
                       </Pressable>
@@ -578,7 +580,7 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1 },
   itemName: { fontSize: 13, fontWeight: '600', color: Colors.onSurface, marginBottom: 4 },
   itemUnitPrice: { fontSize: 12, color: Colors.textSecondary },
-  itemSubtotal: { fontSize: 14, fontWeight: '700', color: Colors.primary },
+  itemSubtotal: { fontSize: 14, fontWeight: '700', color: Colors.primaryText },
 
   // Info rows (notes)
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 14, paddingVertical: 12 },
@@ -593,7 +595,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   summaryTotalLabel: { fontSize: 14, fontWeight: '700', color: Colors.onSurface },
-  summaryTotalValue: { fontSize: 17, fontWeight: '800', color: Colors.primary },
+  summaryTotalValue: { fontSize: 17, fontWeight: '800', color: Colors.primaryText },
 
   // Cancel footer
   footer: {
@@ -725,6 +727,6 @@ const styles = StyleSheet.create({
   reorderCardBtnText: {
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
 });

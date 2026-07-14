@@ -7,14 +7,14 @@ import {
   RefreshControl,
   StyleSheet,
   Switch,
-  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
 import { orderApi, type ScheduledOrderDto } from '../api/orderApi';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 
@@ -57,7 +57,7 @@ export function ManageRecurringOrdersScreen() {
     navigation.setOptions({
       headerRight: () => (
         <Pressable style={styles.headerAddBtn} onPress={() => navigation.navigate('CreateRecurringOrder')}>
-          <Ionicons name="add" size={24} color={Colors.primary} />
+          <Ionicons name="add" size={24} color={Colors.primaryText} />
         </Pressable>
       ),
     });
@@ -135,7 +135,7 @@ export function ManageRecurringOrdersScreen() {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.headerTitleRow}>
-            <Ionicons name="repeat-outline" size={16} color={Colors.primary} />
+            <Ionicons name="repeat-outline" size={16} color={Colors.primaryText} />
             <Text style={styles.recurrenceLabel}>
               {RECURRENCE_LABEL[item.recurrenceType] ?? item.recurrenceType}
             </Text>
@@ -176,7 +176,7 @@ export function ManageRecurringOrdersScreen() {
               onPress={() => navigation.navigate('CreateRecurringOrder', { scheduledOrderId: item.scheduledOrderId })}
               disabled={isCancelling}
             >
-              <Ionicons name="create-outline" size={15} color={Colors.primary} />
+              <Ionicons name="create-outline" size={15} color={Colors.primaryText} />
               <Text style={styles.editBtnText}>Sửa</Text>
             </Pressable>
             <Pressable
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary + '40',
     backgroundColor: Colors.primaryLight,
   },
-  editBtnText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  editBtnText: { fontSize: 12, fontWeight: '700', color: Colors.primaryText },
   cancelBtn: {
     flex: 1,
     flexDirection: 'row',

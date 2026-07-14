@@ -5,13 +5,13 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
 import {
   orderApi,
   type OrderListItemDto,
@@ -143,7 +143,7 @@ export function TrackOrderScreen() {
         <View style={styles.cardHeader}>
           <View style={styles.orderTitleRow}>
             <View style={styles.orderIcon}>
-              <Ionicons name="cube-outline" size={18} color={Colors.primary} />
+              <Ionicons name="cube-outline" size={18} color={Colors.primaryText} />
             </View>
             <View style={styles.orderTitleText}>
               <Text style={styles.orderCode} numberOfLines={1}>
@@ -171,7 +171,7 @@ export function TrackOrderScreen() {
 
         {item.scheduledFor ? (
           <View style={styles.scheduleRow}>
-            <Ionicons name="calendar-outline" size={16} color={Colors.primary} />
+            <Ionicons name="calendar-outline" size={16} color={Colors.primaryText} />
             <Text style={styles.scheduleText}>
               Dự kiến giao: {formatDate(item.scheduledFor)}
             </Text>
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   filterTextActive: {
-    color: Colors.primary,
+    color: Colors.primaryText,
     fontWeight: '800',
   },
   listContent: {
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   progressLabelCompleted: {
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   scheduleRow: {
     flexDirection: 'row',
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   centered: {
     flex: 1,

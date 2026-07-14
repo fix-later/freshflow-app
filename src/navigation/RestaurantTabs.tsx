@@ -7,16 +7,32 @@ import { TrackOrderScreen } from '../features/delivery/screens/TrackOrderScreen'
 import { RestaurantProfileTab } from './RestaurantProfileTab';
 import { RestaurantOrdersTab } from './RestaurantOrdersTab';
 import { FavoritesScreen } from '../features/orders/screens/FavoritesScreen';
+import { RestaurantColors, RestaurantFonts } from '../features/restaurant/theme';
 import { type RestaurantTabParamList } from './types';
-import { Colors } from '../constants/colors';
 
 const Tab = createBottomTabNavigator<RestaurantTabParamList>();
 
 const TAB_CONFIG = {
-  RestaurantOrders: { label: 'Chợ', icon: 'storefront-outline' as const, activeIcon: 'storefront' as const },
-  RestaurantFavorites: { label: 'Yêu thích', icon: 'heart-outline' as const, activeIcon: 'heart' as const },
-  RestaurantTracking: { label: 'Giao hàng', icon: 'car-outline' as const, activeIcon: 'car' as const },
-  RestaurantProfile: { label: 'Hồ sơ', icon: 'person-circle-outline' as const, activeIcon: 'person-circle' as const },
+  RestaurantOrders: {
+    label: 'Mua sắm',
+    icon: 'bag-handle-outline' as const,
+    activeIcon: 'bag-handle' as const,
+  },
+  RestaurantFavorites: {
+    label: 'Yêu thích',
+    icon: 'heart-outline' as const,
+    activeIcon: 'heart' as const,
+  },
+  RestaurantTracking: {
+    label: 'Theo dõi',
+    icon: 'clipboard-outline' as const,
+    activeIcon: 'clipboard' as const,
+  },
+  RestaurantProfile: {
+    label: 'Tài khoản',
+    icon: 'person-circle-outline' as const,
+    activeIcon: 'person-circle' as const,
+  },
 } as const;
 
 export function RestaurantTabs() {
@@ -28,30 +44,48 @@ export function RestaurantTabs() {
         const config = TAB_CONFIG[route.name as keyof typeof TAB_CONFIG];
         return {
           headerShown: true,
+          headerStyle: {
+            backgroundColor: RestaurantColors.surface,
+          },
+          headerTintColor: RestaurantColors.deepTeal,
+          headerTitleAlign: 'center',
+          headerTitleStyle: {
+            color: RestaurantColors.deepTeal,
+            fontFamily: RestaurantFonts.semibold,
+            fontSize: 18,
+          },
+          headerShadowVisible: false,
           tabBarLabel: config?.label,
+          tabBarHideOnKeyboard: true,
           tabBarStyle: {
-            backgroundColor: Colors.surface,
-            borderTopWidth: 0,
-            elevation: 0,
-            height: 64 + (insets.bottom > 0 ? insets.bottom - 8 : 0),
-            paddingBottom: Math.max(insets.bottom, 16),
+            backgroundColor: RestaurantColors.surface,
+            borderTopColor: RestaurantColors.border,
+            borderTopWidth: 1,
+            elevation: 2,
+            shadowColor: RestaurantColors.deepTeal,
+            shadowOffset: { width: 0, height: -1 },
+            shadowOpacity: 0.04,
+            shadowRadius: 3,
+            height: 68 + Math.max(insets.bottom - 8, 0),
+            paddingBottom: Math.max(insets.bottom, 12),
             paddingTop: 8,
           },
           tabBarLabelStyle: {
-            fontSize: 10,
-            fontWeight: '600',
+            fontFamily: RestaurantFonts.semibold,
+            fontSize: 11,
+            lineHeight: 14,
             marginTop: 2,
           },
-          tabBarActiveTintColor: Colors.primary,
-          tabBarInactiveTintColor: Colors.onSurfaceVariant,
+          tabBarActiveTintColor: RestaurantColors.primaryText,
+          tabBarInactiveTintColor: RestaurantColors.textSecondary,
           tabBarIcon: ({ focused, size }) => {
             return (
               <View
                 style={{
-                  width: 56,
+                  width: 58,
                   height: 32,
-                  borderRadius: 12,
-                  backgroundColor: focused ? 'rgba(0,107,44,0.12)' : 'transparent',
+                  borderRadius: 16,
+                  backgroundColor: focused ? RestaurantColors.primaryLight : 'transparent',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
@@ -59,7 +93,11 @@ export function RestaurantTabs() {
                 <Ionicons
                   name={focused ? config.activeIcon : config.icon}
                   size={focused ? size + 1 : size}
-                  color={focused ? Colors.primary : Colors.onSurfaceVariant}
+                  color={
+                    focused
+                      ? RestaurantColors.primaryText
+                      : RestaurantColors.textSecondary
+                  }
                 />
               </View>
             );
@@ -80,12 +118,12 @@ export function RestaurantTabs() {
       <Tab.Screen
         name="RestaurantTracking"
         component={TrackOrderScreen}
-        options={{ title: 'Giao hàng' }}
+        options={{ title: 'Theo dõi' }}
       />
       <Tab.Screen
         name="RestaurantProfile"
         component={RestaurantProfileTab}
-        options={{ title: 'Hồ sơ' }}
+        options={{ title: 'Tài khoản' }}
       />
     </Tab.Navigator>
   );

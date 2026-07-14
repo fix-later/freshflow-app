@@ -5,14 +5,16 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import {
+  RestaurantText as Text,
+  RestaurantTextInput as TextInput,
+} from '../../restaurant/components/RestaurantText';
 import {
   orderApi,
   type IssueType,
@@ -231,7 +233,7 @@ export function ReportIssueScreen({ route, navigation }: Props) {
                 <Ionicons
                   name={selected ? 'radio-button-on' : 'radio-button-off'}
                   size={20}
-                  color={selected ? Colors.primary : Colors.outline}
+                  color={selected ? Colors.primaryText : Colors.outline}
                 />
                 <Text style={styles.reasonText}>
                   {item.productNameSnapshot || 'Sản phẩm'} (SL: {item.quantity})
@@ -262,7 +264,7 @@ export function ReportIssueScreen({ route, navigation }: Props) {
                 <Ionicons
                   name={selected ? 'radio-button-on' : 'radio-button-off'}
                   size={20}
-                  color={selected ? Colors.primary : Colors.outline}
+                  color={selected ? Colors.primaryText : Colors.outline}
                 />
                 <Text style={styles.reasonText}>{option.label}</Text>
               </Pressable>
@@ -304,7 +306,7 @@ export function ReportIssueScreen({ route, navigation }: Props) {
         {formError ? <Text style={styles.errorMsgText}>{formError}</Text> : null}
 
         <Pressable style={styles.addBtn} onPress={handleAddToList}>
-          <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
+          <Ionicons name="add-circle-outline" size={18} color={Colors.primaryText} />
           <Text style={styles.addBtnText}>Thêm vào danh sách</Text>
         </Pressable>
 
@@ -383,7 +385,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 6,
   },
-  addedBadgeText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
+  addedBadgeText: { fontSize: 11, fontWeight: '700', color: Colors.primaryText },
 
   smallInput: {
     height: 48,
@@ -411,7 +413,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginTop: 14,
   },
-  addBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
+  addBtnText: { color: Colors.primaryText, fontWeight: '700', fontSize: 14 },
 
   // Queued draft issues
   draftRow: {
@@ -425,7 +427,7 @@ const styles = StyleSheet.create({
   },
   draftInfo: { flex: 1 },
   draftName: { fontSize: 14, fontWeight: '600', color: Colors.onSurface },
-  draftMeta: { fontSize: 12, color: Colors.primary, fontWeight: '600', marginTop: 2 },
+  draftMeta: { fontSize: 12, color: Colors.primaryText, fontWeight: '600', marginTop: 2 },
   draftDescription: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
   draftRemoveBtn: { padding: 2 },
 

@@ -8,8 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +18,12 @@ import { Colors } from '../../../constants/colors';
 import { UserRole } from '../../../constants/roles';
 import { useAuthStore } from '../../../store/authStore';
 import { Button } from '../../../components/ui/Button';
+import { RestaurantButton } from '../../restaurant/components/RestaurantButton';
+import {
+  RestaurantText as Text,
+  RestaurantTextInput as TextInput,
+} from '../../restaurant/components/RestaurantText';
+import { RestaurantColors } from '../../restaurant/theme';
 import { profileApi } from '../api/profileApi';
 import { uploadImageToCloudinary } from '../../../services/cloudinaryUpload';
 
@@ -33,7 +37,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
 };
 
 const ROLE_COLOR: Record<UserRole, string> = {
-  [UserRole.RESTAURANT]: '#006b2c',
+  [UserRole.RESTAURANT]: RestaurantColors.primaryText,
   [UserRole.MARKET_AGENT]: '#006399',
   [UserRole.HUB_STAFF]: '#825100',
   [UserRole.DRIVER]: '#5c4033',
@@ -274,10 +278,15 @@ export function ProfileScreen() {
   if (!user) return null;
 
   const roleColor = ROLE_COLOR[user.role] ?? Colors.primary;
+  const isRestaurant = user.role === UserRole.RESTAURANT;
+  const ActionButton = isRestaurant ? RestaurantButton : Button;
   const displayAvatarUri = isEditing ? editAvatarUri ?? user.avatarUrl : user.avatarUrl;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView
+      style={[styles.safe, isRestaurant && { backgroundColor: RestaurantColors.background }]}
+      edges={['bottom']}
+    >
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -343,9 +352,20 @@ export function ProfileScreen() {
 
               {/* Edit / Cancel toggle button */}
               {!isEditing ? (
-                <Pressable style={styles.editBtn} onPress={enterEditMode}>
-                  <Ionicons name="pencil" size={14} color={Colors.primary} />
-                  <Text style={styles.editBtnText}>Chỉnh sửa</Text>
+                <Pressable
+                  style={[styles.editBtn, isRestaurant && styles.restaurantEditBtn]}
+                  onPress={enterEditMode}
+                >
+                  <Ionicons
+                    name="pencil-outline"
+                    size={14}
+                    color={isRestaurant ? RestaurantColors.primaryText : Colors.primary}
+                  />
+                  <Text
+                    style={[styles.editBtnText, isRestaurant && styles.restaurantEditBtnText]}
+                  >
+                    Chỉnh sửa
+                  </Text>
                 </Pressable>
               ) : (
                 <Pressable style={styles.cancelBtn} onPress={cancelEdit}>
@@ -356,7 +376,7 @@ export function ProfileScreen() {
           </View>
 
           {/* ─── Info / Edit Card ───────────────── */}
-          <View style={styles.card}>
+          <View style={[styles.card, isRestaurant && styles.restaurantCard]}>
             <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
 
             {isEditing ? (
@@ -395,7 +415,7 @@ export function ProfileScreen() {
                   />
                 </View>
 
-                <Button
+                <ActionButton
                   title="LƯU THAY ĐỔI"
                   variant="primary"
                   size="md"
@@ -434,21 +454,39 @@ export function ProfileScreen() {
           {user.role === UserRole.RESTAURANT && (
             <>
               <Pressable
-                style={({ pressed }) => [styles.card, styles.navRow, pressed && { opacity: 0.7 }]}
+                style={({ pressed }) => [
+                  styles.card,
+                  styles.restaurantCard,
+                  styles.navRow,
+                  pressed && { opacity: 0.7 },
+                ]}
                 onPress={() => navigation.navigate('RestaurantProfileEdit' as never)}
               >
                 <View style={styles.rowLeft}>
-                  <Ionicons name="business-outline" size={18} color={Colors.textMuted} />
+                  <Ionicons
+                    name="business-outline"
+                    size={18}
+                    color={RestaurantColors.primaryText}
+                  />
                   <Text style={styles.changePwTitle}>Thông tin nhà hàng</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
               </Pressable>
               <Pressable
-                style={({ pressed }) => [styles.card, styles.navRow, pressed && { opacity: 0.7 }]}
+                style={({ pressed }) => [
+                  styles.card,
+                  styles.restaurantCard,
+                  styles.navRow,
+                  pressed && { opacity: 0.7 },
+                ]}
                 onPress={() => navigation.navigate('CreditOverview' as never)}
               >
                 <View style={styles.rowLeft}>
-                  <Ionicons name="card-outline" size={18} color={Colors.textMuted} />
+                  <Ionicons
+                    name="card-outline"
+                    size={18}
+                    color={RestaurantColors.primaryText}
+                  />
                   <Text style={styles.changePwTitle}>Tín dụng & Thanh toán</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
@@ -457,7 +495,7 @@ export function ProfileScreen() {
           )}
 
           {/* ─── Change Password Card ────────────── */}
-          <View style={styles.card}>
+          <View style={[styles.card, isRestaurant && styles.restaurantCard]}>
             <Pressable style={styles.changePwHeader} onPress={toggleChangePw}>
               <View style={styles.rowLeft}>
                 <Ionicons name="key-outline" size={18} color={Colors.textMuted} />
@@ -476,7 +514,11 @@ export function ProfileScreen() {
 
                 {changePwDone ? (
                   <View style={styles.successBox}>
-                    <Ionicons name="checkmark-circle" size={40} color={Colors.primary} />
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={40}
+                      color={isRestaurant ? RestaurantColors.primaryText : Colors.primary}
+                    />
                     <Text style={styles.successTitle}>Đổi mật khẩu thành công!</Text>
                     <Text style={styles.successDesc}>Mật khẩu của bạn đã được cập nhật.</Text>
                     <Pressable onPress={toggleChangePw} style={styles.closeDoneBtn}>
@@ -557,7 +599,7 @@ export function ProfileScreen() {
                     </View>
                     {confirmError && <Text style={styles.fieldError}>{confirmError}</Text>}
 
-                    <Button
+                    <ActionButton
                       title="CẬP NHẬT MẬT KHẨU"
                       variant="primary"
                       size="md"
@@ -675,6 +717,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryLight,
   },
   editBtnText: { fontSize: 12, fontWeight: '600', color: Colors.primary },
+  restaurantEditBtn: {
+    backgroundColor: RestaurantColors.primaryLight,
+    borderWidth: 1,
+    borderColor: RestaurantColors.primary,
+  },
+  restaurantEditBtnText: { color: RestaurantColors.primaryText },
   cancelBtn: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -695,6 +743,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 3,
+  },
+  restaurantCard: {
+    backgroundColor: RestaurantColors.surface,
+    borderWidth: 1,
+    borderColor: RestaurantColors.border,
+    shadowColor: RestaurantColors.deepTeal,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
   },
   sectionTitle: {
     fontSize: 12,

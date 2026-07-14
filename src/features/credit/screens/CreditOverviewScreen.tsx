@@ -4,14 +4,14 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
 import { creditApi, type CreditDto } from '../api/creditApi';
 import { restaurantApi } from '../../restaurant/api/restaurantApi';
 import { type RestaurantProfileStackParamList } from '../../../navigation/types';
@@ -28,12 +28,13 @@ function UsageBar({ used, limit }: { used: number | undefined | null; limit: num
   const ratio = safeLimit > 0 ? Math.min(safeUsed / safeLimit, 1) : 0;
   const pct = Math.round(ratio * 100);
   const barColor = ratio >= 0.9 ? Colors.danger : ratio >= 0.7 ? Colors.warning : Colors.primary;
+  const labelColor = ratio >= 0.9 ? Colors.danger : ratio >= 0.7 ? Colors.warning : Colors.primaryText;
   return (
     <View style={bar.wrap}>
       <View style={bar.track}>
         <View style={[bar.fill, { width: `${pct}%` as any, backgroundColor: barColor }]} />
       </View>
-      <Text style={[bar.label, { color: barColor }]}>{pct}% đã sử dụng</Text>
+      <Text style={[bar.label, { color: labelColor }]}>{pct}% đã sử dụng</Text>
     </View>
   );
 }
@@ -103,7 +104,7 @@ function NavRow({
     >
       <View style={styles.navRowLeft}>
         <View style={styles.navIcon}>
-          <Ionicons name={icon} size={20} color={Colors.primary} />
+          <Ionicons name={icon} size={20} color={Colors.primaryText} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.navLabel}>{label}</Text>
@@ -186,7 +187,7 @@ export function CreditOverviewScreen() {
             icon="wallet-outline"
             label="Khả dụng"
             value={formatVnd(credit.availableCredit)}
-            color={Colors.primary}
+            color={Colors.primaryText}
           />
           <StatCard
             icon="receipt-outline"
@@ -248,14 +249,14 @@ const styles = StyleSheet.create({
   heroLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.75)',
+    color: Colors.onPrimary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   heroLimit: {
     fontSize: 32,
     fontWeight: '900',
-    color: '#FFF',
+    color: Colors.onPrimary,
     marginTop: 4,
   },
 

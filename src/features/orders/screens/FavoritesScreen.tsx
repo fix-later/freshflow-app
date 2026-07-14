@@ -4,13 +4,13 @@ import {
   Image,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
 import { useFavoritesStore } from '../../../store/favoritesStore';
 import { useCartStore } from '../../../store/cartStore';
 
@@ -91,7 +91,7 @@ export function FavoritesScreen() {
 
             {!outOfStock && (
               <Pressable style={styles.addBtn} onPress={() => handleAddToCart(item)}>
-                <Ionicons name="add" size={18} color="#FFF" />
+                <Ionicons name="add" size={18} color={Colors.onPrimary} />
               </Pressable>
             )}
           </View>
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   unitTag: {
     backgroundColor: '#F1F5F9',
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.primary,
+    color: Colors.primaryText,
     marginTop: 1,
   },
   priceOutOfStock: {
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   shopBtnText: {
-    color: '#FFF',
+    color: Colors.onPrimary,
     fontSize: 14,
     fontWeight: '800',
   },

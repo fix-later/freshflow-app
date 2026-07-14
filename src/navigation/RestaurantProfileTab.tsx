@@ -1,7 +1,11 @@
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import {
+  createNativeStackNavigator,
+  type NativeStackNavigationOptions,
+} from '@react-navigation/native-stack';
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { RestaurantProfileScreen } from '../features/restaurant/screens/RestaurantProfileScreen';
 import { DeliveryAddressesScreen } from '../features/restaurant/screens/DeliveryAddressesScreen';
+import { RestaurantColors, RestaurantFonts } from '../features/restaurant/theme';
 import { CreditOverviewScreen } from '../features/credit/screens/CreditOverviewScreen';
 import { CreditTransactionsScreen } from '../features/credit/screens/CreditTransactionsScreen';
 import { CreditStatementsScreen } from '../features/credit/screens/CreditStatementsScreen';
@@ -9,9 +13,23 @@ import { type RestaurantProfileStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RestaurantProfileStackParamList>();
 
+const STACK_SCREEN_OPTIONS = {
+  animation: 'slide_from_right',
+  contentStyle: { backgroundColor: RestaurantColors.background },
+  headerShadowVisible: false,
+  headerStyle: { backgroundColor: RestaurantColors.surface },
+  headerTintColor: RestaurantColors.deepTeal,
+  headerTitleAlign: 'center',
+  headerTitleStyle: {
+    color: RestaurantColors.deepTeal,
+    fontFamily: RestaurantFonts.semibold,
+    fontSize: 18,
+  },
+} satisfies NativeStackNavigationOptions;
+
 export function RestaurantProfileTab() {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={STACK_SCREEN_OPTIONS}>
       <Stack.Screen
         name="ProfileMain"
         component={ProfileScreen}
@@ -20,7 +38,7 @@ export function RestaurantProfileTab() {
       <Stack.Screen
         name="RestaurantProfileEdit"
         component={RestaurantProfileScreen}
-        options={{ title: 'Thông tin nhà hàng', animation: 'slide_from_right' }}
+        options={{ title: 'Thông tin nhà hàng' }}
       />
       <Stack.Screen
         name="DeliveryAddresses"
@@ -30,17 +48,17 @@ export function RestaurantProfileTab() {
       <Stack.Screen
         name="CreditOverview"
         component={CreditOverviewScreen}
-        options={{ title: 'Tín dụng & Thanh toán', animation: 'slide_from_right' }}
+        options={{ title: 'Tín dụng & Thanh toán' }}
       />
       <Stack.Screen
         name="CreditTransactions"
         component={CreditTransactionsScreen}
-        options={{ title: 'Lịch sử giao dịch', animation: 'slide_from_right' }}
+        options={{ title: 'Lịch sử giao dịch' }}
       />
       <Stack.Screen
         name="CreditStatements"
         component={CreditStatementsScreen}
-        options={{ title: 'Sao kê tín dụng', animation: 'slide_from_right' }}
+        options={{ title: 'Sao kê tín dụng' }}
       />
     </Stack.Navigator>
   );
