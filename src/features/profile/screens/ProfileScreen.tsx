@@ -39,7 +39,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
 const ROLE_COLOR: Record<UserRole, string> = {
   [UserRole.RESTAURANT]: RestaurantColors.primaryText,
   [UserRole.MARKET_AGENT]: RestaurantColors.primaryText,
-  [UserRole.HUB_STAFF]: '#825100',
+  [UserRole.HUB_STAFF]: RestaurantColors.primaryText,
   [UserRole.DRIVER]: '#5c4033',
 };
 
@@ -279,7 +279,8 @@ export function ProfileScreen() {
 
   const roleColor = ROLE_COLOR[user.role] ?? Colors.primary;
   const isRestaurant = user.role === UserRole.RESTAURANT;
-  const isBrandedRole = isRestaurant || user.role === UserRole.MARKET_AGENT;
+  const isBrandedRole =
+    isRestaurant || user.role === UserRole.MARKET_AGENT || user.role === UserRole.HUB_STAFF;
   const ActionButton = isBrandedRole ? RestaurantButton : Button;
   const displayAvatarUri = isEditing ? editAvatarUri ?? user.avatarUrl : user.avatarUrl;
 
