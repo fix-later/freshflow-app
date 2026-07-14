@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -8,6 +8,7 @@ import { Colors } from '../../../constants/colors';
 import { type DriverStackParamList } from '../../../navigation/types';
 import { MOCK_STOPS, MOCK_ROUTE, type MockStop, type StopStatus } from '../mockData';
 import { stopStatusStore, isRouteComplete } from '../stopStatusStore';
+import { stopOrderStore } from '../stopOrderStore';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'StopList'>;
 const STATUS_CONFIG: Record<StopStatus, { label: string; color: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
@@ -20,10 +21,20 @@ function StopCard({
   stop,
   status,
   onPress,
+  reorderMode,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
 }: {
   stop: MockStop;
   status: StopStatus;
   onPress: () => void;
+  reorderMode?: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const cfg = STATUS_CONFIG[status];
   const isDone = status === 'delivered' || status === 'failed';
@@ -31,7 +42,7 @@ function StopCard({
   return (
     <Pressable
       style={({ pressed }) => [styles.card, isDone && styles.cardDone, pressed && { opacity: 0.75 }]}
-      onPress={onPress}
+      onPress={!reorderMode ? onPress : undefined}
     >
       <View style={[styles.numBadge, { backgroundColor: cfg.color + '18', borderColor: cfg.color + '50' }]}>
         <Text style={[styles.numText, { color: cfg.color }]}>{stop.order}</Text>
@@ -54,13 +65,37 @@ function StopCard({
           <Ionicons name="cube-outline" size={12} color={Colors.textMuted} />
           <Text style={styles.meta}>{stop.items.length} loại · {totalQty} đơn vị</Text>
         </View>
-        {!isDone && (
+        {!isDone && !reorderMode && (
           <Pressable style={styles.navBtn} onPress={onPress}>
             <Ionicons name="navigate-outline" size={13} color={Colors.primary} />
             <Text style={styles.navBtnText}>Điều hướng</Text>
           </Pressable>
         )}
       </View>
+      {/* Reorder arrows — only on moveable (non-done) stops */}
+      {reorderMode && !isDone && (
+        <View style={styles.reorderBtns}>
+          <TouchableOpacity
+            style={[styles.reorderArrow, !canMoveUp && styles.reorderArrowDisabled]}
+            onPress={canMoveUp ? onMoveUp : undefined}
+            activeOpacity={canMoveUp ? 0.6 : 1}
+          >
+            <Ionicons name="chevron-up" size={18} color={canMoveUp ? Colors.primary : Colors.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.reorderArrow, !canMoveDown && styles.reorderArrowDisabled]}
+            onPress={canMoveDown ? onMoveDown : undefined}
+            activeOpacity={canMoveDown ? 0.6 : 1}
+          >
+            <Ionicons name="chevron-down" size={18} color={canMoveDown ? Colors.primary : Colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      )}
+      {reorderMode && isDone && (
+        <View style={styles.reorderLockedBadge}>
+          <Ionicons name="lock-closed-outline" size={13} color={Colors.textMuted} />
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -127,6 +162,10 @@ export function StopListScreen({ route, navigation }: Props) {
   );
   const [routeCompleted, setRouteCompleted] = useState(false);
   const [durationText, setDurationText] = useState('');
+  const [reorderMode, setReorderMode] = useState(false);
+  const [stopOrderIds, setStopOrderIds] = useState<string[]>(
+    () => stopOrderStore.isEmpty() ? MOCK_STOPS.map(s => s.id) : stopOrderStore.get(),
+  );
   // Refresh statuses from shared store every time screen is focused
   useFocusEffect(
     useCallback(() => {
@@ -134,10 +173,29 @@ export function StopListScreen({ route, navigation }: Props) {
       if (isRouteComplete()) setRouteCompleted(true);
     }, []),
   );
-  const stopsWithStatus = MOCK_STOPS.map(s => ({
-    ...s,
-    status: statuses[s.id] ?? s.status,
-  }));
+  const stopsWithStatus = stopOrderIds.map((id, idx) => {
+    const s = MOCK_STOPS.find(ms => ms.id === id)!;
+    return {
+      ...s,
+      order: idx + 1,
+      status: statuses[s.id] ?? s.status,
+    };
+  });
+
+  const moveStop = (id: string, dir: 'up' | 'down') => {
+    setStopOrderIds(prev => {
+      const idx = prev.indexOf(id);
+      const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+      // Don't swap past a done stop
+      const targetId = prev[targetIdx];
+      const targetStatus = statuses[targetId] ?? MOCK_STOPS.find(s => s.id === targetId)?.status ?? 'pending';
+      if (targetStatus === 'delivered' || targetStatus === 'failed') return prev;
+      const next = [...prev];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      return next;
+    });
+  };
   const delivered = stopsWithStatus.filter(s => s.status === 'delivered').length;
   const failed = stopsWithStatus.filter(s => s.status === 'failed').length;
   const done = delivered + failed;
@@ -181,13 +239,27 @@ export function StopListScreen({ route, navigation }: Props) {
       <FlatList
         data={stopsWithStatus}
         keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <StopCard
-            stop={item}
-            status={item.status}
-            onPress={() => navigation.navigate('DriverNavigation', { stopId: item.id })}
-          />
-        )}
+        renderItem={({ item, index }) => {
+          const isDone = item.status === 'delivered' || item.status === 'failed';
+          // Can move up if prev stop is not done
+          const prevId = stopOrderIds[index - 1];
+          const prevStatus = prevId ? (statuses[prevId] ?? MOCK_STOPS.find(s => s.id === prevId)?.status) : 'delivered';
+          const canMoveUp = !isDone && index > 0 && prevStatus !== 'delivered' && prevStatus !== 'failed';
+          // Can move down if next stop exists
+          const canMoveDown = !isDone && index < stopOrderIds.length - 1;
+          return (
+            <StopCard
+              stop={item}
+              status={item.status}
+              onPress={() => navigation.navigate('DriverNavigation', { stopId: item.id })}
+              reorderMode={reorderMode}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              onMoveUp={() => moveStop(item.id, 'up')}
+              onMoveDown={() => moveStop(item.id, 'down')}
+            />
+          );
+        }}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
@@ -218,7 +290,37 @@ export function StopListScreen({ route, navigation }: Props) {
                 </View>
               </View>
             </View>
-            <Text style={styles.listLabel}>Danh sách điểm giao</Text>
+            {/* List label row with reorder toggle */}
+            <View style={styles.listLabelRow}>
+              <Text style={styles.listLabel}>Danh sách điểm giao</Text>
+              {!allDone && stopOrderStore.isEmpty() && (
+                reorderMode ? (
+                  <TouchableOpacity
+                    style={styles.reorderDoneBtn}
+                    onPress={() => setReorderMode(false)}
+                  >
+                    <Ionicons name="checkmark" size={13} color={Colors.onPrimary} />
+                    <Text style={styles.reorderDoneBtnText}>Xong</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.reorderToggleBtn}
+                    onPress={() => setReorderMode(true)}
+                  >
+                    <Ionicons name="swap-vertical-outline" size={13} color={Colors.primary} />
+                    <Text style={styles.reorderToggleBtnText}>Sắp xếp lại</Text>
+                  </TouchableOpacity>
+                )
+              )}
+            </View>
+            {reorderMode && (
+              <View style={styles.reorderBanner}>
+                <Ionicons name="information-circle-outline" size={15} color={Colors.primary} />
+                <Text style={styles.reorderBannerText}>
+                  Nhấn ↑ ↓ để điều chỉnh thứ tự giao hàng. Điểm đã xong không thể di chuyển.
+                </Text>
+              </View>
+            )}
           </View>
         }
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
@@ -365,4 +467,35 @@ const styles = StyleSheet.create({
   shiftStat: { flex: 1, alignItems: 'center', gap: 6 },
   shiftStatVal: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
   shiftStatLbl: { fontSize: 11, color: Colors.textMuted, textAlign: 'center' },
+  // Reorder mode
+  reorderBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+    marginBottom: 4,
+  },
+  reorderBannerText: { flex: 1, fontSize: 12, color: Colors.primary, fontWeight: '600' },
+  reorderDoneBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: Colors.primary, borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  reorderDoneBtnText: { fontSize: 12, fontWeight: '700', color: Colors.onPrimary },
+  listLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  reorderToggleBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 8, borderWidth: 1, borderColor: Colors.primary,
+  },
+  reorderToggleBtnText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
+  reorderBtns: { justifyContent: 'center', gap: 2, flexShrink: 0 },
+  reorderArrow: {
+    width: 32, height: 32, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
+  },
+  reorderArrowDisabled: { backgroundColor: Colors.surfaceContainerHigh },
+  reorderLockedBadge: {
+    width: 32, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
 });
