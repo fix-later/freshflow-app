@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,25 +23,33 @@ import { stopOrderStore } from '../stopOrderStore';
 
 type Nav = NativeStackNavigationProp<DriverStackParamList>;
 
+// Estimated height of each card + 8px gap (used for drag index calculation)
+const ITEM_HEIGHT = 70;
+
 function StopOrderCard({
   stop,
   reorderMode,
-  canMoveUp,
-  canMoveDown,
-  onMoveUp,
-  onMoveDown,
+  isDragging,
+  isTarget,
 }: {
   stop: (typeof MOCK_STOPS)[0] & { displayOrder: number };
   reorderMode: boolean;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
+  isDragging: boolean;
+  isTarget: boolean;
 }) {
   return (
-    <View style={[styles.stopCard, reorderMode && styles.stopCardReorder]}>
-      <View style={styles.stopNumBadge}>
-        <Text style={styles.stopNumText}>{stop.displayOrder}</Text>
+    <View
+      style={[
+        styles.stopCard,
+        reorderMode && styles.stopCardReorder,
+        isDragging && styles.stopCardDragging,
+        isTarget && styles.stopCardTarget,
+      ]}
+    >
+      <View style={[styles.stopNumBadge, isDragging && styles.stopNumBadgeDragging]}>
+        <Text style={[styles.stopNumText, isDragging && styles.stopNumTextDragging]}>
+          {stop.displayOrder}
+        </Text>
       </View>
       <View style={styles.stopInfo}>
         <Text style={styles.stopName} numberOfLines={1}>{stop.restaurantName}</Text>
@@ -49,22 +59,12 @@ function StopOrderCard({
         </View>
       </View>
       {reorderMode && (
-        <View style={styles.reorderBtns}>
-          <TouchableOpacity
-            style={[styles.reorderArrow, !canMoveUp && styles.reorderArrowDisabled]}
-            onPress={canMoveUp ? onMoveUp : undefined}
-            activeOpacity={canMoveUp ? 0.6 : 1}
-          >
-            <Ionicons name="chevron-up" size={18} color={canMoveUp ? Colors.primary : Colors.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.reorderArrow, !canMoveDown && styles.reorderArrowDisabled]}
-            onPress={canMoveDown ? onMoveDown : undefined}
-            activeOpacity={canMoveDown ? 0.6 : 1}
-          >
-            <Ionicons name="chevron-down" size={18} color={canMoveDown ? Colors.primary : Colors.textMuted} />
-          </TouchableOpacity>
-        </View>
+        <Ionicons
+          name="reorder-four-outline"
+          size={22}
+          color={isDragging ? Colors.primary : Colors.textMuted}
+          style={styles.dragHandle}
+        />
       )}
     </View>
   );
@@ -86,27 +86,107 @@ export function DriverHomeScreen() {
   const [currentLng, setCurrentLng] = useState<number | undefined>();
   const [reorderMode, setReorderMode] = useState(false);
   const [orderIds, setOrderIds] = useState<string[]>(() => MOCK_STOPS.map(s => s.id));
-  // Map only re-renders when reorder mode exits (avoids flicker on each arrow tap)
+  // Map only re-renders when reorder mode exits ("Xong")
   const [mapOrderIds, setMapOrderIds] = useState<string[]>(() => MOCK_STOPS.map(s => s.id));
+
+  const [draggingIdx, setDraggingIdx] = useState(-1);
+  const [insertIdx, setInsertIdx] = useState(-1);
+
+  // Refs for PanResponder callbacks (avoid stale closures)
+  const reorderModeRef = useRef(false);
+  const orderIdsRef = useRef(orderIds);
+  const draggingIdxRef = useRef(-1);
+  const insertIdxRef = useRef(-1);
+  const dragY = useRef(new Animated.Value(0)).current;
+
+  // Measure list container's absolute screen position so we can compute
+  // which card was touched from e.nativeEvent.pageY
+  const listRef = useRef<View>(null);
+  const listPageYRef = useRef(0);
+  const itemHeightRef = useRef(ITEM_HEIGHT);
+
+  useEffect(() => { reorderModeRef.current = reorderMode; }, [reorderMode]);
+  useEffect(() => { orderIdsRef.current = orderIds; }, [orderIds]);
+
+  // Re-measure list position whenever reorder mode activates (banner shifts layout)
+  useEffect(() => {
+    if (reorderMode) {
+      setTimeout(() => {
+        listRef.current?.measure((_x, _y, _w, _h, _px, pageY) => {
+          listPageYRef.current = pageY;
+        });
+      }, 150);
+    }
+  }, [reorderMode]);
+
+  const listPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => reorderModeRef.current,
+      onMoveShouldSetPanResponder: () => reorderModeRef.current,
+
+      onPanResponderGrant: (e) => {
+        // Use pageY (absolute screen coord) minus list container's screen top
+        // because locationY is relative to the touched child, not the container
+        const relY = e.nativeEvent.pageY - listPageYRef.current;
+        const h = itemHeightRef.current;
+        const total = orderIdsRef.current.length;
+        const idx = Math.min(total - 1, Math.max(0, Math.floor(relY / h)));
+        draggingIdxRef.current = idx;
+        insertIdxRef.current = idx;
+        dragY.setValue(0);
+        setDraggingIdx(idx);
+        setInsertIdx(idx);
+      },
+
+      onPanResponderMove: (_, { dy }) => {
+        if (draggingIdxRef.current < 0) return;
+        dragY.setValue(dy);
+        const from = draggingIdxRef.current;
+        const h = itemHeightRef.current;
+        const total = orderIdsRef.current.length;
+        const target = Math.min(total - 1, Math.max(0, Math.round(from + dy / h)));
+        if (target !== insertIdxRef.current) {
+          insertIdxRef.current = target;
+          setInsertIdx(target);
+        }
+      },
+
+      onPanResponderRelease: () => {
+        const from = draggingIdxRef.current;
+        const to = insertIdxRef.current;
+        if (from >= 0 && from !== to) {
+          setOrderIds(prev => {
+            const next = [...prev];
+            const [removed] = next.splice(from, 1);
+            next.splice(to, 0, removed);
+            return next;
+          });
+        }
+        // Snap card back before hiding
+        Animated.spring(dragY, { toValue: 0, useNativeDriver: true, speed: 40 }).start();
+        draggingIdxRef.current = -1;
+        insertIdxRef.current = -1;
+        setDraggingIdx(-1);
+        setInsertIdx(-1);
+      },
+
+      onPanResponderTerminate: () => {
+        dragY.setValue(0);
+        draggingIdxRef.current = -1;
+        insertIdxRef.current = -1;
+        setDraggingIdx(-1);
+        setInsertIdx(-1);
+      },
+    }),
+  ).current;
 
   const orderedStops = orderIds.map((id, idx) => ({
     ...MOCK_STOPS.find(ms => ms.id === id)!,
     displayOrder: idx + 1,
   }));
 
-  const moveStop = (id: string, dir: 'up' | 'down') => {
-    setOrderIds(prev => {
-      const idx = prev.indexOf(id);
-      const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
-      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
-      const next = [...prev];
-      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
-      return next;
-    });
-  };
-
   const handleReorderDone = () => {
-    setMapOrderIds([...orderIds]);
+    setMapOrderIds([...orderIds]); // update map now
     setReorderMode(false);
   };
 
@@ -135,8 +215,11 @@ export function DriverHomeScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-
+      <ScrollView
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={!reorderMode}
+      >
         {/* ── Greeting ── */}
         <View style={styles.greetCard}>
           <View style={{ gap: 2 }}>
@@ -174,7 +257,7 @@ export function DriverHomeScreen() {
             </View>
           </View>
 
-          {/* Map thumbnail — tap to open fullscreen */}
+          {/* Map thumbnail */}
           <Pressable onPress={handleShowMap} style={styles.mapThumbWrap}>
             <RouteOverviewMap
               stops={mapStops}
@@ -182,7 +265,6 @@ export function DriverHomeScreen() {
               currentLng={currentLng}
               style={styles.mapThumb}
             />
-            {/* overlay so tap registers over WebView */}
             <View style={styles.mapThumbOverlay} pointerEvents="none">
               <View style={styles.mapThumbBadge}>
                 <Ionicons name="expand-outline" size={13} color="#fff" />
@@ -213,25 +295,58 @@ export function DriverHomeScreen() {
 
         {reorderMode && (
           <View style={styles.reorderBanner}>
-            <Ionicons name="information-circle-outline" size={15} color={Colors.primary} />
+            <Ionicons name="hand-left-outline" size={15} color={Colors.primary} />
             <Text style={styles.reorderBannerText}>
-              Nhấn ↑ ↓ để thay đổi thứ tự. Nhấn Xong để cập nhật bản đồ.
+              Giữ và kéo biểu tượng ≡ để thay đổi thứ tự. Nhấn Xong để cập nhật bản đồ.
             </Text>
           </View>
         )}
 
-        <View style={styles.stopList}>
-          {orderedStops.map((stop, idx) => (
-            <StopOrderCard
-              key={stop.id}
-              stop={stop}
-              reorderMode={reorderMode}
-              canMoveUp={idx > 0}
-              canMoveDown={idx < orderedStops.length - 1}
-              onMoveUp={() => moveStop(stop.id, 'up')}
-              onMoveDown={() => moveStop(stop.id, 'down')}
-            />
-          ))}
+        {/* Drag-to-reorder list */}
+        <View
+          ref={listRef}
+          collapsable={false}
+          {...listPanResponder.panHandlers}
+          style={styles.stopList}
+          onLayout={() => {
+            listRef.current?.measure((_x, _y, _w, _h, _px, pageY) => {
+              listPageYRef.current = pageY;
+            });
+          }}
+        >
+          {orderedStops.map((stop, idx) => {
+            const isDragging = idx === draggingIdx;
+            const isTarget = draggingIdx >= 0 && !isDragging && idx === insertIdx;
+            return (
+              <Animated.View
+                key={stop.id}
+                onLayout={idx === 0 ? (e) => {
+                  // Measure actual card height + gap for accurate index calculation
+                  itemHeightRef.current = e.nativeEvent.layout.height + 8;
+                } : undefined}
+                style={[
+                  isDragging && {
+                    transform: [{ translateY: dragY }],
+                    zIndex: 10,
+                    shadowColor: '#000',
+                    shadowOpacity: 0.2,
+                    shadowRadius: 10,
+                    shadowOffset: { width: 0, height: 5 },
+                    elevation: 8,
+                    borderRadius: 14,
+                  },
+                  { marginBottom: idx < orderedStops.length - 1 ? 8 : 0 },
+                ]}
+              >
+                <StopOrderCard
+                  stop={stop}
+                  reorderMode={reorderMode}
+                  isDragging={isDragging}
+                  isTarget={isTarget}
+                />
+              </Animated.View>
+            );
+          })}
         </View>
 
         <View style={{ height: 110 }} />
@@ -285,32 +400,23 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   body: { padding: 16, gap: 12 },
 
-  // Greeting
   greetCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.primary,
-    borderRadius: 16,
-    padding: 18,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.primary, borderRadius: 16, padding: 18,
   },
   greetTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
   greetSub: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
   vehiclePill: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#fff', borderRadius: 20,
-    paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
   },
   vehiclePlate: { fontSize: 12, fontWeight: '700', color: Colors.primary },
 
-  // Section label
   sectionLabel: {
-    fontSize: 12, fontWeight: '700',
-    color: Colors.textMuted,
+    fontSize: 12, fontWeight: '700', color: Colors.textMuted,
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
 
-  // Route summary card
   routeCard: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: 16, padding: 16, gap: 14,
@@ -321,8 +427,7 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
+    backgroundColor: Colors.primaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
   },
   statusLabel: { fontSize: 12, fontWeight: '700', color: Colors.primary },
   routeDate: { fontSize: 12, color: Colors.textMuted },
@@ -334,8 +439,7 @@ const styles = StyleSheet.create({
   statLbl: { fontSize: 10, color: Colors.textMuted, textAlign: 'center' },
 
   mapThumbWrap: {
-    borderRadius: 12, overflow: 'hidden',
-    height: 150,
+    borderRadius: 12, overflow: 'hidden', height: 150,
     borderWidth: 1, borderColor: Colors.outlineVariant,
   },
   mapThumb: { flex: 1, borderRadius: 0 },
@@ -345,15 +449,12 @@ const styles = StyleSheet.create({
   },
   mapThumbBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
   },
   mapThumbBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
 
-  // Stop order section
   stopSectionHeader: {
-    flexDirection: 'row', alignItems: 'flex-end',
-    justifyContent: 'space-between', marginTop: 4,
+    flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 4,
   },
   stopSectionSub: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
 
@@ -365,49 +466,52 @@ const styles = StyleSheet.create({
   reorderToggleBtnText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
   reorderDoneBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primary, borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6,
   },
   reorderDoneBtnText: { fontSize: 12, fontWeight: '700', color: Colors.onPrimary },
 
   reorderBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 10, padding: 10,
+    backgroundColor: Colors.primaryLight, borderRadius: 10, padding: 10,
   },
-  reorderBannerText: {
-    flex: 1, fontSize: 12, color: Colors.primary,
-    fontWeight: '600', lineHeight: 17,
-  },
+  reorderBannerText: { flex: 1, fontSize: 12, color: Colors.primary, fontWeight: '600', lineHeight: 17 },
 
-  stopList: { gap: 8 },
+  stopList: { gap: 0 },
+
   stopCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: 14, padding: 12,
     borderWidth: 1, borderColor: Colors.outlineVariant,
   },
-  stopCardReorder: { borderColor: Colors.primary + '30' },
+  stopCardReorder: { borderColor: Colors.primary + '25' },
+  stopCardDragging: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.primary,
+    borderWidth: 1.5,
+  },
+  stopCardTarget: {
+    borderColor: Colors.primary,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+  },
+
   stopNumBadge: {
     width: 34, height: 34, borderRadius: 10,
     backgroundColor: Colors.primaryLight,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
+  stopNumBadgeDragging: { backgroundColor: Colors.primary },
   stopNumText: { fontSize: 14, fontWeight: '800', color: Colors.primary },
+  stopNumTextDragging: { color: Colors.onPrimary },
+
   stopInfo: { flex: 1, gap: 4 },
   stopName: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
   stopAddressRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   stopAddress: { flex: 1, fontSize: 11, color: Colors.textMuted },
 
-  reorderBtns: { justifyContent: 'center', gap: 2, flexShrink: 0 },
-  reorderArrow: {
-    width: 32, height: 32, borderRadius: 8,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: Colors.primaryLight,
-  },
-  reorderArrowDisabled: { backgroundColor: Colors.surfaceContainerHigh },
+  dragHandle: { flexShrink: 0, paddingHorizontal: 2 },
 
-  // Footer
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: Colors.surfaceContainerLowest,
@@ -416,12 +520,10 @@ const styles = StyleSheet.create({
   },
   hubBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary,
-    borderRadius: 14, paddingVertical: 15,
+    gap: 8, backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 15,
   },
   hubBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
 
-  // Map modal
   modalScreen: { flex: 1, backgroundColor: Colors.background },
   modalHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
