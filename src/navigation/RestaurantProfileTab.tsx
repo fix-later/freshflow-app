@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { RestaurantProfileScreen } from '../features/restaurant/screens/RestaurantProfileScreen';
+import { DeliveryAddressesScreen } from '../features/restaurant/screens/DeliveryAddressesScreen';
 import { CreditOverviewScreen } from '../features/credit/screens/CreditOverviewScreen';
 import { CreditTransactionsScreen } from '../features/credit/screens/CreditTransactionsScreen';
 import { CreditStatementsScreen } from '../features/credit/screens/CreditStatementsScreen';
@@ -20,6 +21,11 @@ export function RestaurantProfileTab() {
         name="RestaurantProfileEdit"
         component={RestaurantProfileScreen}
         options={{ title: 'Thông tin nhà hàng', animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="DeliveryAddresses"
+        component={DeliveryAddressesScreen}
+        options={{ title: 'Địa chỉ giao hàng', animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="CreditOverview"

@@ -60,6 +60,27 @@ function normalizeDto(data: RestaurantProfileApiDto): RestaurantProfileDto {
   };
 }
 
+// ─── Delivery Addresses ──────────────────────────────────────────────────────
+
+export interface DeliveryAddressDto {
+  id: string;
+  addressLine: string;
+  recipientName: string;
+  phone: string;
+  latitude: number | null;
+  longitude: number | null;
+  isDefault: boolean;
+}
+
+export interface CreateDeliveryAddressPayload {
+  addressLine: string;
+  recipientName: string;
+  phone: string;
+  latitude: number | null;
+  longitude: number | null;
+  isDefault: boolean;
+}
+
 export const restaurantApi = {
   async getRestaurantProfile(): Promise<RestaurantProfileDto> {
     const { data } = await apiClient.get<RestaurantProfileApiDto>(
@@ -83,5 +104,37 @@ export const restaurantApi = {
       '/api/v1/restaurants/me/approval-status',
     );
     return data;
+  },
+
+  async getDeliveryAddresses(): Promise<DeliveryAddressDto[]> {
+    const { data } = await apiClient.get<DeliveryAddressDto[]>(
+      '/api/v1/restaurants/me/delivery-addresses',
+    );
+    return data;
+  },
+
+  async createDeliveryAddress(
+    payload: CreateDeliveryAddressPayload,
+  ): Promise<DeliveryAddressDto> {
+    const { data } = await apiClient.post<DeliveryAddressDto>(
+      '/api/v1/restaurants/me/delivery-addresses',
+      payload,
+    );
+    return data;
+  },
+
+  async updateDeliveryAddress(
+    id: string,
+    payload: CreateDeliveryAddressPayload,
+  ): Promise<DeliveryAddressDto> {
+    const { data } = await apiClient.put<DeliveryAddressDto>(
+      `/api/v1/restaurants/me/delivery-addresses/${id}`,
+      payload,
+    );
+    return data;
+  },
+
+  async deleteDeliveryAddress(id: string): Promise<void> {
+    await apiClient.delete(`/api/v1/restaurants/me/delivery-addresses/${id}`);
   },
 };

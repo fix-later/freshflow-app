@@ -18,6 +18,7 @@ export type RestaurantTabParamList = {
 export type RestaurantProfileStackParamList = {
   ProfileMain: undefined;
   RestaurantProfileEdit: undefined;
+  DeliveryAddresses: undefined;
   CreditOverview: undefined;
   CreditTransactions: { restaurantId: string };
   CreditStatements: { restaurantId: string };
