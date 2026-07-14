@@ -7,13 +7,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
 import { orderApi } from '../api/orderApi';
 import { useCartStore } from '../../../store/cartStore';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';
@@ -145,7 +145,9 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
       try {
         const status = await restaurantApi.getApprovalStatus();
         const credit = await creditApi.getCredit(status.restaurantId);
-        const ratio = credit.creditLimit > 0 ? credit.outstandingBalance / credit.creditLimit : 1;
+        const ratio = credit.creditLimit > 0
+          ? credit.outstandingBalance / credit.creditLimit
+          : 1;
         setCreditRatio(ratio);
         setAvailableCredit(credit.availableCredit ?? 0);
       } catch {
@@ -251,7 +253,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         <Text style={styles.sectionTitle}>Thời gian giao hàng</Text>
         <View style={styles.card}>
           <View style={styles.infoRow}>
-            <Ionicons name="time-outline" size={16} color={Colors.primary} />
+            <Ionicons name="time-outline" size={16} color={Colors.primaryText} />
             <Text style={styles.infoText}>{deliveryLabel}</Text>
           </View>
         </View>
@@ -262,7 +264,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
             <Text style={styles.sectionTitle}>Ghi chú đơn hàng</Text>
             <View style={styles.card}>
               <View style={styles.infoRow}>
-                <Ionicons name="document-text-outline" size={16} color={Colors.primary} />
+                <Ionicons name="document-text-outline" size={16} color={Colors.primaryText} />
                 <Text style={styles.infoText}>{notes}</Text>
               </View>
             </View>
@@ -366,7 +368,7 @@ const styles = StyleSheet.create({
   },
   cycleDays: { fontSize: 13, fontWeight: '600', color: Colors.onSurface },
   cycleNote: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
-  cycleWindow: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  cycleWindow: { fontSize: 13, fontWeight: '700', color: Colors.primaryText },
 
   // Items
   itemRow: { flexDirection: 'column', padding: 12, gap: 8 },
@@ -377,7 +379,7 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1 },
   itemName: { fontSize: 13, fontWeight: '600', color: Colors.onSurface, marginBottom: 2 },
   itemMeta: { fontSize: 11, color: Colors.textMuted, marginBottom: 4 },
-  itemPrice: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  itemPrice: { fontSize: 13, fontWeight: '700', color: Colors.primaryText },
   itemQtyWrap: { alignItems: 'center', minWidth: 36 },
   itemQtyLabel: { fontSize: 10, color: Colors.textMuted },
   itemQty: { fontSize: 16, fontWeight: '700', color: Colors.onSurface },
@@ -404,7 +406,7 @@ const styles = StyleSheet.create({
   summaryNote: { fontSize: 13, color: Colors.textMuted, fontStyle: 'italic' },
   summaryDivider: { height: 1, backgroundColor: Colors.surfaceVariant, marginHorizontal: 14 },
   summaryTotalLabel: { fontSize: 14, fontWeight: '700', color: Colors.onSurface },
-  summaryTotalValue: { fontSize: 15, fontWeight: '800', color: Colors.primary },
+  summaryTotalValue: { fontSize: 15, fontWeight: '800', color: Colors.primaryText },
 
   // Footer
   footer: {
@@ -418,7 +420,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLowest,
   },
   footerLabel: { fontSize: 12, color: Colors.textMuted },
-  footerTotal: { fontSize: 18, fontWeight: '800', color: Colors.primary },
+  footerTotal: { fontSize: 18, fontWeight: '800', color: Colors.primaryText },
   submitBtn: {
     backgroundColor: Colors.primary,
     borderRadius: 12,

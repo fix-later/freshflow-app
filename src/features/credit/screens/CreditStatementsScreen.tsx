@@ -6,13 +6,13 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
 import { creditApi, type CreditStatementDto } from '../api/creditApi';
 import { type RestaurantProfileStackParamList } from '../../../navigation/types';
 
@@ -30,7 +30,7 @@ function formatVnd(amount: number) {
 
 function StatementCard({ item }: { item: CreditStatementDto }) {
   const isClosed = item.status === 'closed';
-  const statusColor = isClosed ? Colors.primary : Colors.warning;
+  const statusColor = isClosed ? Colors.primaryText : Colors.warning;
   const statusLabel = isClosed ? 'Đã đóng' : 'Đang mở';
 
   return (
@@ -70,7 +70,7 @@ function StatementCard({ item }: { item: CreditStatementDto }) {
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Tổng đã thanh toán</Text>
-          <Text style={[styles.statValue, { color: Colors.primary }]}>
+          <Text style={[styles.statValue, { color: Colors.primaryText }]}>
             +{formatVnd(item.totalCredits)}
           </Text>
         </View>

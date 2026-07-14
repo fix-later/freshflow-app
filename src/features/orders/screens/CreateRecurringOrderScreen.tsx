@@ -7,8 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
@@ -19,7 +17,11 @@ import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import {
+  RestaurantText as Text,
+  RestaurantTextInput as TextInput,
+} from '../../restaurant/components/RestaurantText';
 import { orderApi, type RecurrenceType } from '../api/orderApi';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 
@@ -171,7 +173,7 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.infoBox}>
-          <Ionicons name="information-circle-outline" size={16} color={Colors.primary} />
+          <Ionicons name="information-circle-outline" size={16} color={Colors.primaryText} />
           <Text style={styles.infoText}>
             Hệ thống sẽ tự động tạo đơn hàng mới theo chu kỳ bạn chọn, bắt đầu từ thời gian chạy lần đầu.
           </Text>
@@ -193,7 +195,7 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
                 <Ionicons
                   name={selected ? 'radio-button-on' : 'radio-button-off'}
                   size={20}
-                  color={selected ? Colors.primary : Colors.outline}
+                  color={selected ? Colors.primaryText : Colors.outline}
                 />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.optionLabel}>{option.label}</Text>
@@ -207,12 +209,12 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
         <Text style={styles.sectionTitle}>Thời gian chạy lần đầu *</Text>
         <View style={styles.card}>
           <Pressable style={styles.dateTimeRow} onPress={() => openPicker('date')}>
-            <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+            <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
             <Text style={styles.dateTimeLabel}>Ngày</Text>
             <Text style={styles.dateTimeValue}>{formatDate(firstRunAt)}</Text>
           </Pressable>
           <Pressable style={[styles.dateTimeRow, styles.dateTimeRowLast]} onPress={() => openPicker('time')}>
-            <Ionicons name="time-outline" size={18} color={Colors.primary} />
+            <Ionicons name="time-outline" size={18} color={Colors.primaryText} />
             <Text style={styles.dateTimeLabel}>Giờ</Text>
             <Text style={styles.dateTimeValue}>{formatTime(firstRunAt)}</Text>
           </Pressable>
@@ -346,7 +348,7 @@ const styles = StyleSheet.create({
   },
   dateTimeRowLast: { borderBottomWidth: 0 },
   dateTimeLabel: { flex: 1, fontSize: 14, color: Colors.onSurface },
-  dateTimeValue: { fontSize: 14, fontWeight: '700', color: Colors.primary },
+  dateTimeValue: { fontSize: 14, fontWeight: '700', color: Colors.primaryText },
 
   pickerBackdrop: {
     flex: 1,
@@ -372,7 +374,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.surfaceVariant,
   },
   pickerSheetTitle: { fontSize: 16, fontWeight: '800', color: Colors.onSurface },
-  pickerDoneText: { fontSize: 15, fontWeight: '700', color: Colors.primary },
+  pickerDoneText: { fontSize: 15, fontWeight: '700', color: Colors.primaryText },
   textArea: {
     minHeight: 90,
     padding: 14,

@@ -1,25 +1,21 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
   Pressable,
   RefreshControl,
-  Dimensions,
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { Colors } from '../../../constants/colors';
-import { theme } from '../../../config/theme';
 import { useAuthStore } from '../../../store/authStore';
 import { ScreenContainer } from '../../../components/layout/ScreenContainer';
 import { Card } from '../../../components/ui/Card';
+import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
+import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
 import { inventoryApi, type AssignedMarketDto } from '../api/inventoryApi';
 import type { MarketProductDto } from '../../../types/api.types';
-
-const { width } = Dimensions.get('window');
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -88,9 +84,15 @@ export function MarketAgentHomeScreen() {
   // ── Loading state ──
   if (loading) {
     return (
-      <ScreenContainer scroll={false} safeArea={true} edges={['top']} style={styles.container}>
+      <ScreenContainer
+        scroll={false}
+        safeArea={true}
+        edges={['top']}
+        bgColor={Colors.background}
+        style={styles.container}
+      >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={Colors.primaryText} />
           <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
         </View>
       </ScreenContainer>
@@ -103,9 +105,10 @@ export function MarketAgentHomeScreen() {
       padding={false}
       safeArea={true}
       edges={['top']}
+      bgColor={Colors.background}
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primaryText]} />
       }
     >
       {/* ─── HEADER BANNER ────────────────────────────────────────── */}
@@ -130,7 +133,7 @@ export function MarketAgentHomeScreen() {
             style={styles.notificationBtn}
             onPress={() => navigation.navigate('Notifications' as never)}
           >
-            <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
+            <Ionicons name="notifications-outline" size={24} color={Colors.white} />
             <View style={styles.notificationDot} />
           </Pressable>
         </View>
@@ -145,12 +148,12 @@ export function MarketAgentHomeScreen() {
           </View>
           <View style={styles.ecosystemStatsRow}>
             <View style={styles.ecoStatItem}>
-              <Text style={styles.ecoStatVal}>{assignedMarkets.length}</Text>
+              <Text style={styles.ecoStatVal} numeric>{assignedMarkets.length}</Text>
               <Text style={styles.ecoStatLabel}>Chợ được phân công</Text>
             </View>
             <View style={styles.ecoStatDivider} />
             <View style={styles.ecoStatItem}>
-              <Text style={styles.ecoStatVal}>{priceProducts.length}</Text>
+              <Text style={styles.ecoStatVal} numeric>{priceProducts.length}</Text>
               <Text style={styles.ecoStatLabel}>Sản phẩm theo dõi</Text>
             </View>
           </View>
@@ -163,29 +166,29 @@ export function MarketAgentHomeScreen() {
         {/* Quick Metrics */}
         <View style={styles.metricsRow}>
           <Card
-            style={StyleSheet.flatten([styles.metricCard, { borderColor: Colors.primary, borderWidth: 1 }])}
+            style={StyleSheet.flatten([styles.metricCard, { borderColor: Colors.primary600 }])}
             padding="sm"
             onPress={() => navigation.navigate('UpdatePrice')}
           >
             <View style={styles.metricIconRow}>
               <View style={[styles.metricIconBg, { backgroundColor: Colors.primaryLight }]}>
-                <MaterialCommunityIcons name="tag-multiple" size={20} color={Colors.primary} />
+                <Ionicons name="pricetags-outline" size={20} color={Colors.primaryText} />
               </View>
             </View>
-            <Text style={styles.metricValue}>{priceProducts.length}</Text>
+            <Text style={styles.metricValue} numeric>{priceProducts.length}</Text>
             <Text style={styles.metricLabelText}>Sản phẩm hiện có</Text>
           </Card>
 
           <Card
-            style={StyleSheet.flatten([styles.metricCard, { borderColor: Colors.secondary, borderWidth: 1 }])}
+            style={StyleSheet.flatten([styles.metricCard, { borderColor: Colors.secondary }])}
             padding="sm"
           >
             <View style={styles.metricIconRow}>
-              <View style={[styles.metricIconBg, { backgroundColor: 'rgba(0,99,153,0.1)' }]}>
-                <Ionicons name="time" size={20} color={Colors.secondary} />
+              <View style={[styles.metricIconBg, { backgroundColor: Colors.secondaryContainer }]}>
+                <Ionicons name="time-outline" size={20} color={Colors.secondary} />
               </View>
             </View>
-            <Text style={styles.metricValue}>{assignedMarkets.length} chợ</Text>
+            <Text style={styles.metricValue} numeric>{assignedMarkets.length} chợ</Text>
             <Text style={styles.metricLabelText}>Đang phụ trách</Text>
           </Card>
         </View>
@@ -228,7 +231,7 @@ export function MarketAgentHomeScreen() {
                   }
                 >
                   <Text style={styles.viewKiosksBtnText}>Xem Kiosk liên kết</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+                  <Ionicons name="arrow-forward" size={16} color={Colors.onPrimary} />
                 </Pressable>
               </View>
             </View>
@@ -250,7 +253,7 @@ export function MarketAgentHomeScreen() {
             <Text style={styles.emptySubtext}>Sản phẩm sẽ xuất hiện khi được thêm vào chợ</Text>
           </View>
         ) : (
-          <View style={[styles.watchlistCard, theme.shadow.sm]}>
+          <View style={styles.watchlistCard}>
             {priceProducts.map((item, index) => (
               <View
                 key={item.marketProductId}
@@ -264,8 +267,8 @@ export function MarketAgentHomeScreen() {
                 </View>
 
                 <View style={styles.watchlistPriceSection}>
-                  <Text style={styles.watchlistPriceText}>{formatPrice(item.currentPrice)}</Text>
-                  <Text style={styles.watchlistQtyText}>
+                  <Text style={styles.watchlistPriceText} numeric>{formatPrice(item.currentPrice)}</Text>
+                  <Text style={styles.watchlistQtyText} numeric>
                     Kho: {item.availableQuantity} {item.unit}
                   </Text>
                 </View>
@@ -274,7 +277,7 @@ export function MarketAgentHomeScreen() {
                   style={styles.quickPriceBtn}
                   onPress={() => navigation.navigate('UpdatePrice', { productId: item.productId, marketId: item.marketId })}
                 >
-                  <Ionicons name="create-outline" size={18} color={Colors.primary} />
+                  <Ionicons name="create-outline" size={18} color={Colors.primaryText} />
                 </Pressable>
               </View>
             ))}
@@ -291,7 +294,7 @@ export function MarketAgentHomeScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -307,7 +310,7 @@ const styles = StyleSheet.create({
 
   // ── Header Banner ──
   headerBanner: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.deepTeal,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     paddingTop: 20,
@@ -349,19 +352,19 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
+    shadowColor: Colors.deepTeal,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    elevation: 1,
   },
   avatarText: {
     fontSize: 20,
     fontWeight: '800',
-    color: Colors.primary,
+    color: Colors.onPrimary,
   },
   welcomeText: {
     fontSize: 13,
@@ -371,7 +374,7 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: Colors.white,
   },
   notificationBtn: {
     width: 40,
@@ -390,7 +393,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: Colors.danger,
     borderWidth: 1.5,
-    borderColor: Colors.primary,
+    borderColor: Colors.deepTeal,
   },
 
   // ── Ecosystem Card (inside header) ──
@@ -407,7 +410,7 @@ const styles = StyleSheet.create({
   ecosystemTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: Colors.white,
     marginBottom: 4,
   },
   ecosystemSub: {
@@ -431,8 +434,8 @@ const styles = StyleSheet.create({
   },
   ecoStatVal: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontFamily: RestaurantFonts.monoBold,
+    color: Colors.white,
   },
   ecoStatLabel: {
     fontSize: 11,
@@ -455,8 +458,14 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius: 14,
+    borderWidth: 1,
+    shadowColor: Colors.deepTeal,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   metricIconRow: {
     flexDirection: 'row',
@@ -473,7 +482,7 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: RestaurantFonts.monoSemibold,
     color: Colors.textPrimary,
   },
   metricLabelText: {
@@ -499,13 +508,15 @@ const styles = StyleSheet.create({
   seeAllLink: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
 
   // ── Empty state ──
   emptyCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
     padding: 32,
     alignItems: 'center',
     marginBottom: 16,
@@ -524,15 +535,17 @@ const styles = StyleSheet.create({
 
   // ── Market Card ──
   marketCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius: 18,
     marginBottom: 16,
     overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.07,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: Colors.deepTeal,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   marketDetails: {
     padding: 16,
@@ -558,7 +571,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(34,197,94,0.1)',
+    backgroundColor: Colors.primaryLight,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
@@ -567,12 +580,12 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: '#22C55E',
+    backgroundColor: Colors.primaryText,
   },
   activeBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#22C55E',
+    color: Colors.primaryText,
     letterSpacing: 0.5,
   },
   viewKiosksBtn: {
@@ -583,33 +596,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
+    shadowColor: Colors.deepTeal,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   viewKiosksBtnPressed: {
     opacity: 0.85,
   },
   viewKiosksBtnText: {
-    color: '#FFFFFF',
+    color: Colors.onPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
 
   // ── Price Watchlist ──
   watchlistCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius: 14,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: Colors.deepTeal,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   watchlistItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Colors.border,
   },
   noBorder: {
     borderBottomWidth: 0,
@@ -633,11 +653,12 @@ const styles = StyleSheet.create({
   },
   watchlistPriceText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    fontFamily: RestaurantFonts.monoSemibold,
+    color: Colors.primaryText,
   },
   watchlistQtyText: {
     fontSize: 11,
+    fontFamily: RestaurantFonts.monoRegular,
     color: Colors.textMuted,
     marginTop: 2,
   },

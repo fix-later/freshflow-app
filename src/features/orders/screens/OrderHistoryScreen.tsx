@@ -7,7 +7,6 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  Text,
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
@@ -15,7 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
 import {
   orderApi,
   type OrderListItemDto,
@@ -84,7 +84,7 @@ export function OrderHistoryScreen() {
           style={styles.headerFilterIconBtn}
           onPress={() => setIsDateModalVisible(true)}
         >
-          <Ionicons name="calendar-outline" size={22} color={Colors.primary} />
+          <Ionicons name="calendar-outline" size={22} color={Colors.primaryText} />
           {hasActiveFilter && <View style={styles.activeFilterDot} />}
         </Pressable>
       ),
@@ -209,7 +209,7 @@ export function OrderHistoryScreen() {
         {/* Header Row */}
         <View style={styles.cardHeader}>
           <View style={styles.headerTitleRow}>
-            <Ionicons name="receipt-outline" size={16} color={Colors.primary} style={styles.receiptIcon} />
+            <Ionicons name="receipt-outline" size={16} color={Colors.primaryText} style={styles.receiptIcon} />
             <Text style={styles.orderCode}>Đơn #{orderId ? orderId.slice(0, 8).toUpperCase() : 'N/A'}</Text>
           </View>
           <View style={[styles.badge, { backgroundColor: statusColor + '12', borderColor: statusColor + '25' }]}>
@@ -225,7 +225,7 @@ export function OrderHistoryScreen() {
           </View>
           {item.scheduledFor ? (
             <View style={[styles.metaRow, styles.scheduledMetaRow]}>
-              <Ionicons name="calendar-outline" size={12} color={Colors.primary} />
+              <Ionicons name="calendar-outline" size={12} color={Colors.primaryText} />
               <Text style={styles.scheduledMetaText}>
                 Hẹn giao: {new Date(item.scheduledFor).toLocaleDateString('vi-VN')}
               </Text>
@@ -257,7 +257,7 @@ export function OrderHistoryScreen() {
               <ActivityIndicator size="small" color={Colors.primary} />
             ) : (
               <>
-                <Ionicons name="repeat-outline" size={14} color={Colors.primary} />
+                <Ionicons name="repeat-outline" size={14} color={Colors.primaryText} />
                 <Text style={styles.reorderBtnText}>Đặt lại đơn này</Text>
               </>
             )}
@@ -328,7 +328,7 @@ export function OrderHistoryScreen() {
                           {chip.label}
                         </Text>
                         {active && (
-                          <Ionicons name="checkmark-sharp" size={18} color={Colors.primary} />
+                          <Ionicons name="checkmark-sharp" size={18} color={Colors.primaryText} />
                         )}
                       </Pressable>
                     );
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
   },
   statusTabTextActive: {
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   statusTabIndicator: {
     position: 'absolute',
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
   },
   modalItemTextActive: {
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   listContainer: {
     padding: 16,
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
   },
   scheduledMetaText: {
     fontSize: 11,
-    color: Colors.primary,
+    color: Colors.primaryText,
     fontWeight: '600',
   },
   cardDivider: {
@@ -644,7 +644,7 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   reorderBtn: {
     flexDirection: 'row',
@@ -664,6 +664,6 @@ const styles = StyleSheet.create({
   reorderBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
 });

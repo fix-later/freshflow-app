@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../../../constants/colors';
+import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
+import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
 import type { HubStackParamList } from '../../../navigation/types';
 import { SORT_GROUPS } from '../data/hubOperations';
 
@@ -42,7 +43,7 @@ export function SortingScreen() {
           <Text style={styles.eyebrow}>KHU PHÂN LOẠI · CA SÁNG</Text>
           <View style={styles.headerRow}>
             <View style={styles.headerCopy}><Text style={styles.title}>Phân hàng theo nhà hàng</Text><Text style={styles.subtitle}>{completedGroups}/{SORT_GROUPS.length} đơn đã hoàn tất</Text></View>
-            <View style={styles.progressCircle}><Text style={styles.progressValue}>{progress}%</Text></View>
+            <View style={styles.progressCircle}><Text numeric style={styles.progressValue}>{progress}%</Text></View>
           </View>
           <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View>
         </View>
@@ -54,7 +55,7 @@ export function SortingScreen() {
         </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.instructionStrip}><Ionicons name="scan-outline" size={18} color={Colors.primary} /><Text style={styles.instructionText}>Đặt đúng hàng vào slot và đánh dấu từng mặt hàng.</Text></View>
+          <View style={styles.instructionStrip}><Ionicons name="scan-outline" size={18} color={Colors.primaryText} /><Text style={styles.instructionText}>Đặt đúng hàng vào slot và đánh dấu từng mặt hàng.</Text></View>
 
           {SORT_GROUPS.map((group) => {
             const expanded = expandedId === group.id;
@@ -70,7 +71,7 @@ export function SortingScreen() {
                     <Text style={styles.orderMeta}>{group.orderCode} · {group.district}</Text>
                   </View>
                   <View style={styles.groupStatus}>
-                    <Text style={[styles.groupProgress, complete && styles.groupProgressComplete, started && !complete && styles.groupProgressStarted]}>{checkedCount}/{group.items.length}</Text>
+                    <Text numeric style={[styles.groupProgress, complete && styles.groupProgressComplete, started && !complete && styles.groupProgressStarted]}>{checkedCount}/{group.items.length}</Text>
                     <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textMuted} />
                   </View>
                 </Pressable>
@@ -82,13 +83,13 @@ export function SortingScreen() {
                       return (
                         <Pressable key={item.id} style={styles.itemRow} onPress={() => toggleItem(item.id)}>
                           <View style={[styles.checkbox, checked && styles.checkboxChecked]}>{checked && <Ionicons name="checkmark" size={15} color={Colors.onPrimary} />}</View>
-                          <View style={styles.itemCopy}><Text style={[styles.itemName, checked && styles.itemNameChecked]}>{item.name}</Text><Text style={styles.itemQuantity}>{item.quantity} {item.unit}</Text></View>
+                          <View style={styles.itemCopy}><Text style={[styles.itemName, checked && styles.itemNameChecked]}>{item.name}</Text><Text numeric style={styles.itemQuantity}>{item.quantity} {item.unit}</Text></View>
                           <Ionicons name="reorder-three-outline" size={19} color={Colors.textMuted} />
                         </Pressable>
                       );
                     })}
                     <View style={[styles.groupFooter, complete && styles.groupFooterComplete]}>
-                      <Ionicons name={complete ? 'checkmark-circle' : 'time-outline'} size={17} color={complete ? Colors.primary : '#8A5900'} />
+                      <Ionicons name={complete ? 'checkmark-circle' : 'time-outline'} size={17} color={complete ? Colors.primaryText : '#8A5900'} />
                       <Text style={[styles.groupFooterText, complete && styles.groupFooterTextComplete]}>{complete ? 'Slot đã sẵn sàng đóng gói' : 'Tiếp tục kiểm đủ mặt hàng'}</Text>
                     </View>
                   </View>
@@ -102,9 +103,9 @@ export function SortingScreen() {
             style={[styles.handoffButton, !allCompleted && styles.handoffButtonDisabled]}
             onPress={() => navigation.navigate('DriverHandoff', { routeId: 'route-1' })}
           >
-            <Ionicons name="car-outline" size={19} color={Colors.onPrimary} />
-            <Text style={styles.handoffText}>Hoàn tất và bàn giao tài xế</Text>
-            <Ionicons name="arrow-forward" size={17} color={Colors.onPrimary} />
+            <Ionicons name="car-outline" size={19} color={allCompleted ? Colors.onPrimary : Colors.textMuted} />
+            <Text style={[styles.handoffText, !allCompleted && styles.handoffTextDisabled]}>Hoàn tất và bàn giao tài xế</Text>
+            <Ionicons name="arrow-forward" size={17} color={allCompleted ? Colors.onPrimary : Colors.textMuted} />
           </Pressable>
           {!allCompleted && <Text style={styles.disabledHint}>Hoàn tất tất cả mặt hàng để chuyển sang bàn giao.</Text>}
         </ScrollView>
@@ -114,43 +115,43 @@ export function SortingScreen() {
 }
 
 function Summary({ icon, value, label }: { icon: keyof typeof Ionicons.glyphMap; value: string; label: string }) {
-  return <View style={styles.summaryItem}><Ionicons name={icon} size={17} color={Colors.primary} /><Text style={styles.summaryValue}>{value}</Text><Text style={styles.summaryLabel}>{label}</Text></View>;
+  return <View style={styles.summaryItem}><Ionicons name={icon} size={17} color={Colors.primaryText} /><Text numeric style={styles.summaryValue}>{value}</Text><Text style={styles.summaryLabel}>{label}</Text></View>;
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.primary },
+  safeArea: { flex: 1, backgroundColor: Colors.deepTeal },
   screen: { flex: 1, backgroundColor: Colors.background },
-  header: { backgroundColor: Colors.primary, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 17 },
+  header: { backgroundColor: Colors.deepTeal, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 20, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   eyebrow: { color: 'rgba(255,255,255,0.72)', fontSize: 10, fontWeight: '800' },
   headerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
   headerCopy: { flex: 1, minWidth: 0, paddingRight: 10 },
-  title: { color: Colors.onPrimary, fontSize: 19, fontWeight: '800' },
+  title: { color: Colors.white, fontSize: 19, fontWeight: '800' },
   subtitle: { color: 'rgba(255,255,255,0.72)', fontSize: 10, marginTop: 4 },
   progressCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
-  progressValue: { color: Colors.onPrimary, fontSize: 13, fontWeight: '800' },
+  progressValue: { color: Colors.white, fontSize: 13, fontWeight: '800', fontFamily: RestaurantFonts.monoBold },
   progressTrack: { height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.2)', marginTop: 14, overflow: 'hidden' },
-  progressFill: { height: 5, borderRadius: 3, backgroundColor: Colors.primaryFixed },
-  summaryRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 13, borderRadius: 8, borderWidth: 1, borderColor: Colors.outlineVariant, backgroundColor: Colors.surfaceContainerLowest, paddingVertical: 10 },
+  progressFill: { height: 5, borderRadius: 3, backgroundColor: Colors.primary },
+  summaryRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 13, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, paddingVertical: 11, shadowColor: Colors.deepTeal, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
   summaryItem: { flex: 1, alignItems: 'center', borderRightWidth: 1, borderRightColor: Colors.surfaceContainerHigh },
-  summaryValue: { fontSize: 11, fontWeight: '800', color: Colors.textPrimary, marginTop: 3 },
+  summaryValue: { fontSize: 11, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.textPrimary, marginTop: 3 },
   summaryLabel: { fontSize: 8, color: Colors.textMuted, marginTop: 2 },
   content: { padding: 16, paddingBottom: 28, gap: 10 },
-  instructionStrip: { borderRadius: 8, backgroundColor: Colors.successLight, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  instructionStrip: { borderRadius: 12, backgroundColor: Colors.primaryLight, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 7 },
   instructionText: { flex: 1, fontSize: 9, color: Colors.textSecondary },
-  groupCard: { borderRadius: 8, borderWidth: 1, borderColor: Colors.outlineVariant, backgroundColor: Colors.surfaceContainerLowest, overflow: 'hidden' },
+  groupCard: { borderRadius: 14, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, overflow: 'hidden', shadowColor: Colors.deepTeal, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.025, shadowRadius: 4, elevation: 1 },
   groupCardComplete: { borderColor: Colors.primary },
   groupHeader: { minHeight: 66, padding: 11, flexDirection: 'row', alignItems: 'center' },
   slotBadge: { width: 42, height: 42, borderRadius: 8, backgroundColor: Colors.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' },
-  slotBadgeComplete: { backgroundColor: Colors.successLight },
+  slotBadgeComplete: { backgroundColor: Colors.primaryLight },
   slotText: { fontSize: 11, fontWeight: '800', color: Colors.textSecondary },
-  slotTextComplete: { color: Colors.primary },
+  slotTextComplete: { color: Colors.primaryText },
   groupCopy: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
   restaurantName: { fontSize: 12, fontWeight: '800', color: Colors.textPrimary },
   orderMeta: { fontSize: 9, color: Colors.textMuted, marginTop: 3 },
   groupStatus: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  groupProgress: { fontSize: 9, fontWeight: '800', color: Colors.textMuted },
+  groupProgress: { fontSize: 9, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.textMuted },
   groupProgressStarted: { color: '#8A5900' },
-  groupProgressComplete: { color: Colors.primary },
+  groupProgressComplete: { color: Colors.primaryText },
   itemsList: { borderTopWidth: 1, borderTopColor: Colors.surfaceContainerHigh, paddingHorizontal: 11 },
   itemRow: { minHeight: 47, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: Colors.surfaceContainerHigh },
   checkbox: { width: 23, height: 23, borderRadius: 6, borderWidth: 1, borderColor: Colors.outline, alignItems: 'center', justifyContent: 'center' },
@@ -158,13 +159,14 @@ const styles = StyleSheet.create({
   itemCopy: { flex: 1, paddingHorizontal: 9 },
   itemName: { fontSize: 10, fontWeight: '700', color: Colors.textPrimary },
   itemNameChecked: { color: Colors.textMuted, textDecorationLine: 'line-through' },
-  itemQuantity: { fontSize: 9, color: Colors.textMuted, marginTop: 2 },
+  itemQuantity: { fontSize: 9, fontFamily: RestaurantFonts.monoMedium, color: Colors.textMuted, marginTop: 2 },
   groupFooter: { marginVertical: 9, borderRadius: 7, backgroundColor: Colors.warningLight, padding: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  groupFooterComplete: { backgroundColor: Colors.successLight },
+  groupFooterComplete: { backgroundColor: Colors.primaryLight },
   groupFooterText: { fontSize: 9, fontWeight: '700', color: '#8A5900' },
-  groupFooterTextComplete: { color: Colors.primary },
-  handoffButton: { height: 46, borderRadius: 8, backgroundColor: Colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 4 },
-  handoffButtonDisabled: { backgroundColor: Colors.textMuted },
+  groupFooterTextComplete: { color: Colors.primaryText },
+  handoffButton: { height: 48, borderRadius: 12, backgroundColor: Colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 4, shadowColor: Colors.deepTeal, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+  handoffButtonDisabled: { backgroundColor: Colors.surfaceContainerHigh, shadowOpacity: 0, elevation: 0 },
   handoffText: { color: Colors.onPrimary, fontSize: 11, fontWeight: '800' },
+  handoffTextDisabled: { color: Colors.textMuted },
   disabledHint: { textAlign: 'center', fontSize: 9, color: Colors.textMuted, marginTop: -3 },
 });

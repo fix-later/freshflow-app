@@ -9,8 +9,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
   Alert,
 } from "react-native";
@@ -18,7 +16,11 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { type NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Colors } from "../../../constants/colors";
+import { RestaurantColors as Colors, RestaurantFonts } from "../../restaurant/theme";
+import {
+  RestaurantText as Text,
+  RestaurantTextInput as TextInput,
+} from "../../restaurant/components/RestaurantText";
 import { useAuthStore } from "../../../store/authStore";
 import { useCartStore } from "../../../store/cartStore";
 import { useFavoritesStore } from "../../../store/favoritesStore";
@@ -36,8 +38,6 @@ const PRODUCT_CARD_WIDTH = (SCREEN_WIDTH - CONTAINER_PADDING * 2 - GAP) / 2;
 
 // ─── Assets ────────────────────────────────
 const IMAGES = {
-  avatar:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuA1j0sl2_XxNRo9UV_2sE1VIJXj7hvh5VyS_ZOAENav4RlhZg1fuKgWvF-k88gJ65PRiD0CsNU7xRuJpgGeVAYS2xPwbz9r6dvESRu0e59SX76GLaYk5gCEG9Cz__WTSen0Ti-HV9G-lV-tLyidh4LN4YANog30q3Takv_lcHEeMLP3rIYSc02jLz8YJZMPPlc-35t39oAj9tC7SaYwSYJrcWuJFscim01qEjaMPkSAyc456XPJ9dnBo3KCbS1H8kGyE_WIH8znskon",
   hero: "https://lh3.googleusercontent.com/aida-public/AB6AXuAuxh--i7t6RopJF5JvNg2i6g91FbQxEDiOhgp8Kr6FuDFo4eWw_Wprn5PvG484b7jiJXtpwC_ObEsN-G1gSIgF_Zg-KPZBUizV--LSXB_jXC_lqeQIqDmNBGYmE9PQ4Kq93vgpWjSjLAlLhpBm7zCIr8u1Pu0IIZ2Lvx_onO8uGjBctbVnx14dW5cBrdpGbFh3pPFO0kqgbaF9i1wTYIwLO9RVEFsoFn--NB7VQ_4qQhxseqLvCIr4YfwqGBVGR1lgFopea4k8mZP6",
   hocMon:
     "https://lh3.googleusercontent.com/aida-public/AB6AXuD9VcUush4POrDO1s0xblyUJbyQXSnMwZpiN6IDkaZDuHbQbGtTE2qBaVQIeCZoJNolSH7CQya8wX95eNuVU4VrVl2lMxmEl5HZxL30-KkeK4rWS5sdX7EXNu0TAjaJkQ0r-bpZzwsMjztPIhQE--LBI0mQmI8Vwz_fvBhdJ4ktUJ30AizjvVIzaBovjdLw4-6_7MFVfHGIOHmhr3vclIsqKBGapup7h7z0i7ZXVN5oJuq6o3K9t5fsSZ7ZiM24t6Ag83Zw_KgOvlb2",
@@ -75,6 +75,36 @@ const PRODUCT_PLACEHOLDERS = [
 
 function productImage(index: number): string {
   return PRODUCT_PLACEHOLDERS[index % PRODUCT_PLACEHOLDERS.length];
+}
+
+interface ProductCategoryFilter {
+  id: string;
+  name: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}
+
+function getProductCategoryIcon(name: string): keyof typeof Ionicons.glyphMap {
+  const normalizedName = name.toLowerCase();
+
+  if (
+    normalizedName.includes('cá')
+    || normalizedName.includes('hải sản')
+    || normalizedName.includes('cua')
+    || normalizedName.includes('ghẹ')
+  ) {
+    return 'fish-outline';
+  }
+  if (normalizedName.includes('rau') || normalizedName.includes('củ') || normalizedName.includes('quả') || normalizedName.includes('trái cây')) {
+    return 'leaf-outline';
+  }
+  if (normalizedName.includes('thịt')) return 'restaurant-outline';
+  if (normalizedName.includes('trứng') || normalizedName.includes('sữa')) return 'cafe-outline';
+  if (normalizedName.includes('bột')) return 'bag-outline';
+  if (normalizedName.includes('dầu')) return 'water-outline';
+  if (normalizedName.includes('gia vị')) return 'flask-outline';
+  if (normalizedName.includes('khô')) return 'cube-outline';
+
+  return 'basket-outline';
 }
 
 // ─── Data ──────────────────────────────────
@@ -224,6 +254,7 @@ export function OrderListScreen({ route }: { route?: any }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState('');
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   // ── Global cart state ───
   const {
@@ -316,6 +347,10 @@ export function OrderListScreen({ route }: { route?: any }) {
   }, [apiMarkets]);
 
   const handleSelectMarket = (marketId: string) => {
+    if (marketId !== selectedMarketId) {
+      setActiveCategory('');
+      setShowAllCategories(false);
+    }
     setSelectedMarketId(marketId);
     setShowMarketPicker(false);
     setActiveTab('products');
@@ -353,6 +388,46 @@ export function OrderListScreen({ route }: { route?: any }) {
       p.productName.toLowerCase().includes(searchQuery.toLowerCase()),
     );
   }, [searchQuery, apiProducts]);
+
+  const categoryFilters = useMemo<ProductCategoryFilter[]>(() => [
+    { id: 'all-products', name: 'Tất cả', icon: 'grid-outline' },
+    ...apiCategories
+      .filter(category => category.isActive)
+      .map(category => ({
+        id: category.id,
+        name: category.name,
+        icon: getProductCategoryIcon(category.name),
+      })),
+  ], [apiCategories]);
+
+  const handleCategorySelect = useCallback((categoryName: string) => {
+    setActiveCategory(categoryName === activeCategory ? '' : categoryName);
+  }, [activeCategory]);
+
+  const renderCategoryChip = useCallback(({ item }: { item: ProductCategoryFilter }) => {
+    const categoryName = item.id === 'all-products' ? '' : item.name;
+    const active = activeCategory === categoryName;
+
+    return (
+      <Pressable
+        key={item.id}
+        style={[styles.chip, active && styles.chipActive]}
+        onPress={() => handleCategorySelect(categoryName)}
+        accessibilityRole="button"
+        accessibilityLabel={`Lọc theo ${item.name}`}
+        accessibilityState={{ selected: active }}
+      >
+        <Ionicons
+          name={active ? 'checkmark-circle' : item.icon}
+          size={16}
+          color={active ? Colors.primaryText : Colors.textSecondary}
+        />
+        <Text style={[styles.chipText, active && styles.chipTextActive]}>
+          {item.name}
+        </Text>
+      </Pressable>
+    );
+  }, [activeCategory, handleCategorySelect]);
 
   // ── Add API product to cart ───────────────
   const addApiToCart = (product: MarketProductDto, quantity = 1) => {
@@ -501,7 +576,7 @@ export function OrderListScreen({ route }: { route?: any }) {
             <MaterialIcons
               name="arrow-downward"
               size={14}
-              color={Colors.primary}
+              color={Colors.primaryText}
             />
           )}
           {item.trendType === "up" && (
@@ -544,7 +619,7 @@ export function OrderListScreen({ route }: { route?: any }) {
             <MaterialIcons
               name={item.outOfStock ? "block" : "add-shopping-cart"}
               size={18}
-              color={item.outOfStock ? Colors.onSurfaceVariant : "#FFF"}
+              color={item.outOfStock ? Colors.onSurfaceVariant : Colors.onPrimary}
             />
           </Pressable>
         </View>
@@ -638,16 +713,16 @@ export function OrderListScreen({ route }: { route?: any }) {
                   <Pressable style={styles.catalogQtyBtn} onPress={() => {
                     globalRemoveFromCart(item.marketProductId);
                   }}>
-                    <Ionicons name="remove" size={16} color="#FFF" />
+                    <Ionicons name="remove" size={16} color={Colors.onPrimary} />
                   </Pressable>
                   <Text style={styles.catalogQtyText}>{qty}</Text>
                   <Pressable style={styles.catalogQtyBtn} onPress={() => addApiToCart(item)}>
-                    <Ionicons name="add" size={16} color="#FFF" />
+                    <Ionicons name="add" size={16} color={Colors.onPrimary} />
                   </Pressable>
                 </>
               ) : (
                 <Pressable style={styles.catalogAddBtn} onPress={() => addApiToCart(item)}>
-                  <Ionicons name="add" size={18} color="#FFF" />
+                  <Ionicons name="add" size={18} color={Colors.onPrimary} />
                 </Pressable>
               )}
             </View>
@@ -659,11 +734,28 @@ export function OrderListScreen({ route }: { route?: any }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      {/* Compact restaurant strip — mirrors the web storefront utility bar. */}
+      <View style={styles.restaurantStrip}>
+        <View style={styles.restaurantStripItem}>
+          <Ionicons name="storefront-outline" size={14} color={Colors.primary} />
+          <Text style={styles.restaurantStripText}>Nhà hàng TP.HCM</Text>
+        </View>
+        <View style={styles.restaurantStripDivider} />
+        <View style={styles.restaurantStripItem}>
+          <Ionicons name="location-outline" size={14} color={Colors.primary} />
+          <Text style={styles.restaurantStripText} numberOfLines={1}>
+            Chi nhánh chính
+          </Text>
+        </View>
+      </View>
+
       {/* ─── FIXED HEADER ──────────────────── */}
       <View style={styles.appHeader}>
         <View style={styles.headerTop}>
           <View style={styles.headerLogo}>
-            <MaterialIcons name="agriculture" size={28} color={Colors.primary} />
+            <View style={styles.headerLogoMark}>
+              <Ionicons name="leaf-outline" size={20} color={Colors.deepTeal} />
+            </View>
             <Text style={styles.headerLogoText}>FreshFlow</Text>
           </View>
           <View style={styles.headerIcons}>
@@ -674,11 +766,19 @@ export function OrderListScreen({ route }: { route?: any }) {
               <Ionicons name="time-outline" size={23} color={Colors.onSurfaceVariant} />
             </Pressable>
             <Pressable style={styles.hIconButton}>
-              <MaterialIcons name="notifications" size={24} color={Colors.onSurfaceVariant} />
+              <Ionicons
+                name="notifications-outline"
+                size={23}
+                color={Colors.onSurfaceVariant}
+              />
               <View style={styles.hBadgeDot} />
             </Pressable>
-            <Pressable onPress={handleLogout}>
-              <Image source={{ uri: IMAGES.avatar }} style={styles.hAvatar} />
+            <Pressable style={styles.hIconButton} onPress={handleLogout}>
+              <Ionicons
+                name="person-circle-outline"
+                size={25}
+                color={Colors.onSurfaceVariant}
+              />
             </Pressable>
           </View>
         </View>
@@ -816,7 +916,7 @@ export function OrderListScreen({ route }: { route?: any }) {
                     <MaterialIcons
                       name={s.icon as any}
                       size={32}
-                      color={Colors.primary}
+                      color={Colors.primaryText}
                     />
                     <Text style={styles.statVal}>{s.v}</Text>
                     <Text style={styles.statLbl}>{s.l}</Text>
@@ -828,7 +928,7 @@ export function OrderListScreen({ route }: { route?: any }) {
               <View style={styles.footerSection}>
                 {/* Brand & Desc */}
                 <View style={styles.footerBrand}>
-                  <MaterialIcons name="agriculture" size={28} color={Colors.primary} />
+                  <Ionicons name="leaf-outline" size={24} color={Colors.primaryText} />
                   <Text style={styles.footerBrandText}>FreshFlow</Text>
                 </View>
                 <Text style={styles.footerDesc}>
@@ -838,19 +938,19 @@ export function OrderListScreen({ route }: { route?: any }) {
                 {/* Contact info */}
                 <View style={styles.footerInfoSection}>
                   <View style={styles.footerInfoRow}>
-                    <MaterialIcons name="phone" size={16} color={Colors.primary} />
+                    <Ionicons name="call-outline" size={16} color={Colors.primaryText} />
                     <Text style={styles.footerInfoText}>1900 1234 56</Text>
                   </View>
                   <View style={styles.footerInfoRow}>
-                    <MaterialIcons name="email" size={16} color={Colors.primary} />
+                    <Ionicons name="mail-outline" size={16} color={Colors.primaryText} />
                     <Text style={styles.footerInfoText}>info@freshflow.vn</Text>
                   </View>
                   <View style={styles.footerInfoRow}>
-                    <MaterialIcons name="location-on" size={16} color={Colors.primary} />
+                    <Ionicons name="location-outline" size={16} color={Colors.primaryText} />
                     <Text style={styles.footerInfoText}>123 Nguyễn Huệ, Quận 1, TP.HCM</Text>
                   </View>
                   <View style={styles.footerInfoRow}>
-                    <MaterialIcons name="schedule" size={16} color={Colors.primary} />
+                    <Ionicons name="time-outline" size={16} color={Colors.primaryText} />
                     <Text style={styles.footerInfoText}>06:00 - 20:00 • T2 - CN</Text>
                   </View>
                 </View>
@@ -873,7 +973,7 @@ export function OrderListScreen({ route }: { route?: any }) {
         <View style={{ flex: 1 }}>
           {apiLoading && apiProducts.length === 0 ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={Colors.primary} />
+              <ActivityIndicator size="large" color={Colors.primaryText} />
               <Text style={styles.loadingText}>Đang tải sản phẩm...</Text>
             </View>
           ) : apiError && apiProducts.length === 0 ? (
@@ -900,7 +1000,7 @@ export function OrderListScreen({ route }: { route?: any }) {
               contentContainerStyle={styles.mainScroll}
               showsVerticalScrollIndicator={false}
               refreshControl={
-                <RefreshControl refreshing={apiRefreshing} onRefresh={handleApiRefresh} colors={[Colors.primary]} />
+                <RefreshControl refreshing={apiRefreshing} onRefresh={handleApiRefresh} colors={[Colors.primaryText]} />
               }
               ListHeaderComponent={
                 <View>
@@ -941,25 +1041,55 @@ export function OrderListScreen({ route }: { route?: any }) {
                     }}
                   /> */}
 
-                  {/* Category Chips */}
-                  <FlatList
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    data={apiCategories}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.chipRow}
-                    renderItem={({ item }) => {
-                      const active = activeCategory === item.name;
-                      return (
+                  {/* Product category filter */}
+                  <View style={styles.categoryFilter}>
+                    <View style={styles.categoryFilterHeader}>
+                      <View style={styles.categoryFilterTitleGroup}>
+                        <View style={styles.categoryFilterIcon}>
+                          <Ionicons name="options-outline" size={16} color={Colors.primaryText} />
+                        </View>
+                        <View>
+                          <Text style={styles.categoryFilterTitle}>Danh mục</Text>
+                          <Text style={styles.categoryFilterSubtitle}>
+                            {apiLoading ? 'Đang cập nhật...' : `${filteredApiProducts.length} sản phẩm`}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {categoryFilters.length > 4 && (
                         <Pressable
-                          style={[styles.chip, active && styles.chipActive]}
-                          onPress={() => setActiveCategory(item.name === activeCategory ? '' : item.name)}
+                          style={styles.categoryToggleBtn}
+                          onPress={() => setShowAllCategories(current => !current)}
+                          accessibilityRole="button"
+                          accessibilityLabel={showAllCategories ? 'Thu gọn danh mục' : 'Xem tất cả danh mục'}
                         >
-                          <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.name}</Text>
+                          <Text style={styles.categoryToggleText}>
+                            {showAllCategories ? 'Thu gọn' : 'Xem tất cả'}
+                          </Text>
+                          <Ionicons
+                            name={showAllCategories ? 'chevron-up' : 'chevron-down'}
+                            size={15}
+                            color={Colors.primaryText}
+                          />
                         </Pressable>
-                      );
-                    }}
-                  />
+                      )}
+                    </View>
+
+                    {showAllCategories ? (
+                      <View style={styles.categoryChipWrap}>
+                        {categoryFilters.map(item => renderCategoryChip({ item }))}
+                      </View>
+                    ) : (
+                      <FlatList
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        data={categoryFilters}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={styles.chipRow}
+                        renderItem={renderCategoryChip}
+                      />
+                    )}
+                  </View>
                 </View>
               }
               ListEmptyComponent={
@@ -993,7 +1123,7 @@ export function OrderListScreen({ route }: { route?: any }) {
       {/* ─── FLOATING CART FAB ─────────────── */}
       {cartCount > 0 && (
         <Pressable style={styles.cartFab} onPress={() => setShowCart(true)}>
-          <MaterialIcons name="shopping-cart" size={24} color="#FFF" />
+          <Ionicons name="cart-outline" size={24} color={Colors.onPrimary} />
           <View style={styles.cartFabBadge}>
             <Text style={styles.cartFabBadgeText}>{cartCount}</Text>
           </View>
@@ -1052,7 +1182,7 @@ export function OrderListScreen({ route }: { route?: any }) {
                     setDemoDetailProduct(null);
                   }}
                 >
-                  <Ionicons name="cart" size={18} color="#FFF" />
+                  <Ionicons name="cart-outline" size={18} color={Colors.onPrimary} />
                   <Text style={styles.productDetailAddText}>
                     {demoDetailProduct.outOfStock ? 'Tạm hết hàng' : 'Thêm vào giỏ'}
                   </Text>
@@ -1141,7 +1271,7 @@ export function OrderListScreen({ route }: { route?: any }) {
                       <MaterialIcons
                         name="remove"
                         size={18}
-                        color={detailOrderQuantity <= 1 ? Colors.outline : Colors.primary}
+                        color={detailOrderQuantity <= 1 ? Colors.outline : Colors.primaryText}
                       />
                     </Pressable>
 
@@ -1175,7 +1305,7 @@ export function OrderListScreen({ route }: { route?: any }) {
                         color={
                           detailOrderQuantity >= Math.max(0, detailProduct.product.availableQuantity)
                             ? Colors.outline
-                            : Colors.primary
+                            : Colors.primaryText
                         }
                       />
                     </Pressable>
@@ -1197,7 +1327,7 @@ export function OrderListScreen({ route }: { route?: any }) {
 
                   {detailHistoryLoading ? (
                     <View style={styles.productHistoryLoading}>
-                      <ActivityIndicator size="small" color={Colors.primary} />
+                      <ActivityIndicator size="small" color={Colors.primaryText} />
                       <Text style={styles.productHistoryLoadingText}>Đang tải lịch sử...</Text>
                     </View>
                   ) : detailHistoryError ? (
@@ -1231,7 +1361,7 @@ export function OrderListScreen({ route }: { route?: any }) {
                     closeProductDetail();
                   }}
                 >
-                  <Ionicons name="cart" size={18} color="#FFF" />
+                  <Ionicons name="cart-outline" size={18} color={Colors.onPrimary} />
                   <Text style={styles.productDetailAddText}>
                     {detailOrderQuantity <= 0
                       ? 'Tạm hết hàng'
@@ -1332,13 +1462,13 @@ export function OrderListScreen({ route }: { route?: any }) {
                   </View>
                   <View style={styles.cartScreenItemQty}>
                     <Pressable style={styles.cartScreenQtyBtn} onPress={() => removeFromCart(item.name)}>
-                      <MaterialIcons name="remove" size={16} color={Colors.primary} />
+                      <MaterialIcons name="remove" size={16} color={Colors.primaryText} />
                     </Pressable>
                     <Text style={styles.cartScreenQtyText}>{item.qty}</Text>
                     <Pressable style={styles.cartScreenQtyBtn} onPress={() => {
                       globalAddToCart(item);
                     }}>
-                      <MaterialIcons name="add" size={16} color={Colors.primary} />
+                      <MaterialIcons name="add" size={16} color={Colors.primaryText} />
                     </Pressable>
                   </View>
                 </View>
@@ -1463,17 +1593,42 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   retryBtnText: {
-    color: '#FFF',
+    color: Colors.onPrimary,
     fontFamily: 'Inter-Bold',
     fontSize: 14,
   },
 
   // ─── Header ────────────────────────────────
+  restaurantStrip: {
+    minHeight: 36,
+    paddingHorizontal: CONTAINER_PADDING,
+    backgroundColor: Colors.deepTeal,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  restaurantStripItem: {
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  restaurantStripDivider: {
+    width: 1,
+    height: 16,
+    marginHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
+  restaurantStripText: {
+    flexShrink: 1,
+    color: Colors.white,
+    fontSize: 11,
+    fontFamily: 'Inter-Medium',
+  },
   appHeader: {
     backgroundColor: Colors.surface,
     paddingHorizontal: CONTAINER_PADDING,
-    paddingTop: 4,
-    paddingBottom: 8,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: Colors.outlineVariant,
   },
@@ -1483,19 +1638,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerLogo: { flexDirection: "row", alignItems: "center", gap: 10 },
+  headerLogoMark: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+  },
   headerLogoText: {
-    fontSize: 24,
+    fontSize: 21,
     fontFamily: "Inter-Bold",
-    color: Colors.primary,
+    color: Colors.deepTeal,
     letterSpacing: -0.5,
   },
-  headerIcons: { flexDirection: "row", alignItems: "center", gap: 16 },
+  headerIcons: { flexDirection: "row", alignItems: "center", gap: 2 },
   hIconButton: {
-    width: 44,
-    height: 44,
+    width: 38,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 22,
+    borderRadius: 19,
+    backgroundColor: Colors.surfaceContainerLow,
   },
   hBadgeDot: {
     position: "absolute",
@@ -1508,14 +1672,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.surface,
   },
-  hAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: Colors.outlineVariant,
-  },
-
   // ─── Hero ──────────────────────────────────
   heroBox: {
     marginHorizontal: CONTAINER_PADDING,
@@ -1527,7 +1683,7 @@ const styles = StyleSheet.create({
   heroImg: { ...StyleSheet.absoluteFillObject },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,107,44,0.7)",
+    backgroundColor: "rgba(8,59,75,0.78)",
   },
   heroContent: {
     flex: 1,
@@ -1544,7 +1700,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   heroAlertTagText: {
-    color: "#FFF",
+    color: Colors.onPrimary,
     fontSize: 9,
     fontFamily: "Inter-Bold",
     textTransform: "uppercase",
@@ -1570,7 +1726,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 8,
   },
-  heroButtonText: { color: "#FFF", fontFamily: "Inter-Bold", fontSize: 12 },
+  heroButtonText: { color: Colors.onPrimary, fontFamily: "Inter-Bold", fontSize: 12 },
 
   // ─── Market ────────────────────────────────
   secTitleRow: {
@@ -1583,7 +1739,7 @@ const styles = StyleSheet.create({
   },
   secTitle: { fontSize: 18, fontFamily: "Inter-Bold", color: Colors.onSurface },
   secAction: {
-    color: Colors.primary,
+    color: Colors.primaryText,
     fontFamily: "Inter-SemiBold",
     fontSize: 12,
   },
@@ -1691,7 +1847,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginTop: 2,
   },
-  trendLabel: { fontSize: 10, fontFamily: "Inter-Bold", color: Colors.primary },
+  trendLabel: { fontSize: 10, fontFamily: "Inter-Bold", color: Colors.primaryText },
   trendDownColor: { color: "#16A34A" },
   trendUpColor: { color: Colors.error },
   trendFlatColor: { color: Colors.onSurfaceVariant },
@@ -1702,7 +1858,7 @@ const styles = StyleSheet.create({
   },
   cardPrice: {
     fontSize: 15,
-    fontFamily: "Inter-Bold",
+    fontFamily: RestaurantFonts.monoSemibold,
     color: Colors.onSurface,
   },
   cardUnit: {
@@ -1765,7 +1921,7 @@ const styles = StyleSheet.create({
   },
   promoText: { flex: 1, zIndex: 10 },
   promoTitle: {
-    color: "#FFF",
+    color: Colors.onPrimary,
     fontSize: 24,
     fontFamily: "Inter-Bold",
     lineHeight: 32,
@@ -1790,12 +1946,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   promoActionText: {
-    color: Colors.primary,
+    color: Colors.primaryText,
     fontFamily: "Inter-Bold",
     fontSize: 15,
   },
   promoTime: { flexDirection: "row", alignItems: "center", gap: 8 },
-  promoTimeText: { color: "#FFF", fontFamily: "Inter-SemiBold", fontSize: 14 },
+  promoTimeText: { color: Colors.onPrimary, fontFamily: "Inter-SemiBold", fontSize: 14 },
   promoImgArea: {
     width: 140,
     justifyContent: "center",
@@ -1845,7 +2001,7 @@ const styles = StyleSheet.create({
   footerBrandText: {
     fontSize: 16,
     fontFamily: "Inter-Bold",
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   footerDesc: {
     fontSize: 11,
@@ -2006,7 +2162,7 @@ const styles = StyleSheet.create({
   },
   cartScreenItemPrice: {
     fontSize: 15,
-    fontFamily: "Inter-Bold",
+    fontFamily: RestaurantFonts.monoSemibold,
     color: Colors.onSurface,
     marginTop: 4,
   },
@@ -2063,7 +2219,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   cartScreenVoucherBtnText: {
-    color: "#FFF",
+    color: Colors.onPrimary,
     fontFamily: "Inter-Bold",
     fontSize: 13,
   },
@@ -2099,13 +2255,13 @@ const styles = StyleSheet.create({
   },
   cartScreenSummaryTotal: {
     fontSize: 16,
-    fontFamily: "Inter-Bold",
+    fontFamily: RestaurantFonts.monoSemibold,
     color: Colors.onSurface,
   },
   cartScreenSummaryTotalValue: {
     fontSize: 18,
-    fontFamily: "Inter-Bold",
-    color: Colors.primary,
+    fontFamily: RestaurantFonts.monoSemibold,
+    color: Colors.primaryText,
   },
   cartScreenCheckoutBar: {
     position: "absolute",
@@ -2129,7 +2285,7 @@ const styles = StyleSheet.create({
   },
   cartScreenCheckoutTotal: {
     fontSize: 20,
-    fontFamily: "Inter-Bold",
+    fontFamily: RestaurantFonts.monoSemibold,
     color: Colors.onSurface,
   },
   cartScreenCheckoutBtn: {
@@ -2142,7 +2298,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceVariant,
   },
   cartScreenCheckoutBtnText: {
-    color: "#FFF",
+    color: Colors.onPrimary,
     fontFamily: "Inter-Bold",
     fontSize: 15,
   },
@@ -2151,8 +2307,8 @@ const styles = StyleSheet.create({
   // ─── Tab Bar ──────────────────────────────
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: 14,
+    backgroundColor: Colors.surface,
+    borderRadius: 999,
     marginHorizontal: CONTAINER_PADDING,
     marginVertical: 12,
     padding: 4,
@@ -2163,16 +2319,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'transparent',
     backgroundColor: 'transparent',
   },
   tabItemActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.primary,
   },
   tabText: {
     fontSize: 13,
@@ -2180,7 +2334,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   tabTextActive: {
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
 
   // ─── Search Bar ─────────────────────────
@@ -2190,11 +2344,13 @@ const styles = StyleSheet.create({
     marginHorizontal: CONTAINER_PADDING,
     marginTop: 16,
     marginBottom: 4,
-    backgroundColor: Colors.surfaceContainerHighest,
-    borderRadius: 14,
+    backgroundColor: Colors.surface,
+    borderRadius: 999,
     paddingHorizontal: 14,
     height: 44,
     gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
   },
   searchInput: {
     flex: 1,
@@ -2205,24 +2361,86 @@ const styles = StyleSheet.create({
   },
 
   // ─── Chip Row ───────────────────────────
+  categoryFilter: {
+    marginHorizontal: CONTAINER_PADDING,
+    marginTop: 10,
+    marginBottom: 12,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    backgroundColor: Colors.surface,
+  },
+  categoryFilterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  categoryFilterTitleGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  categoryFilterIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
+  },
+  categoryFilterTitle: {
+    fontSize: 14,
+    fontFamily: RestaurantFonts.bold,
+    color: Colors.onSurface,
+  },
+  categoryFilterSubtitle: {
+    marginTop: 1,
+    fontSize: 11,
+    fontFamily: RestaurantFonts.medium,
+    color: Colors.textMuted,
+  },
+  categoryToggleBtn: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 9,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+  },
+  categoryToggleText: {
+    fontSize: 11,
+    fontFamily: RestaurantFonts.semibold,
+    color: Colors.primaryText,
+  },
   chipRow: {
-    paddingHorizontal: CONTAINER_PADDING,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
     gap: 8,
+  },
+  categoryChipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 12,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    minHeight: 40,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 100,
-    backgroundColor: Colors.surfaceContainerHigh,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerLow,
     borderWidth: 1,
     borderColor: Colors.outlineVariant,
   },
   chipActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
     borderColor: Colors.primary,
   },
   chipText: {
@@ -2231,7 +2449,7 @@ const styles = StyleSheet.create({
     color: Colors.onSurfaceVariant,
   },
   chipTextActive: {
-    color: Colors.onPrimary,
+    color: Colors.primaryText,
   },
 
   // ─── Catalog Qty Controls ──────────────
@@ -2268,16 +2486,18 @@ const styles = StyleSheet.create({
 
   // ─── Catalog List Card (single-column) ──
   catalogListCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
     padding: 14,
     marginHorizontal: CONTAINER_PADDING,
     marginBottom: 12,
     shadowColor: '#0F172A',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   catalogListCardPressed: {
     opacity: 0.92,
@@ -2324,7 +2544,7 @@ const styles = StyleSheet.create({
   catalogCategoryText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   catalogUnitTag: {
     backgroundColor: '#F1F5F9',
@@ -2366,8 +2586,9 @@ const styles = StyleSheet.create({
   },
   catalogListPrice: {
     fontSize: 16,
+    fontFamily: RestaurantFonts.monoSemibold,
     fontWeight: '800',
-    color: Colors.primary,
+    color: Colors.primaryText,
     marginTop: 1,
   },
   priceOutOfStock: {
@@ -2471,7 +2692,7 @@ const styles = StyleSheet.create({
   productDetailCategoryText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   productDetailMarketText: {
     fontSize: 12,
@@ -2506,15 +2727,16 @@ const styles = StyleSheet.create({
   productDetailPrice: {
     marginTop: 14,
     fontSize: 28,
+    fontFamily: RestaurantFonts.monoSemibold,
     fontWeight: '900',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   productDetailUnit: {
     marginBottom: 5,
     marginLeft: 4,
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   productDetailStatsGrid: {
     flexDirection: 'row',
@@ -2585,7 +2807,7 @@ const styles = StyleSheet.create({
   productPurchaseAvailable: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   productQuantityPicker: {
     flexDirection: 'row',
@@ -2647,8 +2869,9 @@ const styles = StyleSheet.create({
   },
   productPurchaseTotalValue: {
     fontSize: 16,
+    fontFamily: RestaurantFonts.monoSemibold,
     fontWeight: '900',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   productHistoryHeader: {
     flexDirection: 'row',
@@ -2698,8 +2921,9 @@ const styles = StyleSheet.create({
   },
   productHistoryPrice: {
     fontSize: 14,
+    fontFamily: RestaurantFonts.monoSemibold,
     fontWeight: '800',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   productHistoryDate: {
     marginTop: 2,
@@ -2773,7 +2997,7 @@ const styles = StyleSheet.create({
   clearFiltersBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   catalogHeaderRight: {
     alignItems: 'flex-end',

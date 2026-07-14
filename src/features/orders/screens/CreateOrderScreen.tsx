@@ -7,15 +7,17 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import {
+  RestaurantText as Text,
+  RestaurantTextInput as TextInput,
+} from '../../restaurant/components/RestaurantText';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'CreateOrder'>;
@@ -172,7 +174,7 @@ export function CreateOrderScreen({ route, navigation }: Props) {
                 style={styles.pickerSelector}
                 onPress={() => setShowDatePicker(true)}
               >
-                <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+                <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
                 <View>
                   <Text style={styles.pickerSelectorLabel}>Ngày giao hàng</Text>
                   <Text style={styles.pickerSelectorValue}>
@@ -185,7 +187,7 @@ export function CreateOrderScreen({ route, navigation }: Props) {
                 style={styles.pickerSelector}
                 onPress={() => setShowTimePicker(true)}
               >
-                <Ionicons name="time-outline" size={18} color={Colors.primary} />
+                <Ionicons name="time-outline" size={18} color={Colors.primaryText} />
                 <View>
                   <Text style={styles.pickerSelectorLabel}>Giờ giao hàng</Text>
                   <Text style={styles.pickerSelectorValue}>
@@ -278,7 +280,7 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1 },
   itemName: { fontSize: 13, fontWeight: '600', color: Colors.onSurface, marginBottom: 2 },
   itemMeta: { fontSize: 11, color: Colors.textMuted, marginBottom: 4 },
-  itemPrice: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  itemPrice: { fontSize: 13, fontWeight: '700', color: Colors.primaryText },
   itemQtyWrap: { alignItems: 'center', minWidth: 36 },
   itemQtyLabel: { fontSize: 10, color: Colors.textMuted },
   itemQty: { fontSize: 16, fontWeight: '700', color: Colors.onSurface },
@@ -294,7 +296,7 @@ const styles = StyleSheet.create({
   timeRowSelected: { backgroundColor: Colors.primaryLight },
   timeText: { flex: 1 },
   timeLabel: { fontSize: 14, fontWeight: '600', color: Colors.onSurface },
-  timeLabelSelected: { color: Colors.primary },
+  timeLabelSelected: { color: Colors.primaryText },
   timeSub: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   radioOuter: {
     width: 20,
@@ -363,7 +365,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLowest,
   },
   footerLabel: { fontSize: 12, color: Colors.textMuted },
-  footerTotal: { fontSize: 18, fontWeight: '800', color: Colors.primary },
+  footerTotal: { fontSize: 18, fontWeight: '800', color: Colors.primaryText },
   nextBtn: {
     backgroundColor: Colors.primary,
     borderRadius: 12,

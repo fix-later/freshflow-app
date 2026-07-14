@@ -6,17 +6,19 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors } from '../../../constants/colors';
-import { Button } from '../../../components/ui/Button';
 import { type RestaurantProfileStackParamList } from '../../../navigation/types';
+import { RestaurantColors as Colors } from '../theme';
+import {
+  RestaurantText as Text,
+  RestaurantTextInput as TextInput,
+} from '../components/RestaurantText';
+import { RestaurantButton as Button } from '../components/RestaurantButton';
 import {
   restaurantApi,
   type RestaurantProfileDto,
@@ -340,7 +342,7 @@ export function RestaurantProfileScreen() {
             </View>
             {!isEditing && (
               <Pressable style={styles.editBtn} onPress={enterEdit}>
-                <Ionicons name="pencil" size={14} color={Colors.primary} />
+                <Ionicons name="pencil" size={14} color={Colors.primaryText} />
                 <Text style={styles.editBtnText}>Chỉnh sửa</Text>
               </Pressable>
             )}
@@ -349,7 +351,7 @@ export function RestaurantProfileScreen() {
           {/* ─── Success banner ─────────────────── */}
           {savedOk && (
             <View style={styles.successBanner}>
-              <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+              <Ionicons name="checkmark-circle" size={18} color={Colors.primaryText} />
               <Text style={styles.successText}>Thông tin nhà hàng đã được cập nhật.</Text>
             </View>
           )}
@@ -630,7 +632,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: Colors.primaryLight,
   },
-  editBtnText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
+  editBtnText: { fontSize: 13, fontWeight: '600', color: Colors.primaryText },
 
   // ─── Banners ─────────────────────────────────
   successBanner: {
@@ -643,7 +645,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 16,
   },
-  successText: { flex: 1, fontSize: 13, color: Colors.primary },
+  successText: { flex: 1, fontSize: 13, color: Colors.primaryText },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',

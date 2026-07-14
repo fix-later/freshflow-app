@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../../../constants/colors';
 import type { HubStackParamList } from '../../../navigation/types';
+import {
+  RestaurantText as Text,
+  RestaurantTextInput as TextInput,
+} from '../../restaurant/components/RestaurantText';
+import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
 import { HUB_BATCHES } from '../data/hubOperations';
 
 type Props = NativeStackScreenProps<HubStackParamList, 'IncidentReport'>;
@@ -42,7 +46,7 @@ export function IncidentReportScreen({ route, navigation }: Props) {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {batch && (
             <View style={styles.contextCard}>
-              <View style={styles.contextIcon}><Ionicons name="cube-outline" size={20} color={Colors.primary} /></View>
+              <View style={styles.contextIcon}><Ionicons name="cube-outline" size={20} color={Colors.primaryText} /></View>
               <View style={styles.contextCopy}><Text style={styles.contextLabel}>LÔ HÀNG LIÊN QUAN</Text><Text style={styles.contextCode}>{batch.code}</Text><Text numberOfLines={1} style={styles.contextMarket}>{batch.marketName}</Text></View>
               <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
             </View>
@@ -55,7 +59,7 @@ export function IncidentReportScreen({ route, navigation }: Props) {
               return (
                 <Pressable key={item.id} style={[styles.typeButton, active && styles.typeButtonActive]} onPress={() => setIncidentType(item.id)}>
                   <View style={[styles.radio, active && styles.radioActive]}>{active && <View style={styles.radioDot} />}</View>
-                  <Ionicons name={item.icon} size={19} color={active ? Colors.primary : Colors.textMuted} />
+                  <Ionicons name={item.icon} size={19} color={active ? Colors.primaryText : Colors.textMuted} />
                   <Text style={[styles.typeText, active && styles.typeTextActive]}>{item.label}</Text>
                 </Pressable>
               );
@@ -83,7 +87,7 @@ export function IncidentReportScreen({ route, navigation }: Props) {
             </View>
           ) : (
             <Pressable style={styles.uploadArea} onPress={pickImage}>
-              <View style={styles.uploadIcon}><Ionicons name="camera-outline" size={23} color={Colors.primary} /></View>
+              <View style={styles.uploadIcon}><Ionicons name="camera-outline" size={23} color={Colors.primaryText} /></View>
               <Text style={styles.uploadTitle}>Chụp hoặc chọn ảnh</Text>
               <Text style={styles.uploadHint}>Ảnh giúp Operations xử lý nhanh hơn</Text>
             </Pressable>
@@ -94,7 +98,7 @@ export function IncidentReportScreen({ route, navigation }: Props) {
 
         <View style={styles.footer}>
           <Pressable disabled={!canSubmit} style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]} onPress={submit}>
-            <Ionicons name="send-outline" size={18} color={Colors.onPrimary} /><Text style={styles.submitText}>Gửi báo cáo sự cố</Text>
+            <Ionicons name="send-outline" size={18} color={canSubmit ? Colors.onPrimary : Colors.textMuted} /><Text style={[styles.submitText, !canSubmit && styles.submitTextDisabled]}>Gửi báo cáo sự cố</Text>
           </Pressable>
         </View>
       </View>
@@ -103,40 +107,41 @@ export function IncidentReportScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.surfaceContainerLowest },
+  safeArea: { flex: 1, backgroundColor: Colors.surface },
   screen: { flex: 1, backgroundColor: Colors.background },
   content: { padding: 16, paddingBottom: 24 },
-  contextCard: { borderRadius: 8, borderWidth: 1, borderColor: Colors.outlineVariant, backgroundColor: Colors.surfaceContainerLowest, padding: 11, flexDirection: 'row', alignItems: 'center' },
-  contextIcon: { width: 38, height: 38, borderRadius: 8, backgroundColor: Colors.successLight, alignItems: 'center', justifyContent: 'center' },
+  contextCard: { borderRadius: 14, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, padding: 13, flexDirection: 'row', alignItems: 'center', shadowColor: Colors.deepTeal, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
+  contextIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   contextCopy: { flex: 1, minWidth: 0, paddingHorizontal: 9 },
-  contextLabel: { fontSize: 8, fontWeight: '800', color: Colors.textMuted },
-  contextCode: { fontSize: 12, fontWeight: '800', color: Colors.textPrimary, marginTop: 2 },
+  contextLabel: { fontSize: 8, fontWeight: '700', color: Colors.textMuted },
+  contextCode: { fontSize: 12, fontWeight: '700', fontFamily: RestaurantFonts.monoBold, color: Colors.deepTeal, marginTop: 2 },
   contextMarket: { fontSize: 9, color: Colors.textMuted, marginTop: 2 },
-  sectionTitle: { fontSize: 12, fontWeight: '800', color: Colors.textPrimary, marginTop: 18, marginBottom: 9 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: Colors.deepTeal, marginTop: 18, marginBottom: 9 },
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  typeButton: { width: '48%', minHeight: 50, borderRadius: 8, borderWidth: 1, borderColor: Colors.outlineVariant, backgroundColor: Colors.surfaceContainerLowest, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  typeButtonActive: { borderColor: Colors.primary, backgroundColor: Colors.successLight },
+  typeButton: { width: '48%', minHeight: 52, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 7, elevation: 1 },
+  typeButtonActive: { borderColor: Colors.primary600, backgroundColor: Colors.primaryLight },
   radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: Colors.outline, alignItems: 'center', justifyContent: 'center' },
-  radioActive: { borderColor: Colors.primary },
-  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary },
-  typeText: { flex: 1, fontSize: 9, fontWeight: '700', color: Colors.textSecondary },
-  typeTextActive: { color: Colors.primary },
+  radioActive: { borderColor: Colors.primaryText },
+  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primaryText },
+  typeText: { flex: 1, fontSize: 9, fontWeight: '600', color: Colors.textSecondary },
+  typeTextActive: { color: Colors.primaryText },
   labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  required: { fontSize: 8, fontWeight: '700', color: Colors.danger, marginTop: 10 },
+  required: { fontSize: 8, fontWeight: '600', color: Colors.danger, marginTop: 10 },
   optional: { fontSize: 8, color: Colors.textMuted, marginTop: 10 },
-  descriptionInput: { minHeight: 112, borderRadius: 8, borderWidth: 1, borderColor: Colors.outlineVariant, backgroundColor: Colors.surfaceContainerLowest, color: Colors.textPrimary, fontSize: 11, lineHeight: 17, padding: 11 },
-  characterCount: { textAlign: 'right', fontSize: 8, color: Colors.textMuted, marginTop: 4 },
-  uploadArea: { height: 106, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.primary, backgroundColor: Colors.successLight, alignItems: 'center', justifyContent: 'center' },
-  uploadIcon: { width: 36, height: 36, borderRadius: 8, backgroundColor: Colors.surfaceContainerLowest, alignItems: 'center', justifyContent: 'center' },
-  uploadTitle: { fontSize: 10, fontWeight: '800', color: Colors.primary, marginTop: 7 },
+  descriptionInput: { minHeight: 112, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, color: Colors.textPrimary, fontSize: 11, lineHeight: 17, padding: 12 },
+  characterCount: { textAlign: 'right', fontSize: 8, fontFamily: RestaurantFonts.monoRegular, color: Colors.textMuted, marginTop: 4 },
+  uploadArea: { height: 108, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.primary600, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  uploadIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
+  uploadTitle: { fontSize: 10, fontWeight: '700', color: Colors.primaryText, marginTop: 7 },
   uploadHint: { fontSize: 8, color: Colors.textMuted, marginTop: 3 },
-  imageWrap: { height: 150, borderRadius: 8, overflow: 'hidden' },
+  imageWrap: { height: 150, borderRadius: 14, overflow: 'hidden' },
   image: { width: '100%', height: '100%' },
   removeImage: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
-  notice: { borderRadius: 8, backgroundColor: '#E8F4FC', padding: 10, flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 15 },
+  notice: { borderRadius: 14, borderWidth: 1, borderColor: '#CBD5F0', backgroundColor: '#F1F3FF', padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 15 },
   noticeText: { flex: 1, fontSize: 9, lineHeight: 14, color: Colors.textSecondary },
-  footer: { borderTopWidth: 1, borderTopColor: Colors.outlineVariant, backgroundColor: Colors.surfaceContainerLowest, padding: 10 },
-  submitButton: { height: 46, borderRadius: 8, backgroundColor: Colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  submitButtonDisabled: { backgroundColor: Colors.textMuted },
-  submitText: { fontSize: 11, fontWeight: '800', color: Colors.onPrimary },
+  footer: { borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.surface, padding: 10 },
+  submitButton: { height: 46, borderRadius: 12, backgroundColor: Colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, shadowColor: Colors.deepTeal, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+  submitButtonDisabled: { backgroundColor: Colors.surfaceContainerHighest, elevation: 0, shadowOpacity: 0 },
+  submitText: { fontSize: 11, fontWeight: '700', color: Colors.onPrimary },
+  submitTextDisabled: { color: Colors.textMuted },
 });

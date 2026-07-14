@@ -5,13 +5,13 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors } from '../../restaurant/theme';
+import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
 import {
   creditApi,
   type CreditTransactionDto,
@@ -41,7 +41,7 @@ function TransactionRow({ item }: { item: CreditTransactionDto }) {
   const color = TRANSACTION_TYPE_COLOR[item.type] ?? Colors.textMuted;
   const label = TRANSACTION_TYPE_LABEL[item.type] ?? item.type;
   const sign = isDebit ? '–' : '+';
-  const amountColor = isDebit ? Colors.danger : Colors.primary;
+  const amountColor = isDebit ? Colors.danger : Colors.primaryText;
 
   return (
     <View style={styles.row}>
