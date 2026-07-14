@@ -145,7 +145,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
       try {
         const status = await restaurantApi.getApprovalStatus();
         const credit = await creditApi.getCredit(status.restaurantId);
-        const ratio = credit.creditLimit > 0 ? credit.usedCredit / credit.creditLimit : 1;
+        const ratio = credit.creditLimit > 0 ? credit.outstandingBalance / credit.creditLimit : 1;
         setCreditRatio(ratio);
         setAvailableCredit(credit.availableCredit ?? 0);
       } catch {

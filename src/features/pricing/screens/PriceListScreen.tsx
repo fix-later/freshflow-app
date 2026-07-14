@@ -1024,27 +1024,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  cartFabBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.error,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-    borderWidth: 2.5,
-    borderColor: Colors.background,
-  },
-  cartFabBadgeText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
   // ─── Product detail modal ───────────────
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.outlineVariant,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
   productDetailSheet: {
     backgroundColor: Colors.surface,
     borderTopLeftRadius: 24,
@@ -1265,7 +1257,7 @@ const styles = StyleSheet.create({
   // ─── Cart Modal ─────────────────────────
   modalOverlay: {
     flex: 1,
-    backgroundColor: Colors.background,
+    justifyContent: 'flex-end',
   },
 
   // ─── Cart Full Screen ───────────────────
