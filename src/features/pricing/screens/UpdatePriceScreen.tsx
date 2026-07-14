@@ -8,14 +8,16 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
-import { Colors } from '../../../constants/colors';
+import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
+import {
+  RestaurantText as Text,
+  RestaurantTextInput as TextInput,
+} from '../../restaurant/components/RestaurantText';
 import { inventoryApi } from '../../inventory/api/inventoryApi';
 import type { MarketProductDto } from '../../../types/api.types';
 import type { PriceHistoryEntry } from '../../inventory/api/inventoryApi';
@@ -335,7 +337,7 @@ export function UpdatePriceScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={Colors.primaryText} />
           <Text style={styles.loadingText}>Đang tải...</Text>
         </View>
       </SafeAreaView>
@@ -353,7 +355,7 @@ export function UpdatePriceScreen() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.headerIcon}>
-              <Ionicons name="pricetag" size={18} color={Colors.primary} />
+              <Ionicons name="pricetag-outline" size={18} color={Colors.primaryText} />
             </View>
             <Text style={styles.headerTitle}>Chọn chợ</Text>
           </View>
@@ -378,7 +380,7 @@ export function UpdatePriceScreen() {
                   onPress={() => setSelectedMarketId(item.marketId)}
                 >
                   <View style={styles.marketCardIcon}>
-                    <Ionicons name="storefront" size={22} color={Colors.primary} />
+                    <Ionicons name="storefront-outline" size={22} color={Colors.primaryText} />
                   </View>
                   <View style={styles.marketCardInfo}>
                     <Text style={styles.marketCardName}>{item.name}</Text>
@@ -471,12 +473,12 @@ export function UpdatePriceScreen() {
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[Colors.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[Colors.primaryText]} />
         }
       >
         {loadingProducts ? (
           <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color={Colors.primary} />
+            <ActivityIndicator size="small" color={Colors.primaryText} />
             <Text style={styles.loadingSmallText}>Đang tải sản phẩm...</Text>
           </View>
         ) : filteredProducts.length > 0 ? (
@@ -519,7 +521,12 @@ export function UpdatePriceScreen() {
                       <Text style={styles.outOfStockText}>HẾT HÀNG</Text>
                     </View>
                   ) : (
-                    <MaterialIcons name="info-outline" size={20} color={Colors.textMuted} style={{ marginLeft: 4, marginTop: 2 }} />
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={20}
+                      color={Colors.textMuted}
+                      style={{ marginLeft: 4, marginTop: 2 }}
+                    />
                   )}
                 </Pressable>
 
@@ -527,13 +534,14 @@ export function UpdatePriceScreen() {
                 <View style={styles.priceAdjustSection}>
                   <View style={styles.priceAdjustHeader}>
                     <Text style={styles.priceAdjustLabel}>Giá hiện tại</Text>
-                    <Text style={[styles.priceAdjustCurrent, outOfStock && styles.priceOutOfStock]}>
+                    <Text numeric style={[styles.priceAdjustCurrent, outOfStock && styles.priceOutOfStock]}>
                       {outOfStock ? '—' : formatPrice(product.currentPrice)}
                     </Text>
                   </View>
 
                   <View style={styles.priceInputRow}>
                     <TextInput
+                      numeric
                       style={[
                         styles.priceInput,
                         isPriceChanged && styles.priceInputChanged,
@@ -561,7 +569,7 @@ export function UpdatePriceScreen() {
                         handleQuantityChange(product.productId, product.availableQuantity);
                       }}
                     >
-                      <Ionicons name="refresh" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
+                      <Ionicons name="refresh-outline" size={13} color={Colors.primaryText} style={{ marginRight: 4 }} />
                       <Text style={styles.resetText}>Đặt lại</Text>
                     </Pressable>
                   )}
@@ -571,13 +579,14 @@ export function UpdatePriceScreen() {
                 <View style={styles.qtyAdjustSection}>
                   <View style={styles.priceAdjustHeader}>
                     <Text style={styles.priceAdjustLabel}>Số lượng hiện tại</Text>
-                    <Text style={[styles.priceAdjustCurrent, outOfStock && styles.priceOutOfStock]}>
+                    <Text numeric style={[styles.priceAdjustCurrent, outOfStock && styles.priceOutOfStock]}>
                       {outOfStock ? '—' : `${displayQuantity} ${product.unit}`}
                     </Text>
                   </View>
 
                   <View style={styles.priceInputRow}>
                     <TextInput
+                      numeric
                       style={[
                         styles.priceInput,
                         isQtyChanged && styles.priceInputChanged,
@@ -666,9 +675,9 @@ export function UpdatePriceScreen() {
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color={Colors.onPrimary} />
           ) : (
-            <Ionicons name="save" size={22} color="#FFFFFF" />
+            <Ionicons name="save-outline" size={22} color={Colors.onPrimary} />
           )}
           <Text style={styles.fabText}>
             {saving
@@ -690,7 +699,7 @@ export function UpdatePriceScreen() {
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderLeft}>
-                <Ionicons name="cube" size={20} color={Colors.primary} />
+                <Ionicons name="cube-outline" size={20} color={Colors.primaryText} />
                 <Text style={styles.modalTitle} numberOfLines={1}>
                   {detailProduct?.productName ?? ''}
                 </Text>
@@ -730,14 +739,14 @@ export function UpdatePriceScreen() {
                       <View style={styles.modalInfoGrid}>
                         <View style={styles.modalInfoItem}>
                           <Text style={styles.modalInfoLabel}>Giá hiện tại</Text>
-                          <Text style={styles.modalInfoValue}>
+                          <Text numeric style={styles.modalInfoValue}>
                             {formatPrice(detailProduct.currentPrice)}
                           </Text>
                         </View>
                         <View style={styles.modalInfoDivider} />
                         <View style={styles.modalInfoItem}>
                           <Text style={styles.modalInfoLabel}>Số lượng</Text>
-                          <Text style={styles.modalInfoValue}>
+                          <Text numeric style={styles.modalInfoValue}>
                             {detailProduct.currentQuantity} {detailProduct.unit}
                           </Text>
                         </View>
@@ -746,7 +755,7 @@ export function UpdatePriceScreen() {
                       <View style={styles.modalInfoGrid}>
                         <View style={styles.modalInfoItem}>
                           <Text style={styles.modalInfoLabel}>Kho khả dụng</Text>
-                          <Text style={[
+                          <Text numeric style={[
                             styles.modalInfoValue,
                             detailProduct.availableQuantity <= 0 && { color: Colors.danger },
                           ]}>
@@ -768,13 +777,13 @@ export function UpdatePriceScreen() {
                   {/* ─── Price History Section ─── */}
                   <View style={styles.modalSection}>
                     <View style={styles.modalSectionHeader}>
-                      <Ionicons name="time-outline" size={18} color={Colors.primary} />
+                      <Ionicons name="time-outline" size={18} color={Colors.primaryText} />
                       <Text style={styles.modalSectionTitle}>Lịch sử giá</Text>
                     </View>
 
                     {loadingHistory ? (
                       <View style={styles.modalLoading}>
-                        <ActivityIndicator size="small" color={Colors.primary} />
+                        <ActivityIndicator size="small" color={Colors.primaryText} />
                         <Text style={styles.modalLoadingText}>Đang tải lịch sử...</Text>
                       </View>
                     ) : priceHistory.length > 0 ? (
@@ -794,10 +803,10 @@ export function UpdatePriceScreen() {
                               index === priceHistory.length - 1 && styles.historyRowLast,
                             ]}
                           >
-                            <Text style={[styles.historyCol, { flex: 2, color: Colors.primary, fontWeight: '700' }]}>
+                            <Text numeric style={[styles.historyCol, { flex: 2, color: Colors.primaryText, fontWeight: '700' }]}>
                               {formatPrice(entry.price)}
                             </Text>
-                            <Text style={[styles.historyCol, { flex: 1.5 }]}>
+                            <Text numeric style={[styles.historyCol, { flex: 1.5 }]}>
                               {entry.quantity} {detailProduct.unit}
                             </Text>
                             <View style={{ flex: 2, alignItems: 'flex-end' }}>
@@ -838,7 +847,7 @@ export function UpdatePriceScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.background,
   },
   centered: {
     flex: 1,
@@ -859,9 +868,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Colors.border,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -899,14 +908,16 @@ const styles = StyleSheet.create({
   marketCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 16,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: Colors.deepTeal,
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   marketCardPressed: {
     opacity: 0.9,
@@ -937,20 +948,22 @@ const styles = StyleSheet.create({
 
   // ─── Controls (matching MarketKiosksScreen) ──────────
   controlContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     paddingTop: 14,
     paddingBottom: 10,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Colors.border,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: 999,
     paddingHorizontal: 12,
     height: 44,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   searchInput: {
     flex: 1,
@@ -968,7 +981,7 @@ const styles = StyleSheet.create({
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Colors.surfaceContainer,
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
@@ -985,7 +998,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
 
   // ─── Product List (matching MarketKiosksScreen) ──────
@@ -1005,15 +1018,17 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   productCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: Colors.deepTeal,
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   productHeader: {
     flexDirection: 'row',
@@ -1047,10 +1062,10 @@ const styles = StyleSheet.create({
   categoryTagText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   unitTag: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Colors.surfaceContainer,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -1075,13 +1090,13 @@ const styles = StyleSheet.create({
 
   // ─── Price Adjustment (inline in card) ───────────────
   priceAdjustSection: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.surfaceContainerLow,
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
   },
   qtyAdjustSection: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.surfaceContainerLow,
     borderRadius: 12,
     padding: 12,
     marginBottom: 12,
@@ -1101,14 +1116,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: Colors.textSecondary,
+    fontFamily: RestaurantFonts.monoSemibold,
   },
   priceInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.border,
     paddingHorizontal: 12,
     height: 44,
   },
@@ -1116,22 +1132,24 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.primaryText,
+    fontFamily: RestaurantFonts.monoBold,
     padding: 0,
     textAlign: 'right',
   },
   priceInputChanged: {
-    color: Colors.warning,
-    borderColor: Colors.warning,
+    color: Colors.accent,
+    borderColor: Colors.accent,
   },
   priceInputDisabled: {
     color: Colors.textMuted,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.border,
   },
   priceInputCurrency: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.primaryText,
+    fontFamily: RestaurantFonts.monoSemibold,
     marginLeft: 6,
   },
   priceOutOfStock: {
@@ -1146,7 +1164,7 @@ const styles = StyleSheet.create({
   resetText: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.primaryText,
     textDecorationLine: 'underline',
   },
 
@@ -1156,7 +1174,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: Colors.border,
     paddingTop: 12,
   },
   stockSection: {
@@ -1189,7 +1207,7 @@ const styles = StyleSheet.create({
   clearFilterText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.primaryText,
     marginTop: 4,
   },
 
@@ -1235,11 +1253,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingVertical: 16,
     borderRadius: 100,
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    shadowColor: Colors.deepTeal,
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   fabPressed: {
     opacity: 0.85,
@@ -1251,7 +1269,7 @@ const styles = StyleSheet.create({
   fabText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: Colors.onPrimary,
     marginLeft: 10,
   },
 
@@ -1262,15 +1280,15 @@ const styles = StyleSheet.create({
   // ─── Product Detail Modal ──────────────────────────────
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '88%',
-    shadowColor: '#0F172A',
+    shadowColor: Colors.deepTeal,
     shadowOpacity: 0.15,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: -8 },
@@ -1284,7 +1302,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Colors.border,
   },
   modalHeaderLeft: {
     flexDirection: 'row',
@@ -1302,7 +1320,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Colors.surfaceContainer,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 10,
@@ -1330,7 +1348,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   modalInfoCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.surfaceContainerLow,
     borderRadius: 14,
     padding: 14,
   },
@@ -1348,7 +1366,7 @@ const styles = StyleSheet.create({
   },
   modalInfoDivider: {
     width: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: Colors.border,
     marginHorizontal: 14,
     alignSelf: 'stretch',
   },
@@ -1361,7 +1379,8 @@ const styles = StyleSheet.create({
   modalInfoValue: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.primaryText,
+    fontFamily: RestaurantFonts.monoBold,
   },
   modalInfoValueSmall: {
     fontSize: 12,
@@ -1382,7 +1401,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   historyList: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.surfaceContainerLow,
     borderRadius: 14,
     overflow: 'hidden',
   },
@@ -1390,9 +1409,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Colors.surfaceContainer,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: Colors.border,
   },
   historyColHeader: {
     fontSize: 11,
@@ -1407,7 +1426,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Colors.border,
   },
   historyRowLast: {
     borderBottomWidth: 0,
@@ -1416,6 +1435,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: Colors.textPrimary,
+    fontFamily: RestaurantFonts.monoMedium,
   },
   historyBy: {
     fontSize: 11,
@@ -1436,7 +1456,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginVertical: 14,
     paddingVertical: 14,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Colors.surfaceContainer,
     borderRadius: 12,
     alignItems: 'center',
   },

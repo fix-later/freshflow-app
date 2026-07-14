@@ -1,25 +1,25 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
   ScrollView,
   Pressable,
   ActivityIndicator,
   RefreshControl,
-  Dimensions,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { Colors } from '../../../constants/colors';
 import { ScreenContainer } from '../../../components/layout/ScreenContainer';
-import { Card } from '../../../components/ui/Card';
-import { SearchBar } from '../../../components/ui/SearchBar';
+import {
+  RestaurantText as Text,
+  RestaurantTextInput as TextInput,
+} from '../../restaurant/components/RestaurantText';
+import {
+  RestaurantColors as Colors,
+  RestaurantFonts,
+} from '../../restaurant/theme';
 import { inventoryApi } from '../api/inventoryApi';
 import type { MarketProductDto } from '../../../types/api.types';
-
-const { width } = Dimensions.get('window');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -112,9 +112,15 @@ export function MarketKiosksScreen() {
   // ── Loading state ──
   if (loading) {
     return (
-      <ScreenContainer scroll={false} padding={false} safeArea={true} edges={['bottom']} bgColor="#F8FAFC">
+      <ScreenContainer
+        scroll={false}
+        padding={false}
+        safeArea={true}
+        edges={['bottom']}
+        bgColor={Colors.background}
+      >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={Colors.primaryText} />
           <Text style={styles.loadingText}>Đang tải sản phẩm...</Text>
         </View>
       </ScreenContainer>
@@ -124,11 +130,26 @@ export function MarketKiosksScreen() {
   // ── Error state ──
   if (error && products.length === 0) {
     return (
-      <ScreenContainer scroll={false} padding={false} safeArea={true} edges={['bottom']} bgColor="#F8FAFC">
+      <ScreenContainer
+        scroll={false}
+        padding={false}
+        safeArea={true}
+        edges={['bottom']}
+        bgColor={Colors.background}
+      >
         <View style={styles.loadingContainer}>
           <Ionicons name="alert-circle-outline" size={48} color={Colors.danger} />
           <Text style={styles.errorText}>{error}</Text>
-          <Pressable style={styles.retryBtn} onPress={() => { setLoading(true); fetchData().finally(() => setLoading(false)); }}>
+          <Pressable
+            style={({ pressed }) => [styles.retryBtn, pressed && styles.retryBtnPressed]}
+            onPress={() => {
+              setLoading(true);
+              fetchData().finally(() => setLoading(false));
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Thử tải lại danh sách sản phẩm"
+          >
+            <Ionicons name="refresh" size={17} color={Colors.onPrimary} />
             <Text style={styles.retryBtnText}>Thử lại</Text>
           </Pressable>
         </View>
@@ -137,23 +158,37 @@ export function MarketKiosksScreen() {
   }
 
   return (
-    <ScreenContainer scroll={false} padding={false} safeArea={true} edges={['bottom']} bgColor="#F8FAFC">
+    <ScreenContainer
+      scroll={false}
+      padding={false}
+      safeArea={true}
+      edges={['bottom']}
+      bgColor={Colors.background}
+    >
       {/* ─── SUMMARY HEADER ──────────────────────────────────── */}
       <View style={styles.summaryHeader}>
         <Text style={styles.subtitleText}>{marketName}</Text>
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statVal}>{totalProducts}</Text>
+            <Text numeric style={styles.statVal}>{totalProducts}</Text>
             <Text style={styles.statLabel}>Sản phẩm</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Text style={[styles.statVal, { color: Colors.primary }]}>{categoryCount}</Text>
+            <Text numeric style={[styles.statVal, { color: Colors.primaryText }]}>
+              {categoryCount}
+            </Text>
             <Text style={styles.statLabel}>Loại sản phẩm</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Text style={[styles.statVal, { color: lowStockCount > 0 ? Colors.warning : Colors.textPrimary }]}>
+            <Text
+              numeric
+              style={[
+                styles.statVal,
+                { color: lowStockCount > 0 ? Colors.danger : Colors.textPrimary },
+              ]}
+            >
               {lowStockCount}
             </Text>
             <Text style={styles.statLabel}>Hết hàng</Text>
@@ -163,11 +198,31 @@ export function MarketKiosksScreen() {
 
       {/* ─── SEARCH & CATEGORY FILTER ───────────────────────── */}
       <View style={styles.controlContainer}>
-        <SearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Tìm tên sản phẩm, loại..."
-        />
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={19} color={Colors.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Tìm tên sản phẩm, loại..."
+            placeholderTextColor={Colors.textSecondary}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabel="Tìm kiếm sản phẩm"
+          />
+          {searchQuery.length > 0 && (
+            <Pressable
+              onPress={() => setSearchQuery('')}
+              hitSlop={8}
+              style={styles.clearSearchButton}
+              accessibilityRole="button"
+              accessibilityLabel="Xóa nội dung tìm kiếm"
+            >
+              <Ionicons name="close-circle" size={18} color={Colors.primaryText} />
+            </Pressable>
+          )}
+        </View>
 
         <ScrollView
           horizontal
@@ -177,6 +232,8 @@ export function MarketKiosksScreen() {
           <Pressable
             style={[styles.filterChip, activeCategory === '' && styles.filterChipActive]}
             onPress={() => setActiveCategory('')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeCategory === '' }}
           >
             <Text style={[styles.filterChipText, activeCategory === '' && styles.filterChipTextActive]}>
               Tất cả ({totalProducts})
@@ -190,6 +247,8 @@ export function MarketKiosksScreen() {
                 key={cat.name}
                 style={[styles.filterChip, isActive && styles.filterChipActive]}
                 onPress={() => setActiveCategory(isActive ? '' : cat.name)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
               >
                 <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
                   {cat.name} ({cat.count})
@@ -205,7 +264,12 @@ export function MarketKiosksScreen() {
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primaryText]}
+            tintColor={Colors.primaryText}
+          />
         }
       >
         {filteredProducts.length > 0 ? (
@@ -216,6 +280,9 @@ export function MarketKiosksScreen() {
                 key={product.marketProductId}
                 onPress={() => handleProductPress(product)}
                 style={({ pressed }) => [styles.productCard, pressed && styles.productCardPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${product.productName}, ${formatPrice(product.currentPrice)}, kho ${product.availableQuantity} ${product.unit}`}
+                accessibilityHint="Mở màn hình cập nhật giá"
               >
                 <View style={styles.productHeader}>
                   <View style={styles.productTitleBlock}>
@@ -243,7 +310,7 @@ export function MarketKiosksScreen() {
                 <View style={styles.productFooter}>
                   <View>
                     <Text style={styles.priceLabel}>Giá hiện tại</Text>
-                    <Text style={[styles.priceValue, outOfStock && styles.priceOutOfStock]}>
+                    <Text numeric style={[styles.priceValue, outOfStock && styles.priceOutOfStock]}>
                       {outOfStock ? '—' : formatPrice(product.currentPrice)}
                     </Text>
                   </View>
@@ -252,15 +319,19 @@ export function MarketKiosksScreen() {
                     <Ionicons
                       name={outOfStock ? 'alert-circle' : 'cube-outline'}
                       size={16}
-                      color={outOfStock ? Colors.danger : Colors.textMuted}
+                      color={outOfStock ? Colors.danger : Colors.textSecondary}
                     />
-                    <Text style={[styles.stockText, outOfStock && styles.stockTextDanger]}>
+                    <Text
+                      numeric
+                      numberOfLines={1}
+                      style={[styles.stockText, outOfStock && styles.stockTextDanger]}
+                    >
                       Kho: {product.availableQuantity} {product.unit}
                     </Text>
                   </View>
 
                   <View style={styles.updateBtn}>
-                    <Ionicons name="create-outline" size={18} color={Colors.primary} />
+                    <Ionicons name="create-outline" size={18} color={Colors.primaryText} />
                   </View>
                 </View>
               </Pressable>
@@ -268,12 +339,18 @@ export function MarketKiosksScreen() {
           })
         ) : (
           <View style={styles.emptyContainer}>
-            <Ionicons name="basket-outline" size={48} color={Colors.textMuted} />
+            <Ionicons name="basket-outline" size={48} color={Colors.textSecondary} />
             <Text style={styles.emptyText}>
               {searchQuery || activeCategory ? 'Không tìm thấy sản phẩm phù hợp' : 'Chưa có sản phẩm nào tại chợ này'}
             </Text>
             {(searchQuery || activeCategory) && (
-              <Pressable onPress={() => { setSearchQuery(''); setActiveCategory(''); }}>
+              <Pressable
+                onPress={() => {
+                  setSearchQuery('');
+                  setActiveCategory('');
+                }}
+                accessibilityRole="button"
+              >
                 <Text style={styles.clearFilterText}>Xoá bộ lọc</Text>
               </Pressable>
             )}
@@ -296,7 +373,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
     fontWeight: '500',
   },
   errorText: {
@@ -307,26 +384,34 @@ const styles = StyleSheet.create({
     maxWidth: 280,
   },
   retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     backgroundColor: Colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
     marginTop: 8,
+    minHeight: 48,
+  },
+  retryBtnPressed: {
+    backgroundColor: Colors.primary600,
   },
   retryBtnText: {
-    color: '#FFF',
+    color: Colors.onPrimary,
     fontWeight: '700',
     fontSize: 14,
   },
 
   // ── Summary Header ──
   summaryHeader: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Colors.border,
   },
   subtitleText: {
     fontSize: 20,
@@ -338,7 +423,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.surfaceContainerLow,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -350,28 +435,51 @@ const styles = StyleSheet.create({
   statVal: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: RestaurantFonts.monoBold,
     color: Colors.textPrimary,
   },
   statLabel: {
     fontSize: 11,
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
     marginTop: 2,
     fontWeight: '500',
   },
   statDivider: {
     width: 1,
     height: 24,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: Colors.border,
   },
 
   // ── Controls ──
   controlContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     paddingTop: 14,
     paddingBottom: 10,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Colors.border,
+  },
+  searchBar: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  searchInput: {
+    flex: 1,
+    height: 44,
+    padding: 0,
+    color: Colors.textPrimary,
+    fontSize: 14,
+    fontFamily: RestaurantFonts.regular,
+  },
+  clearSearchButton: {
+    padding: 4,
   },
   filterChipsContainer: {
     flexDirection: 'row',
@@ -382,15 +490,16 @@ const styles = StyleSheet.create({
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Colors.surfaceContainerHigh,
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
     marginRight: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   filterChipActive: {
     backgroundColor: Colors.primaryLight,
-    borderWidth: 1,
     borderColor: Colors.primary,
   },
   filterChipText: {
@@ -399,7 +508,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
 
   // ── Product List ──
@@ -407,19 +516,21 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   productCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
     shadowColor: '#0F172A',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   productCardPressed: {
     opacity: 0.92,
-    transform: [{ scale: 0.98 }],
+    transform: [{ scale: 0.99 }],
   },
   productHeader: {
     flexDirection: 'row',
@@ -450,10 +561,10 @@ const styles = StyleSheet.create({
   categoryTagText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.primaryText,
   },
   unitTag: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Colors.surfaceContainerLow,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -464,7 +575,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   outOfStockBadge: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: Colors.dangerLight,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -480,32 +591,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: Colors.border,
     paddingTop: 12,
   },
   priceLabel: {
     fontSize: 11,
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
     fontWeight: '500',
   },
   priceValue: {
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.primary,
+    fontFamily: RestaurantFonts.monoBold,
+    color: Colors.primaryText,
     marginTop: 1,
   },
   priceOutOfStock: {
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
   },
   stockSection: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    flexShrink: 1,
+    paddingHorizontal: 8,
   },
   stockText: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
     fontWeight: '500',
+    fontFamily: RestaurantFonts.monoMedium,
+    flexShrink: 1,
   },
   stockTextDanger: {
     color: Colors.danger,
@@ -535,7 +651,7 @@ const styles = StyleSheet.create({
   clearFilterText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.primaryText,
     marginTop: 4,
   },
 
