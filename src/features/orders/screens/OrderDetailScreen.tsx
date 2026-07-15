@@ -19,11 +19,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RestaurantColors as Colors } from '../../restaurant/theme';
+import { Colors } from '../../../constants/colors';
 import {
-  RestaurantText as Text,
-  RestaurantTextInput as TextInput,
-} from '../../restaurant/components/RestaurantText';
+  Text,
+  TextInput,
+} from '../../../components/ui/Text';
 import { useCartStore } from '../../../store/cartStore';
 import {
   orderApi,

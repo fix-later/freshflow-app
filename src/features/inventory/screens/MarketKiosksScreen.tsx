@@ -11,13 +11,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { ScreenContainer } from '../../../components/layout/ScreenContainer';
 import {
-  RestaurantText as Text,
-  RestaurantTextInput as TextInput,
-} from '../../restaurant/components/RestaurantText';
-import {
-  RestaurantColors as Colors,
-  RestaurantFonts,
-} from '../../restaurant/theme';
+  Text,
+  TextInput,
+} from '../../../components/ui/Text';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import { inventoryApi } from '../api/inventoryApi';
 import type { MarketProductDto } from '../../../types/api.types';
 
@@ -435,7 +433,7 @@ const styles = StyleSheet.create({
   statVal: {
     fontSize: 18,
     fontWeight: '700',
-    fontFamily: RestaurantFonts.monoBold,
+    fontFamily: Fonts.monoBold,
     color: Colors.textPrimary,
   },
   statLabel: {
@@ -476,7 +474,7 @@ const styles = StyleSheet.create({
     padding: 0,
     color: Colors.textPrimary,
     fontSize: 14,
-    fontFamily: RestaurantFonts.regular,
+    fontFamily: Fonts.regular,
   },
   clearSearchButton: {
     padding: 4,
@@ -602,7 +600,7 @@ const styles = StyleSheet.create({
   priceValue: {
     fontSize: 16,
     fontWeight: '800',
-    fontFamily: RestaurantFonts.monoBold,
+    fontFamily: Fonts.monoBold,
     color: Colors.primaryText,
     marginTop: 1,
   },
@@ -620,7 +618,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     fontWeight: '500',
-    fontFamily: RestaurantFonts.monoMedium,
+    fontFamily: Fonts.monoMedium,
     flexShrink: 1,
   },
   stockTextDanger: {

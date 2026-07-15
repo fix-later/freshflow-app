@@ -10,21 +10,22 @@ import { OrderHistoryScreen } from '../features/orders/screens/OrderHistoryScree
 import { ReportIssueScreen } from '../features/orders/screens/ReportIssueScreen';
 import { CreateRecurringOrderScreen } from '../features/orders/screens/CreateRecurringOrderScreen';
 import { ManageRecurringOrdersScreen } from '../features/orders/screens/ManageRecurringOrdersScreen';
-import { RestaurantColors, RestaurantFonts } from '../features/restaurant/theme';
+import { Colors } from '../constants/colors';
+import { Fonts } from '../constants/fonts';
 import { type RestaurantOrdersStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RestaurantOrdersStackParamList>();
 
 const STACK_SCREEN_OPTIONS = {
   animation: 'slide_from_right',
-  contentStyle: { backgroundColor: RestaurantColors.background },
+  contentStyle: { backgroundColor: Colors.background },
   headerShadowVisible: false,
-  headerStyle: { backgroundColor: RestaurantColors.surface },
-  headerTintColor: RestaurantColors.deepTeal,
+  headerStyle: { backgroundColor: Colors.surface },
+  headerTintColor: Colors.deepTeal,
   headerTitleAlign: 'center',
   headerTitleStyle: {
-    color: RestaurantColors.deepTeal,
-    fontFamily: RestaurantFonts.semibold,
+    color: Colors.deepTeal,
+    fontFamily: Fonts.semibold,
     fontSize: 18,
   },
 } satisfies NativeStackNavigationOptions;

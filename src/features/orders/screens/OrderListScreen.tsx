@@ -16,11 +16,12 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { type NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RestaurantColors as Colors, RestaurantFonts } from "../../restaurant/theme";
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import {
-  RestaurantText as Text,
-  RestaurantTextInput as TextInput,
-} from "../../restaurant/components/RestaurantText";
+  Text,
+  TextInput,
+} from "../../../components/ui/Text";
 import { useAuthStore } from "../../../store/authStore";
 import { useCartStore } from "../../../store/cartStore";
 import { useFavoritesStore } from "../../../store/favoritesStore";
@@ -1858,7 +1859,7 @@ const styles = StyleSheet.create({
   },
   cardPrice: {
     fontSize: 15,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     color: Colors.onSurface,
   },
   cardUnit: {
@@ -2162,7 +2163,7 @@ const styles = StyleSheet.create({
   },
   cartScreenItemPrice: {
     fontSize: 15,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     color: Colors.onSurface,
     marginTop: 4,
   },
@@ -2255,12 +2256,12 @@ const styles = StyleSheet.create({
   },
   cartScreenSummaryTotal: {
     fontSize: 16,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     color: Colors.onSurface,
   },
   cartScreenSummaryTotalValue: {
     fontSize: 18,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     color: Colors.primaryText,
   },
   cartScreenCheckoutBar: {
@@ -2285,7 +2286,7 @@ const styles = StyleSheet.create({
   },
   cartScreenCheckoutTotal: {
     fontSize: 20,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     color: Colors.onSurface,
   },
   cartScreenCheckoutBtn: {
@@ -2395,13 +2396,13 @@ const styles = StyleSheet.create({
   },
   categoryFilterTitle: {
     fontSize: 14,
-    fontFamily: RestaurantFonts.bold,
+    fontFamily: Fonts.bold,
     color: Colors.onSurface,
   },
   categoryFilterSubtitle: {
     marginTop: 1,
     fontSize: 11,
-    fontFamily: RestaurantFonts.medium,
+    fontFamily: Fonts.medium,
     color: Colors.textMuted,
   },
   categoryToggleBtn: {
@@ -2415,7 +2416,7 @@ const styles = StyleSheet.create({
   },
   categoryToggleText: {
     fontSize: 11,
-    fontFamily: RestaurantFonts.semibold,
+    fontFamily: Fonts.semibold,
     color: Colors.primaryText,
   },
   chipRow: {
@@ -2586,7 +2587,7 @@ const styles = StyleSheet.create({
   },
   catalogListPrice: {
     fontSize: 16,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     fontWeight: '800',
     color: Colors.primaryText,
     marginTop: 1,
@@ -2727,7 +2728,7 @@ const styles = StyleSheet.create({
   productDetailPrice: {
     marginTop: 14,
     fontSize: 28,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     fontWeight: '900',
     color: Colors.primaryText,
   },
@@ -2869,7 +2870,7 @@ const styles = StyleSheet.create({
   },
   productPurchaseTotalValue: {
     fontSize: 16,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     fontWeight: '900',
     color: Colors.primaryText,
   },
@@ -2921,7 +2922,7 @@ const styles = StyleSheet.create({
   },
   productHistoryPrice: {
     fontSize: 14,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     fontWeight: '800',
     color: Colors.primaryText,
   },

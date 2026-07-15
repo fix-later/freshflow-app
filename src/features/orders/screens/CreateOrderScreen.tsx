@@ -13,11 +13,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { RestaurantColors as Colors } from '../../restaurant/theme';
+import { Colors } from '../../../constants/colors';
 import {
-  RestaurantText as Text,
-  RestaurantTextInput as TextInput,
-} from '../../restaurant/components/RestaurantText';
+  Text,
+  TextInput,
+} from '../../../components/ui/Text';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'CreateOrder'>;

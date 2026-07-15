@@ -13,11 +13,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
-import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import {
-  RestaurantText as Text,
-  RestaurantTextInput as TextInput,
-} from '../../restaurant/components/RestaurantText';
+  Text,
+  TextInput,
+} from '../../../components/ui/Text';
 import { inventoryApi } from '../../inventory/api/inventoryApi';
 import type { MarketProductDto } from '../../../types/api.types';
 import type { PriceHistoryEntry } from '../../inventory/api/inventoryApi';
@@ -1116,7 +1117,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: Colors.textSecondary,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
   },
   priceInputRow: {
     flexDirection: 'row',
@@ -1133,7 +1134,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: Colors.primaryText,
-    fontFamily: RestaurantFonts.monoBold,
+    fontFamily: Fonts.monoBold,
     padding: 0,
     textAlign: 'right',
   },
@@ -1149,7 +1150,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.primaryText,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     marginLeft: 6,
   },
   priceOutOfStock: {
@@ -1380,7 +1381,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: Colors.primaryText,
-    fontFamily: RestaurantFonts.monoBold,
+    fontFamily: Fonts.monoBold,
   },
   modalInfoValueSmall: {
     fontSize: 12,
@@ -1435,7 +1436,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: Colors.textPrimary,
-    fontFamily: RestaurantFonts.monoMedium,
+    fontFamily: Fonts.monoMedium,
   },
   historyBy: {
     fontSize: 11,

@@ -9,8 +9,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { RestaurantColors as Colors } from '../../restaurant/theme';
-import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
+import { Colors } from '../../../constants/colors';
+import { Text } from '../../../components/ui/Text';
 import { useFavoritesStore } from '../../../store/favoritesStore';
 import { useCartStore } from '../../../store/cartStore';
 

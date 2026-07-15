@@ -4,8 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
-import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
+import { Text } from '../../../components/ui/Text';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import type { HubStackParamList } from '../../../navigation/types';
 import { SORT_GROUPS } from '../data/hubOperations';
 
@@ -128,12 +129,12 @@ const styles = StyleSheet.create({
   title: { color: Colors.white, fontSize: 19, fontWeight: '800' },
   subtitle: { color: 'rgba(255,255,255,0.72)', fontSize: 10, marginTop: 4 },
   progressCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
-  progressValue: { color: Colors.white, fontSize: 13, fontWeight: '800', fontFamily: RestaurantFonts.monoBold },
+  progressValue: { color: Colors.white, fontSize: 13, fontWeight: '800', fontFamily: Fonts.monoBold },
   progressTrack: { height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.2)', marginTop: 14, overflow: 'hidden' },
   progressFill: { height: 5, borderRadius: 3, backgroundColor: Colors.primary },
   summaryRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 13, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, paddingVertical: 11, shadowColor: Colors.deepTeal, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
   summaryItem: { flex: 1, alignItems: 'center', borderRightWidth: 1, borderRightColor: Colors.surfaceContainerHigh },
-  summaryValue: { fontSize: 11, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.textPrimary, marginTop: 3 },
+  summaryValue: { fontSize: 11, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.textPrimary, marginTop: 3 },
   summaryLabel: { fontSize: 8, color: Colors.textMuted, marginTop: 2 },
   content: { padding: 16, paddingBottom: 28, gap: 10 },
   instructionStrip: { borderRadius: 12, backgroundColor: Colors.primaryLight, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 7 },
@@ -149,7 +150,7 @@ const styles = StyleSheet.create({
   restaurantName: { fontSize: 12, fontWeight: '800', color: Colors.textPrimary },
   orderMeta: { fontSize: 9, color: Colors.textMuted, marginTop: 3 },
   groupStatus: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  groupProgress: { fontSize: 9, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.textMuted },
+  groupProgress: { fontSize: 9, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.textMuted },
   groupProgressStarted: { color: '#8A5900' },
   groupProgressComplete: { color: Colors.primaryText },
   itemsList: { borderTopWidth: 1, borderTopColor: Colors.surfaceContainerHigh, paddingHorizontal: 11 },
@@ -159,7 +160,7 @@ const styles = StyleSheet.create({
   itemCopy: { flex: 1, paddingHorizontal: 9 },
   itemName: { fontSize: 10, fontWeight: '700', color: Colors.textPrimary },
   itemNameChecked: { color: Colors.textMuted, textDecorationLine: 'line-through' },
-  itemQuantity: { fontSize: 9, fontFamily: RestaurantFonts.monoMedium, color: Colors.textMuted, marginTop: 2 },
+  itemQuantity: { fontSize: 9, fontFamily: Fonts.monoMedium, color: Colors.textMuted, marginTop: 2 },
   groupFooter: { marginVertical: 9, borderRadius: 7, backgroundColor: Colors.warningLight, padding: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   groupFooterComplete: { backgroundColor: Colors.primaryLight },
   groupFooterText: { fontSize: 9, fontWeight: '700', color: '#8A5900' },

@@ -6,11 +6,11 @@ import {
   type TextProps,
   type TextStyle,
 } from 'react-native';
-import { RestaurantFonts } from '../theme';
+import { Fonts } from '../../constants/fonts';
 
 type SupportedFontWeight = '400' | '500' | '600' | '700' | '800';
 
-export type RestaurantFontWeight =
+export type BrandFontWeight =
   | SupportedFontWeight
   | 'normal'
   | 'medium'
@@ -23,31 +23,31 @@ export type RestaurantFontWeight =
   | 700
   | 800;
 
-type RestaurantTypographyProps = {
+type BrandTypographyProps = {
   /** Explicit weight override. A fontWeight in style is used when omitted. */
-  weight?: RestaurantFontWeight;
+  weight?: BrandFontWeight;
   /** Use IBM Plex Mono for prices, quantities, identifiers, and other numeric data. */
   numeric?: boolean;
 };
 
-export type RestaurantTextProps = TextProps & RestaurantTypographyProps;
-export type RestaurantTextInputProps = TextInputProps & RestaurantTypographyProps;
+export type BrandTextProps = TextProps & BrandTypographyProps;
+export type BrandTextInputProps = TextInputProps & BrandTypographyProps;
 
 const GOOGLE_SANS_BY_WEIGHT: Record<SupportedFontWeight, string> = {
-  '400': RestaurantFonts.regular,
-  '500': RestaurantFonts.medium,
-  '600': RestaurantFonts.semibold,
-  '700': RestaurantFonts.bold,
-  '800': RestaurantFonts.extrabold,
+  '400': Fonts.regular,
+  '500': Fonts.medium,
+  '600': Fonts.semibold,
+  '700': Fonts.bold,
+  '800': Fonts.extrabold,
 };
 
 const IBM_PLEX_MONO_BY_WEIGHT: Record<SupportedFontWeight, string> = {
-  '400': RestaurantFonts.monoRegular,
-  '500': RestaurantFonts.monoMedium,
-  '600': RestaurantFonts.monoSemibold,
-  '700': RestaurantFonts.monoBold,
+  '400': Fonts.monoRegular,
+  '500': Fonts.monoMedium,
+  '600': Fonts.monoSemibold,
+  '700': Fonts.monoBold,
   // IBM Plex Mono has no 800 face in the installed package; use its bold face.
-  '800': RestaurantFonts.monoBold,
+  '800': Fonts.monoBold,
 };
 
 const NAMED_WEIGHTS: Record<string, SupportedFontWeight> = {
@@ -70,7 +70,7 @@ function weightFromFontFamily(fontFamily: TextStyle['fontFamily']): SupportedFon
   return undefined;
 }
 
-function normalizeWeight(weight: RestaurantFontWeight | TextStyle['fontWeight']): SupportedFontWeight {
+function normalizeWeight(weight: BrandFontWeight | TextStyle['fontWeight']): SupportedFontWeight {
   if (weight == null) return '400';
 
   const normalized = String(weight).toLowerCase();
@@ -86,7 +86,7 @@ function normalizeWeight(weight: RestaurantFontWeight | TextStyle['fontWeight'])
 
 function resolveTypographyStyle(
   style: TextProps['style'] | TextInputProps['style'],
-  weight: RestaurantFontWeight | undefined,
+  weight: BrandFontWeight | undefined,
   numeric: boolean,
 ): TextStyle {
   const flattenedStyle = StyleSheet.flatten(style) as TextStyle | undefined;
@@ -106,20 +106,17 @@ function resolveTypographyStyle(
   };
 }
 
-export function RestaurantText({
-  style,
-  weight,
-  numeric = false,
-  ...props
-}: RestaurantTextProps) {
+export function BrandText({ style, weight, numeric = false, ...props }: BrandTextProps) {
   return <Text {...props} style={[style, resolveTypographyStyle(style, weight, numeric)]} />;
 }
 
-export function RestaurantTextInput({
+export function BrandTextInput({
   style,
   weight,
   numeric = false,
   ...props
-}: RestaurantTextInputProps) {
+}: BrandTextInputProps) {
   return <TextInput {...props} style={[style, resolveTypographyStyle(style, weight, numeric)]} />;
 }
+
+export { BrandText as Text, BrandTextInput as TextInput };

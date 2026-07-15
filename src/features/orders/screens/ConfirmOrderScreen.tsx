@@ -12,8 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { RestaurantColors as Colors } from '../../restaurant/theme';
-import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
+import { Colors } from '../../../constants/colors';
+import { Text } from '../../../components/ui/Text';
 import { orderApi } from '../api/orderApi';
 import { useCartStore } from '../../../store/cartStore';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';

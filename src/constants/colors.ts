@@ -1,68 +1,67 @@
 export const Colors = {
-  // Primary palette (Material Design 3)
-  primary: '#006b2c',
-  primaryLight: '#f7fff2',
-  primaryContainer: '#00873a',
-  onPrimary: '#ffffff',
-  onPrimaryContainer: '#f7fff2',
-  primaryFixed: '#7ffc97',
-  primaryFixedDim: '#62df7d',
-  inversePrimary: '#62df7d',
+  // Primary palette (mirrors web freshflow brand scale)
+  primary: '#50F0A3',
+  primary600: '#48D892',
+  primaryLight: '#E5FCEE',
+  primaryContainer: '#50F0A3',
+  // Deep teal keeps normal-size labels accessible on the very light mint fill.
+  onPrimary: '#083B4B',
+  onPrimaryContainer: '#2B8057',
+  primaryText: '#2B8057',
 
-  // Secondary
-  secondary: '#006399',
-  secondaryContainer: '#7bc2ff',
-  onSecondary: '#ffffff',
-  onSecondaryContainer: '#004f7b',
+  // Secondary / accent (mirrors web freshflowAccent brand scale)
+  secondary: '#313F90',
+  secondaryContainer: '#E2E4EB',
+  onSecondary: '#FFFFFF',
+  onSecondaryContainer: '#1A214D',
+  accent: '#313F90',
+  accent600: '#2C3881',
+  deepTeal: '#083B4B',
+  white: '#FFFFFF',
 
-  // Tertiary
+  // Tertiary (status accent, no web brand equivalent)
   tertiary: '#825100',
   tertiaryContainer: '#a36700',
-  onTertiary: '#ffffff',
-  onTertiaryContainer: '#fffbff',
 
   // Semantic colors
-  success: '#006b2c',
-  successLight: '#f7fff2',
+  success: '#48D892',
+  successLight: '#E5FCEE',
   warning: '#F59E0B',
   warningLight: '#FFFBEB',
-  danger: '#ba1a1a',
-  dangerLight: '#ffdad6',
-  error: '#ba1a1a',
-  errorContainer: '#ffdad6',
-  onError: '#ffffff',
-  onErrorContainer: '#93000a',
+  danger: '#DC2626',
+  dangerLight: '#FEE2E2',
+  error: '#DC2626',
+  errorContainer: '#FEE2E2',
+  onError: '#FFFFFF',
+  onErrorContainer: '#7F1D1D',
 
-  // Surfaces
-  background: '#f8f9ff',
-  surface: '#f8f9ff',
-  surfaceDim: '#d0dbed',
-  surfaceBright: '#f8f9ff',
-  surfaceVariant: '#d9e3f6',
-  surfaceContainerLowest: '#ffffff',
-  surfaceContainerLow: '#eff4ff',
-  surfaceContainer: '#e6eeff',
-  surfaceContainerHigh: '#dee9fc',
-  surfaceContainerHighest: '#d9e3f6',
-  inverseSurface: '#27313f',
-  onInverseSurface: '#eaf1ff',
-  overlay: 'rgba(0, 107, 44, 0.5)',
-
-  // Borders
-  border: '#bdcaba',
-  borderDark: '#6e7b6c',
-  outline: '#6e7b6c',
-  outlineVariant: '#bdcaba',
+  // Surfaces (mirrors web slate scale)
+  background: '#F1F5F9',
+  surface: '#FFFFFF',
+  surfaceBright: '#FFFFFF',
+  surfaceContainerLowest: '#FFFFFF',
+  surfaceContainerLow: '#F8FAFC',
+  surfaceContainer: '#F1F5F9',
+  surfaceContainerHigh: '#E2E8F0',
+  surfaceContainerHighest: '#CBD5E1',
+  surfaceVariant: '#E2E8F0',
 
   // Text
-  textPrimary: '#121c2a',
-  textSecondary: '#3e4a3d',
-  textMuted: '#6e7b6c',
-  onSurface: '#121c2a',
-  onSurfaceVariant: '#3e4a3d',
+  text: '#1E293B',
+  textPrimary: '#1E293B',
+  textSecondary: '#64748B',
+  textMuted: '#94A3B8',
+  onSurface: '#1E293B',
+  onSurfaceVariant: '#64748B',
 
-  // Accent
-  accent: '#00873a',
+  // Borders
+  border: '#E2E8F0',
+  borderDark: '#94A3B8',
+  outline: '#94A3B8',
+  outlineVariant: '#E2E8F0',
+
+  // Overlay
+  overlay: 'rgba(8, 59, 75, 0.5)',
 } as const;
 
 export type ColorKey = keyof typeof Colors;

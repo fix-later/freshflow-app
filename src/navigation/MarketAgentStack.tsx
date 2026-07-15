@@ -9,7 +9,8 @@ import { MarketKiosksScreen } from '../features/inventory/screens/MarketKiosksSc
 import { UpdatePriceScreen } from '../features/pricing/screens/UpdatePriceScreen';
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { type MarketAgentStackParamList, type MarketHomeStackParamList } from './types';
-import { RestaurantColors, RestaurantFonts } from '../features/restaurant/theme';
+import { Colors } from '../constants/colors';
+import { Fonts } from '../constants/fonts';
 
 const Tab = createBottomTabNavigator<MarketAgentStackParamList>();
 const HomeStack = createNativeStackNavigator<MarketHomeStackParamList>();
@@ -19,15 +20,15 @@ function MarketAgentHomeNavigator() {
     <HomeStack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: RestaurantColors.surface,
+          backgroundColor: Colors.surface,
         },
         headerTitleAlign: 'center',
         headerTitleStyle: {
-          fontFamily: RestaurantFonts.semibold,
+          fontFamily: Fonts.semibold,
           fontSize: 18,
-          color: RestaurantColors.deepTeal,
+          color: Colors.deepTeal,
         },
-        headerTintColor: RestaurantColors.deepTeal,
+        headerTintColor: Colors.deepTeal,
         headerShadowVisible: false,
       }}
     >
@@ -76,26 +77,26 @@ export function MarketAgentStack() {
         return {
           headerShown: true,
           headerStyle: {
-            backgroundColor: RestaurantColors.surface,
+            backgroundColor: Colors.surface,
           },
-          headerTintColor: RestaurantColors.deepTeal,
+          headerTintColor: Colors.deepTeal,
           headerTitleAlign: 'center',
           headerTitleStyle: {
-            color: RestaurantColors.deepTeal,
-            fontFamily: RestaurantFonts.semibold,
+            color: Colors.deepTeal,
+            fontFamily: Fonts.semibold,
             fontSize: 18,
           },
           headerShadowVisible: false,
           tabBarLabel: config.label,
           tabBarHideOnKeyboard: true,
-          tabBarActiveTintColor: RestaurantColors.primaryText,
-          tabBarInactiveTintColor: RestaurantColors.textSecondary,
+          tabBarActiveTintColor: Colors.primaryText,
+          tabBarInactiveTintColor: Colors.textSecondary,
           tabBarStyle: {
-            backgroundColor: RestaurantColors.surface,
-            borderTopColor: RestaurantColors.border,
+            backgroundColor: Colors.surface,
+            borderTopColor: Colors.border,
             borderTopWidth: 1,
             elevation: 2,
-            shadowColor: RestaurantColors.deepTeal,
+            shadowColor: Colors.deepTeal,
             shadowOffset: { width: 0, height: -1 },
             shadowOpacity: 0.04,
             shadowRadius: 3,
@@ -104,7 +105,7 @@ export function MarketAgentStack() {
             paddingTop: 8,
           },
           tabBarLabelStyle: {
-            fontFamily: RestaurantFonts.semibold,
+            fontFamily: Fonts.semibold,
             fontSize: 11,
             lineHeight: 14,
             marginTop: 2,
@@ -115,7 +116,7 @@ export function MarketAgentStack() {
                 width: 58,
                 height: 32,
                 borderRadius: 16,
-                backgroundColor: focused ? RestaurantColors.primaryLight : 'transparent',
+                backgroundColor: focused ? Colors.primaryLight : 'transparent',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
@@ -125,8 +126,8 @@ export function MarketAgentStack() {
                 size={focused ? size + 1 : size}
                 color={
                   focused
-                    ? RestaurantColors.primaryText
-                    : RestaurantColors.textSecondary
+                    ? Colors.primaryText
+                    : Colors.textSecondary
                 }
               />
             </View>

@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
-import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
+import { Text } from '../../../components/ui/Text';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,7 +103,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: Colors.textPrimary,
-    fontFamily: RestaurantFonts.monoBold,
+    fontFamily: Fonts.monoBold,
   },
   statLabel: {
     fontSize: 11,

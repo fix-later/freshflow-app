@@ -1,6 +1,12 @@
 export { Button } from './Button';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './Button';
 
+export { BrandButton } from './BrandButton';
+export type { BrandButtonProps, BrandButtonVariant, BrandButtonSize } from './BrandButton';
+
+export { Text, TextInput, BrandText, BrandTextInput } from './Text';
+export type { BrandTextProps, BrandTextInputProps, BrandFontWeight } from './Text';
+
 export { Card } from './Card';
 export type { CardProps } from './Card';
 

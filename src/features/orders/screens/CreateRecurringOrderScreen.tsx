@@ -17,11 +17,11 @@ import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RestaurantColors as Colors } from '../../restaurant/theme';
+import { Colors } from '../../../constants/colors';
 import {
-  RestaurantText as Text,
-  RestaurantTextInput as TextInput,
-} from '../../restaurant/components/RestaurantText';
+  Text,
+  TextInput,
+} from '../../../components/ui/Text';
 import { orderApi, type RecurrenceType } from '../api/orderApi';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 

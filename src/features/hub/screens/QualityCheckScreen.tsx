@@ -6,10 +6,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { HubStackParamList } from '../../../navigation/types';
 import {
-  RestaurantText as Text,
-  RestaurantTextInput as TextInput,
-} from '../../restaurant/components/RestaurantText';
-import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
+  Text,
+  TextInput,
+} from '../../../components/ui/Text';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import { HUB_BATCHES } from '../data/hubOperations';
 
 type Props = NativeStackScreenProps<HubStackParamList, 'QualityCheck'>;
@@ -118,9 +119,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   progressHeader: { backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: 16, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   progressCopy: { flex: 1 },
-  progressTitle: { fontSize: 13, fontWeight: '700', fontFamily: RestaurantFonts.monoBold, color: Colors.deepTeal },
+  progressTitle: { fontSize: 13, fontWeight: '700', fontFamily: Fonts.monoBold, color: Colors.deepTeal },
   progressText: { fontSize: 9, color: Colors.textMuted, marginTop: 3 },
-  progressPercent: { fontSize: 13, fontWeight: '700', fontFamily: RestaurantFonts.monoBold, color: Colors.primaryText },
+  progressPercent: { fontSize: 13, fontWeight: '700', fontFamily: Fonts.monoBold, color: Colors.primaryText },
   progressTrack: { width: '100%', height: 5, borderRadius: 3, backgroundColor: Colors.surfaceContainerHigh, marginTop: 9, overflow: 'hidden' },
   progressFill: { height: 5, borderRadius: 3, backgroundColor: Colors.primary600 },
   content: { padding: 16, paddingBottom: 24, gap: 10 },
@@ -129,10 +130,10 @@ const styles = StyleSheet.create({
   cardFailed: { borderColor: Colors.danger },
   productRow: { flexDirection: 'row', alignItems: 'center' },
   productSwatch: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  productIndex: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: RestaurantFonts.monoBold },
+  productIndex: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: Fonts.monoBold },
   productCopy: { flex: 1, paddingHorizontal: 9 },
   productName: { fontSize: 12, fontWeight: '700', color: Colors.textPrimary },
-  productMeta: { fontSize: 9, fontFamily: RestaurantFonts.monoRegular, color: Colors.textMuted, marginTop: 3 },
+  productMeta: { fontSize: 9, fontFamily: Fonts.monoRegular, color: Colors.textMuted, marginTop: 3 },
   statusControl: { flexDirection: 'row', gap: 6, marginTop: 11 },
   statusButton: { flex: 1, height: 36, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceContainerLow, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
   statusButtonText: { fontSize: 9, fontWeight: '600', color: Colors.textMuted },

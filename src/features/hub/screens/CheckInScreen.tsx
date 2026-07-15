@@ -4,8 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { HubStackParamList } from '../../../navigation/types';
-import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
-import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
+import { Text } from '../../../components/ui/Text';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import { HUB_BATCHES } from '../data/hubOperations';
 
 type Props = NativeStackScreenProps<HubStackParamList, 'CheckIn'>;
@@ -110,7 +111,7 @@ const styles = StyleSheet.create({
   batchTop: { flexDirection: 'row', alignItems: 'center' },
   batchIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   batchCopy: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
-  batchCode: { fontSize: 14, fontWeight: '700', fontFamily: RestaurantFonts.monoBold, color: Colors.deepTeal },
+  batchCode: { fontSize: 14, fontWeight: '700', fontFamily: Fonts.monoBold, color: Colors.deepTeal },
   marketName: { fontSize: 10, color: Colors.textMuted, marginTop: 3 },
   scanBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 6, backgroundColor: Colors.primaryLight },
   scanText: { fontSize: 9, fontWeight: '700', color: Colors.primaryText },
@@ -121,26 +122,26 @@ const styles = StyleSheet.create({
   headingRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 20, marginBottom: 10 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.deepTeal },
   sectionSubtitle: { fontSize: 10, color: Colors.textMuted, marginTop: 3 },
-  itemCount: { fontSize: 10, fontWeight: '600', fontFamily: RestaurantFonts.monoSemibold, color: Colors.primaryText },
+  itemCount: { fontSize: 10, fontWeight: '600', fontFamily: Fonts.monoSemibold, color: Colors.primaryText },
   productList: { gap: 10 },
   productCard: { borderRadius: 14, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, padding: 13, shadowColor: Colors.deepTeal, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   productCardShortage: { borderColor: '#D9B967', backgroundColor: Colors.warningLight },
   productTop: { flexDirection: 'row', alignItems: 'center' },
   productSwatch: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  productIndex: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: RestaurantFonts.monoBold },
+  productIndex: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: Fonts.monoBold },
   productCopy: { flex: 1, minWidth: 0, paddingHorizontal: 9 },
   productName: { fontSize: 12, fontWeight: '700', color: Colors.textPrimary },
-  expectedText: { fontSize: 9, fontFamily: RestaurantFonts.monoRegular, color: Colors.textMuted, marginTop: 3 },
+  expectedText: { fontSize: 9, fontFamily: Fonts.monoRegular, color: Colors.textMuted, marginTop: 3 },
   shortageBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 999, backgroundColor: '#FFE8B8', paddingHorizontal: 7, paddingVertical: 5 },
-  shortageText: { fontSize: 8, fontWeight: '700', fontFamily: RestaurantFonts.monoBold, color: '#8A5900' },
+  shortageText: { fontSize: 8, fontWeight: '700', fontFamily: Fonts.monoBold, color: '#8A5900' },
   quantityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   quantityLabel: { fontSize: 10, fontWeight: '600', color: Colors.textSecondary },
   stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
   stepButton: { width: 38, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primaryLight },
   quantityValueWrap: { minWidth: 70, height: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, backgroundColor: Colors.surface },
-  quantityValue: { fontSize: 14, fontWeight: '700', fontFamily: RestaurantFonts.monoBold, color: Colors.textPrimary },
+  quantityValue: { fontSize: 14, fontWeight: '700', fontFamily: Fonts.monoBold, color: Colors.textPrimary },
   quantityValueShortage: { color: '#9A5B00' },
-  quantityUnit: { fontSize: 9, fontFamily: RestaurantFonts.monoRegular, color: Colors.textMuted },
+  quantityUnit: { fontSize: 9, fontFamily: Fonts.monoRegular, color: Colors.textMuted },
   warningCard: { marginTop: 12, borderRadius: 14, borderWidth: 1, borderColor: '#D9B967', backgroundColor: Colors.warningLight, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 9, elevation: 1 },
   warningIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FFE8B8', alignItems: 'center', justifyContent: 'center' },
   warningCopy: { flex: 1 },
@@ -149,7 +150,7 @@ const styles = StyleSheet.create({
   footer: { borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.surface, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 12 },
   footerSummary: { minWidth: 82 },
   footerLabel: { fontSize: 9, color: Colors.textMuted },
-  footerValue: { fontSize: 15, fontWeight: '700', fontFamily: RestaurantFonts.monoBold, color: Colors.deepTeal, marginTop: 2 },
+  footerValue: { fontSize: 15, fontWeight: '700', fontFamily: Fonts.monoBold, color: Colors.deepTeal, marginTop: 2 },
   completeButton: { flex: 1, height: 46, borderRadius: 12, backgroundColor: Colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, shadowColor: Colors.deepTeal, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   completeButtonText: { color: Colors.onPrimary, fontSize: 11, fontWeight: '700' },
 });

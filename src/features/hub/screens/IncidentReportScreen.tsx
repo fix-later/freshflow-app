@@ -6,10 +6,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { HubStackParamList } from '../../../navigation/types';
 import {
-  RestaurantText as Text,
-  RestaurantTextInput as TextInput,
-} from '../../restaurant/components/RestaurantText';
-import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
+  Text,
+  TextInput,
+} from '../../../components/ui/Text';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import { HUB_BATCHES } from '../data/hubOperations';
 
 type Props = NativeStackScreenProps<HubStackParamList, 'IncidentReport'>;
@@ -114,7 +115,7 @@ const styles = StyleSheet.create({
   contextIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   contextCopy: { flex: 1, minWidth: 0, paddingHorizontal: 9 },
   contextLabel: { fontSize: 8, fontWeight: '700', color: Colors.textMuted },
-  contextCode: { fontSize: 12, fontWeight: '700', fontFamily: RestaurantFonts.monoBold, color: Colors.deepTeal, marginTop: 2 },
+  contextCode: { fontSize: 12, fontWeight: '700', fontFamily: Fonts.monoBold, color: Colors.deepTeal, marginTop: 2 },
   contextMarket: { fontSize: 9, color: Colors.textMuted, marginTop: 2 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: Colors.deepTeal, marginTop: 18, marginBottom: 9 },
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
   required: { fontSize: 8, fontWeight: '600', color: Colors.danger, marginTop: 10 },
   optional: { fontSize: 8, color: Colors.textMuted, marginTop: 10 },
   descriptionInput: { minHeight: 112, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, color: Colors.textPrimary, fontSize: 11, lineHeight: 17, padding: 12 },
-  characterCount: { textAlign: 'right', fontSize: 8, fontFamily: RestaurantFonts.monoRegular, color: Colors.textMuted, marginTop: 4 },
+  characterCount: { textAlign: 'right', fontSize: 8, fontFamily: Fonts.monoRegular, color: Colors.textMuted, marginTop: 4 },
   uploadArea: { height: 108, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.primary600, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   uploadIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
   uploadTitle: { fontSize: 10, fontWeight: '700', color: Colors.primaryText, marginTop: 7 },

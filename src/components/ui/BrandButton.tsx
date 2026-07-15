@@ -7,27 +7,23 @@ import {
   type ViewStyle,
 } from 'react-native';
 import type { ReactNode } from 'react';
-import { RestaurantColors, RestaurantFonts } from '../theme';
+import { Colors } from '../../constants/colors';
+import { Fonts } from '../../constants/fonts';
 
-export type RestaurantButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
-export type RestaurantButtonSize = 'sm' | 'md' | 'lg';
+export type BrandButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+export type BrandButtonSize = 'sm' | 'md' | 'lg';
 
-export interface RestaurantButtonProps extends Omit<PressableProps, 'style'> {
+export interface BrandButtonProps extends Omit<PressableProps, 'style'> {
   title: string;
-  variant?: RestaurantButtonVariant;
-  size?: RestaurantButtonSize;
+  variant?: BrandButtonVariant;
+  size?: BrandButtonSize;
   loading?: boolean;
   fullWidth?: boolean;
   icon?: ReactNode;
   style?: ViewStyle;
 }
 
-// Drop-in type aliases for callers migrating from the shared Button component.
-export type ButtonVariant = RestaurantButtonVariant;
-export type ButtonSize = RestaurantButtonSize;
-export type ButtonProps = RestaurantButtonProps;
-
-export function RestaurantButton({
+export function BrandButton({
   title,
   variant = 'primary',
   size = 'md',
@@ -37,13 +33,13 @@ export function RestaurantButton({
   icon,
   style,
   ...rest
-}: RestaurantButtonProps) {
+}: BrandButtonProps) {
   const spinnerColor =
     variant === 'danger'
-      ? RestaurantColors.onError
+      ? Colors.onError
       : variant === 'primary'
-        ? RestaurantColors.onPrimary
-        : RestaurantColors.primaryText;
+        ? Colors.onPrimary
+        : Colors.primaryText;
 
   return (
     <Pressable
@@ -83,7 +79,7 @@ export function RestaurantButton({
   );
 }
 
-export default RestaurantButton;
+export default BrandButton;
 
 const styles = StyleSheet.create({
   base: {
@@ -101,24 +97,24 @@ const styles = StyleSheet.create({
   },
 
   variant_primary: {
-    backgroundColor: RestaurantColors.primary,
-    shadowColor: RestaurantColors.deepTeal,
+    backgroundColor: Colors.primary,
+    shadowColor: Colors.deepTeal,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
     shadowRadius: 4,
     elevation: 2,
   },
   variant_secondary: {
-    backgroundColor: RestaurantColors.surface,
+    backgroundColor: Colors.surface,
     borderWidth: 1.5,
-    borderColor: RestaurantColors.primary600,
+    borderColor: Colors.primary600,
   },
   variant_ghost: {
     backgroundColor: 'transparent',
   },
   variant_danger: {
-    backgroundColor: RestaurantColors.danger,
-    shadowColor: RestaurantColors.danger,
+    backgroundColor: Colors.danger,
+    shadowColor: Colors.danger,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -126,17 +122,17 @@ const styles = StyleSheet.create({
   },
 
   pressed_primary: {
-    backgroundColor: RestaurantColors.primary600,
+    backgroundColor: Colors.primary600,
     elevation: 1,
   },
   pressed_secondary: {
-    backgroundColor: RestaurantColors.primaryLight,
+    backgroundColor: Colors.primaryLight,
   },
   pressed_ghost: {
-    backgroundColor: RestaurantColors.primaryLight,
+    backgroundColor: Colors.primaryLight,
   },
   pressed_danger: {
-    backgroundColor: RestaurantColors.onErrorContainer,
+    backgroundColor: Colors.onErrorContainer,
     elevation: 1,
   },
 
@@ -155,20 +151,20 @@ const styles = StyleSheet.create({
   },
 
   text: {
-    fontFamily: RestaurantFonts.semibold,
+    fontFamily: Fonts.semibold,
     fontWeight: 'normal',
   },
   text_primary: {
-    color: RestaurantColors.onPrimary,
+    color: Colors.onPrimary,
   },
   text_secondary: {
-    color: RestaurantColors.primaryText,
+    color: Colors.primaryText,
   },
   text_ghost: {
-    color: RestaurantColors.primaryText,
+    color: Colors.primaryText,
   },
   text_danger: {
-    color: RestaurantColors.onError,
+    color: Colors.onError,
   },
   textSize_sm: {
     fontSize: 14,

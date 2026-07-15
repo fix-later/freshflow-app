@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
-import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
+import { Text } from '../../../components/ui/Text';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import {
   MARKET_DISPATCHES,
   MARKET_DRIVERS,
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
   summarySub: { color: 'rgba(255,255,255,0.76)', fontSize: 11, lineHeight: 16, marginTop: 4 },
   summaryRow: { flexDirection: 'row', marginTop: 18, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.18)', paddingTop: 13 },
   summaryItem: { flex: 1, minWidth: 0, alignItems: 'center' },
-  summaryValue: { color: Colors.white, fontSize: 14, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, maxWidth: '100%' },
+  summaryValue: { color: Colors.white, fontSize: 14, fontWeight: '800', fontFamily: Fonts.monoBold, maxWidth: '100%' },
   summaryLabel: { color: 'rgba(255,255,255,0.68)', fontSize: 8, marginTop: 3 },
   notice: { marginHorizontal: 16, marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: Colors.primaryLight, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
   noticeText: { flex: 1, color: Colors.textSecondary, fontSize: 10, lineHeight: 15 },
@@ -275,7 +276,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
   sectionSub: { fontSize: 10, color: Colors.textMuted, marginTop: 3 },
   assignedBadge: { minWidth: 38, height: 30, borderRadius: 999, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
-  assignedBadgeText: { color: Colors.primaryText, fontSize: 11, fontWeight: '800', fontFamily: RestaurantFonts.monoBold },
+  assignedBadgeText: { color: Colors.primaryText, fontSize: 11, fontWeight: '800', fontFamily: Fonts.monoBold },
   dispatchList: { marginHorizontal: 16, gap: 10 },
   dispatchCard: { borderWidth: 1, borderColor: Colors.border, borderRadius: 14, backgroundColor: Colors.surface, padding: 14, shadowColor: Colors.deepTeal, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
   cardHeader: { flexDirection: 'row', alignItems: 'center' },
@@ -287,7 +288,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 8, fontWeight: '800' },
   demandRow: { flexDirection: 'row', marginTop: 13, paddingVertical: 11, borderTopWidth: 1, borderBottomWidth: 1, borderColor: Colors.outlineVariant },
   demandItem: { flex: 1, minWidth: 0, alignItems: 'center' },
-  demandValue: { color: Colors.textPrimary, fontSize: 11, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, marginTop: 4 },
+  demandValue: { color: Colors.textPrimary, fontSize: 11, fontWeight: '800', fontFamily: Fonts.monoBold, marginTop: 4 },
   demandLabel: { color: Colors.textMuted, fontSize: 8, marginTop: 2 },
   assignmentSection: { paddingTop: 4 },
   assignmentRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center' },
@@ -300,13 +301,13 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: Colors.outlineVariant, marginLeft: 39 },
   loadHeader: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   loadLabel: { fontSize: 9, color: Colors.textMuted },
-  loadValue: { fontSize: 10, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.primaryText },
+  loadValue: { fontSize: 10, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.primaryText },
   loadTrack: { height: 5, borderRadius: 3, backgroundColor: Colors.surfaceContainerHigh, overflow: 'hidden', marginTop: 6 },
   loadFill: { height: 5, borderRadius: 3, backgroundColor: Colors.primary },
   footer: { minHeight: 70, paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.surface, flexDirection: 'row', alignItems: 'center', gap: 12 },
   footerCopy: { flexShrink: 0 },
   footerLabel: { fontSize: 8, color: Colors.textMuted },
-  footerValue: { fontSize: 15, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.textPrimary, marginTop: 2 },
+  footerValue: { fontSize: 15, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.textPrimary, marginTop: 2 },
   confirmButton: { flex: 1, minWidth: 0, height: 48, borderRadius: 12, backgroundColor: Colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, shadowColor: Colors.deepTeal, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   confirmButtonText: { color: Colors.onPrimary, fontSize: 11, fontWeight: '800' },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },

@@ -12,8 +12,9 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../../../store/authStore';
 import { ScreenContainer } from '../../../components/layout/ScreenContainer';
 import { Card } from '../../../components/ui/Card';
-import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
-import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
+import { Text } from '../../../components/ui/Text';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import { inventoryApi, type AssignedMarketDto } from '../api/inventoryApi';
 import type { MarketProductDto } from '../../../types/api.types';
 
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
   },
   ecoStatVal: {
     fontSize: 22,
-    fontFamily: RestaurantFonts.monoBold,
+    fontFamily: Fonts.monoBold,
     color: Colors.white,
   },
   ecoStatLabel: {
@@ -482,7 +483,7 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontSize: 15,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     color: Colors.textPrimary,
   },
   metricLabelText: {
@@ -653,12 +654,12 @@ const styles = StyleSheet.create({
   },
   watchlistPriceText: {
     fontSize: 14,
-    fontFamily: RestaurantFonts.monoSemibold,
+    fontFamily: Fonts.monoSemibold,
     color: Colors.primaryText,
   },
   watchlistQtyText: {
     fontSize: 11,
-    fontFamily: RestaurantFonts.monoRegular,
+    fontFamily: Fonts.monoRegular,
     color: Colors.textMuted,
     marginTop: 2,
   },

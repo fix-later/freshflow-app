@@ -3,8 +3,9 @@ import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
-import { RestaurantColors as Colors, RestaurantFonts } from '../../restaurant/theme';
+import { Text } from '../../../components/ui/Text';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import type { HubStackParamList } from '../../../navigation/types';
 import { HANDOFF_PACKAGES } from '../data/hubOperations';
 
@@ -91,13 +92,13 @@ const styles = StyleSheet.create({
   routeCard: { borderRadius: 16, backgroundColor: Colors.deepTeal, padding: 16 },
   routeTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   routeLabel: { fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.7)' },
-  routeCode: { fontSize: 18, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.white, marginTop: 3 },
+  routeCode: { fontSize: 18, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.white, marginTop: 3 },
   routeZone: { fontSize: 10, color: 'rgba(255,255,255,0.72)', marginTop: 3 },
   readyBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, backgroundColor: Colors.primary },
   readyText: { fontSize: 8, fontWeight: '800', color: Colors.onPrimary },
   routeStats: { flexDirection: 'row', marginTop: 14, paddingTop: 11, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.18)' },
   stat: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 12, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.white },
+  statValue: { fontSize: 12, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.white },
   statLabel: { fontSize: 8, color: 'rgba(255,255,255,0.66)', marginTop: 2 },
   sectionTitle: { fontSize: 13, fontWeight: '800', color: Colors.textPrimary, marginTop: 19, marginBottom: 9 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, marginBottom: 9 },
@@ -117,9 +118,9 @@ const styles = StyleSheet.create({
   checkbox: { width: 25, height: 25, borderRadius: 6, borderWidth: 1, borderColor: Colors.outline, alignItems: 'center', justifyContent: 'center' },
   checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   packageCopy: { flex: 1, paddingHorizontal: 9 },
-  packageCode: { fontSize: 11, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.textPrimary },
+  packageCode: { fontSize: 11, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.textPrimary },
   packageRestaurant: { fontSize: 9, color: Colors.textMuted, marginTop: 3 },
-  packageCount: { fontSize: 10, fontWeight: '700', fontFamily: RestaurantFonts.monoSemibold, color: Colors.textSecondary },
+  packageCount: { fontSize: 10, fontWeight: '700', fontFamily: Fonts.monoSemibold, color: Colors.textSecondary },
   signaturePad: { height: 126, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.primary600, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   signaturePadSigned: { borderStyle: 'solid', backgroundColor: Colors.surface },
   signatureTitle: { fontSize: 11, fontWeight: '800', color: Colors.primaryText, marginTop: 7 },
