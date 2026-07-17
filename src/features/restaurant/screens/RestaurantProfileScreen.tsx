@@ -13,12 +13,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { type RestaurantProfileStackParamList } from '../../../navigation/types';
-import { RestaurantColors as Colors } from '../theme';
+import { Colors } from '../../../constants/colors';
 import {
-  RestaurantText as Text,
-  RestaurantTextInput as TextInput,
-} from '../components/RestaurantText';
-import { RestaurantButton as Button } from '../components/RestaurantButton';
+  Text,
+  TextInput,
+} from '../../../components/ui/Text';
+import { BrandButton as Button } from '../../../components/ui/BrandButton';
 import {
   restaurantApi,
   type RestaurantProfileDto,

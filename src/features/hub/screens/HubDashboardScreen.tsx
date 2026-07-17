@@ -5,11 +5,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { HubStackParamList } from '../../../navigation/types';
 import { useAuth } from '../../auth';
-import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
-import {
-  RestaurantColors as Colors,
-  RestaurantFonts,
-} from '../../restaurant/theme';
+import { Text } from '../../../components/ui/Text';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import { HUB_BATCHES, MARKET_DISPATCHES } from '../data/hubOperations';
 
 type Navigation = NativeStackNavigationProp<HubStackParamList>;
@@ -209,7 +207,7 @@ const styles = StyleSheet.create({
   shiftIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
   shiftCopy: { flex: 1, paddingHorizontal: 9 },
   shiftLabel: { color: Colors.white, fontSize: 10, fontWeight: '800' },
-  shiftNumeric: { fontFamily: RestaurantFonts.monoSemibold },
+  shiftNumeric: { fontFamily: Fonts.monoSemibold },
   shiftText: { color: 'rgba(255,255,255,0.7)', fontSize: 9, marginTop: 3 },
   onlineBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary },
@@ -217,19 +215,19 @@ const styles = StyleSheet.create({
   metricsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginTop: 16 },
   metricCard: { flex: 1, minWidth: 0, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, padding: 11, ...CARD_SHADOW },
   metricIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  metricValue: { fontSize: 19, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.textPrimary, marginTop: 8 },
+  metricValue: { fontSize: 19, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.textPrimary, marginTop: 8 },
   metricLabel: { fontSize: 9, color: Colors.textMuted, marginTop: 2 },
   sectionHeading: { marginHorizontal: 16, marginTop: 21, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
   sectionSubtitle: { fontSize: 10, color: Colors.textMuted, marginTop: 3 },
-  progressPercent: { fontSize: 13, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.primaryText },
+  progressPercent: { fontSize: 13, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.primaryText },
   workflowCard: { marginHorizontal: 16, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, padding: 14, gap: 13, ...CARD_SHADOW },
   workflowRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   workflowIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   workflowBody: { flex: 1 },
   workflowLabels: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   workflowLabel: { fontSize: 11, fontWeight: '700', color: Colors.textPrimary },
-  workflowValue: { fontSize: 10, fontFamily: RestaurantFonts.monoMedium, color: Colors.textMuted },
+  workflowValue: { fontSize: 10, fontFamily: Fonts.monoMedium, color: Colors.textMuted },
   progressTrack: { height: 4, borderRadius: 2, backgroundColor: Colors.surfaceContainerHigh, overflow: 'hidden' },
   progressFill: { height: 4, borderRadius: 2 },
   seeAll: { fontSize: 11, fontWeight: '700', color: Colors.primaryText },
@@ -239,20 +237,20 @@ const styles = StyleSheet.create({
   marketPlanIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   marketPlanCopy: { flex: 1, minWidth: 0, paddingHorizontal: 9 },
   marketPlanName: { fontSize: 11, fontWeight: '800', color: Colors.textPrimary },
-  marketPlanMeta: { fontSize: 8, fontFamily: RestaurantFonts.monoRegular, color: Colors.textMuted, marginTop: 3 },
+  marketPlanMeta: { fontSize: 8, fontFamily: Fonts.monoRegular, color: Colors.textMuted, marginTop: 3 },
   marketPlanVehicle: { width: 86, minWidth: 0, alignItems: 'flex-end', paddingRight: 5 },
-  marketPlanPlate: { fontSize: 9, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.textPrimary },
+  marketPlanPlate: { fontSize: 9, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.textPrimary },
   marketPlanDriver: { maxWidth: '100%', fontSize: 8, color: Colors.textMuted, marginTop: 3 },
   batchList: { marginHorizontal: 16, gap: 9 },
   batchCard: { minHeight: 72, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, padding: 12, flexDirection: 'row', alignItems: 'center', ...CARD_SHADOW },
   batchIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   batchCopy: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
   batchTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
-  batchCode: { fontSize: 12, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.textPrimary },
+  batchCode: { fontSize: 12, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.textPrimary },
   statusBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
   statusText: { fontSize: 8, fontWeight: '800' },
   marketName: { fontSize: 10, color: Colors.textSecondary, marginTop: 3 },
-  batchMeta: { fontSize: 9, fontFamily: RestaurantFonts.monoRegular, color: Colors.textMuted, marginTop: 3 },
+  batchMeta: { fontSize: 9, fontFamily: Fonts.monoRegular, color: Colors.textMuted, marginTop: 3 },
   quickActions: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 16 },
   primaryAction: { flex: 1, height: 46, borderRadius: 12, backgroundColor: Colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, ...CARD_SHADOW },
   primaryActionText: { color: Colors.onPrimary, fontSize: 11, fontWeight: '800' },

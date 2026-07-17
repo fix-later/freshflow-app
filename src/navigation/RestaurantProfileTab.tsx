@@ -5,7 +5,8 @@ import {
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { RestaurantProfileScreen } from '../features/restaurant/screens/RestaurantProfileScreen';
 import { DeliveryAddressesScreen } from '../features/restaurant/screens/DeliveryAddressesScreen';
-import { RestaurantColors, RestaurantFonts } from '../features/restaurant/theme';
+import { Colors } from '../constants/colors';
+import { Fonts } from '../constants/fonts';
 import { CreditOverviewScreen } from '../features/credit/screens/CreditOverviewScreen';
 import { CreditTransactionsScreen } from '../features/credit/screens/CreditTransactionsScreen';
 import { CreditStatementsScreen } from '../features/credit/screens/CreditStatementsScreen';
@@ -15,14 +16,14 @@ const Stack = createNativeStackNavigator<RestaurantProfileStackParamList>();
 
 const STACK_SCREEN_OPTIONS = {
   animation: 'slide_from_right',
-  contentStyle: { backgroundColor: RestaurantColors.background },
+  contentStyle: { backgroundColor: Colors.background },
   headerShadowVisible: false,
-  headerStyle: { backgroundColor: RestaurantColors.surface },
-  headerTintColor: RestaurantColors.deepTeal,
+  headerStyle: { backgroundColor: Colors.surface },
+  headerTintColor: Colors.deepTeal,
   headerTitleAlign: 'center',
   headerTitleStyle: {
-    color: RestaurantColors.deepTeal,
-    fontFamily: RestaurantFonts.semibold,
+    color: Colors.deepTeal,
+    fontFamily: Fonts.semibold,
     fontSize: 18,
   },
 } satisfies NativeStackNavigationOptions;

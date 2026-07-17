@@ -4,11 +4,9 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { HubStackParamList } from '../../../navigation/types';
-import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
-import {
-  RestaurantColors as Colors,
-  RestaurantFonts,
-} from '../../restaurant/theme';
+import { Text } from '../../../components/ui/Text';
+import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import { HUB_BATCHES } from '../data/hubOperations';
 
 type Navigation = NativeStackNavigationProp<HubStackParamList>;
@@ -102,7 +100,7 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingBottom: 28, gap: 11 },
   card: { borderRadius: 14, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, padding: 14, ...CARD_SHADOW },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
-  code: { fontSize: 14, fontWeight: '800', fontFamily: RestaurantFonts.monoBold, color: Colors.textPrimary },
+  code: { fontSize: 14, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.textPrimary },
   market: { fontSize: 10, color: Colors.textMuted, marginTop: 3 },
   statusBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
   statusText: { fontSize: 8, fontWeight: '800' },
@@ -112,9 +110,9 @@ const styles = StyleSheet.create({
   infoCopy: { flex: 1, minWidth: 0 },
   infoLabel: { fontSize: 8, color: Colors.textMuted },
   infoValue: { fontSize: 10, fontWeight: '700', color: Colors.textPrimary, marginTop: 2 },
-  infoValueNumeric: { fontFamily: RestaurantFonts.monoSemibold },
+  infoValueNumeric: { fontFamily: Fonts.monoSemibold },
   cardFooter: { borderTopWidth: 1, borderTopColor: Colors.surfaceContainerHigh, marginTop: 13, paddingTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  productCount: { fontSize: 9, fontFamily: RestaurantFonts.monoRegular, color: Colors.textMuted },
+  productCount: { fontSize: 9, fontFamily: Fonts.monoRegular, color: Colors.textMuted },
   openAction: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   openActionText: { fontSize: 10, fontWeight: '800', color: Colors.primaryText },
 });

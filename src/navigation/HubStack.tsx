@@ -13,7 +13,8 @@ import { DriverHandoffScreen } from '../features/hub/screens/DriverHandoffScreen
 import { IncidentReportScreen } from '../features/hub/screens/IncidentReportScreen';
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { type HubStackParamList, type HubTabParamList } from './types';
-import { RestaurantColors, RestaurantFonts } from '../features/restaurant/theme';
+import { Colors } from '../constants/colors';
+import { Fonts } from '../constants/fonts';
 
 const Tab = createBottomTabNavigator<HubTabParamList>();
 const Stack = createNativeStackNavigator<HubStackParamList>();
@@ -52,26 +53,26 @@ function HubTabs() {
         return {
           headerShown: false,
           headerStyle: {
-            backgroundColor: RestaurantColors.surface,
+            backgroundColor: Colors.surface,
           },
-          headerTintColor: RestaurantColors.deepTeal,
+          headerTintColor: Colors.deepTeal,
           headerTitleAlign: 'center',
           headerTitleStyle: {
-            color: RestaurantColors.deepTeal,
-            fontFamily: RestaurantFonts.semibold,
+            color: Colors.deepTeal,
+            fontFamily: Fonts.semibold,
             fontSize: 18,
           },
           headerShadowVisible: false,
           tabBarLabel: config.label,
           tabBarHideOnKeyboard: true,
-          tabBarActiveTintColor: RestaurantColors.primaryText,
-          tabBarInactiveTintColor: RestaurantColors.textSecondary,
+          tabBarActiveTintColor: Colors.primaryText,
+          tabBarInactiveTintColor: Colors.textSecondary,
           tabBarStyle: {
-            backgroundColor: RestaurantColors.surface,
-            borderTopColor: RestaurantColors.border,
+            backgroundColor: Colors.surface,
+            borderTopColor: Colors.border,
             borderTopWidth: 1,
             elevation: 2,
-            shadowColor: RestaurantColors.deepTeal,
+            shadowColor: Colors.deepTeal,
             shadowOffset: { width: 0, height: -1 },
             shadowOpacity: 0.04,
             shadowRadius: 3,
@@ -80,7 +81,7 @@ function HubTabs() {
             paddingTop: 8,
           },
           tabBarLabelStyle: {
-            fontFamily: RestaurantFonts.semibold,
+            fontFamily: Fonts.semibold,
             fontSize: 11,
             lineHeight: 14,
             marginTop: 2,
@@ -91,7 +92,7 @@ function HubTabs() {
                 width: 58,
                 height: 32,
                 borderRadius: 16,
-                backgroundColor: focused ? RestaurantColors.primaryLight : 'transparent',
+                backgroundColor: focused ? Colors.primaryLight : 'transparent',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
@@ -101,8 +102,8 @@ function HubTabs() {
                 size={focused ? size + 1 : size}
                 color={
                   focused
-                    ? RestaurantColors.primaryText
-                    : RestaurantColors.textSecondary
+                    ? Colors.primaryText
+                    : Colors.textSecondary
                 }
               />
             </View>
@@ -122,16 +123,16 @@ export function HubStack() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: RestaurantColors.surface },
-        headerTintColor: RestaurantColors.deepTeal,
+        headerStyle: { backgroundColor: Colors.surface },
+        headerTintColor: Colors.deepTeal,
         headerTitleAlign: 'center',
         headerTitleStyle: {
-          color: RestaurantColors.deepTeal,
-          fontFamily: RestaurantFonts.semibold,
+          color: Colors.deepTeal,
+          fontFamily: Fonts.semibold,
           fontSize: 18,
         },
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: RestaurantColors.background },
+        contentStyle: { backgroundColor: Colors.background },
       }}
     >
       <Stack.Screen name="HubTabs" component={HubTabs} options={{ headerShown: false }} />

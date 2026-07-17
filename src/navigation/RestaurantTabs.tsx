@@ -7,7 +7,8 @@ import { TrackOrderScreen } from '../features/delivery/screens/TrackOrderScreen'
 import { RestaurantProfileTab } from './RestaurantProfileTab';
 import { RestaurantOrdersTab } from './RestaurantOrdersTab';
 import { FavoritesScreen } from '../features/orders/screens/FavoritesScreen';
-import { RestaurantColors, RestaurantFonts } from '../features/restaurant/theme';
+import { Colors } from '../constants/colors';
+import { Fonts } from '../constants/fonts';
 import { type RestaurantTabParamList } from './types';
 
 const Tab = createBottomTabNavigator<RestaurantTabParamList>();
@@ -45,24 +46,24 @@ export function RestaurantTabs() {
         return {
           headerShown: true,
           headerStyle: {
-            backgroundColor: RestaurantColors.surface,
+            backgroundColor: Colors.surface,
           },
-          headerTintColor: RestaurantColors.deepTeal,
+          headerTintColor: Colors.deepTeal,
           headerTitleAlign: 'center',
           headerTitleStyle: {
-            color: RestaurantColors.deepTeal,
-            fontFamily: RestaurantFonts.semibold,
+            color: Colors.deepTeal,
+            fontFamily: Fonts.semibold,
             fontSize: 18,
           },
           headerShadowVisible: false,
           tabBarLabel: config?.label,
           tabBarHideOnKeyboard: true,
           tabBarStyle: {
-            backgroundColor: RestaurantColors.surface,
-            borderTopColor: RestaurantColors.border,
+            backgroundColor: Colors.surface,
+            borderTopColor: Colors.border,
             borderTopWidth: 1,
             elevation: 2,
-            shadowColor: RestaurantColors.deepTeal,
+            shadowColor: Colors.deepTeal,
             shadowOffset: { width: 0, height: -1 },
             shadowOpacity: 0.04,
             shadowRadius: 3,
@@ -71,13 +72,13 @@ export function RestaurantTabs() {
             paddingTop: 8,
           },
           tabBarLabelStyle: {
-            fontFamily: RestaurantFonts.semibold,
+            fontFamily: Fonts.semibold,
             fontSize: 11,
             lineHeight: 14,
             marginTop: 2,
           },
-          tabBarActiveTintColor: RestaurantColors.primaryText,
-          tabBarInactiveTintColor: RestaurantColors.textSecondary,
+          tabBarActiveTintColor: Colors.primaryText,
+          tabBarInactiveTintColor: Colors.textSecondary,
           tabBarIcon: ({ focused, size }) => {
             return (
               <View
@@ -85,7 +86,7 @@ export function RestaurantTabs() {
                   width: 58,
                   height: 32,
                   borderRadius: 16,
-                  backgroundColor: focused ? RestaurantColors.primaryLight : 'transparent',
+                  backgroundColor: focused ? Colors.primaryLight : 'transparent',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
@@ -95,8 +96,8 @@ export function RestaurantTabs() {
                   size={focused ? size + 1 : size}
                   color={
                     focused
-                      ? RestaurantColors.primaryText
-                      : RestaurantColors.textSecondary
+                      ? Colors.primaryText
+                      : Colors.textSecondary
                   }
                 />
               </View>

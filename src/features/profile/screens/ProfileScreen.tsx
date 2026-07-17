@@ -18,12 +18,11 @@ import { Colors } from '../../../constants/colors';
 import { UserRole } from '../../../constants/roles';
 import { useAuthStore } from '../../../store/authStore';
 import { Button } from '../../../components/ui/Button';
-import { RestaurantButton } from '../../restaurant/components/RestaurantButton';
+import { BrandButton } from '../../../components/ui/BrandButton';
 import {
-  RestaurantText as Text,
-  RestaurantTextInput as TextInput,
-} from '../../restaurant/components/RestaurantText';
-import { RestaurantColors } from '../../restaurant/theme';
+  Text,
+  TextInput,
+} from '../../../components/ui/Text';
 import { profileApi } from '../api/profileApi';
 import { uploadImageToCloudinary } from '../../../services/cloudinaryUpload';
 
@@ -37,9 +36,9 @@ const ROLE_LABEL: Record<UserRole, string> = {
 };
 
 const ROLE_COLOR: Record<UserRole, string> = {
-  [UserRole.RESTAURANT]: RestaurantColors.primaryText,
-  [UserRole.MARKET_AGENT]: RestaurantColors.primaryText,
-  [UserRole.HUB_STAFF]: RestaurantColors.primaryText,
+  [UserRole.RESTAURANT]: Colors.primaryText,
+  [UserRole.MARKET_AGENT]: Colors.primaryText,
+  [UserRole.HUB_STAFF]: Colors.primaryText,
   [UserRole.DRIVER]: '#5c4033',
 };
 
@@ -281,12 +280,12 @@ export function ProfileScreen() {
   const isRestaurant = user.role === UserRole.RESTAURANT;
   const isBrandedRole =
     isRestaurant || user.role === UserRole.MARKET_AGENT || user.role === UserRole.HUB_STAFF;
-  const ActionButton = isBrandedRole ? RestaurantButton : Button;
+  const ActionButton = isBrandedRole ? BrandButton : Button;
   const displayAvatarUri = isEditing ? editAvatarUri ?? user.avatarUrl : user.avatarUrl;
 
   return (
     <SafeAreaView
-      style={[styles.safe, isBrandedRole && { backgroundColor: RestaurantColors.background }]}
+      style={[styles.safe, isBrandedRole && { backgroundColor: Colors.background }]}
       edges={['bottom']}
     >
       <KeyboardAvoidingView
@@ -361,7 +360,7 @@ export function ProfileScreen() {
                   <Ionicons
                     name="pencil-outline"
                     size={14}
-                    color={isBrandedRole ? RestaurantColors.primaryText : Colors.primary}
+                    color={isBrandedRole ? Colors.primaryText : Colors.primary}
                   />
                   <Text
                     style={[styles.editBtnText, isBrandedRole && styles.restaurantEditBtnText]}
@@ -468,7 +467,7 @@ export function ProfileScreen() {
                   <Ionicons
                     name="business-outline"
                     size={18}
-                    color={RestaurantColors.primaryText}
+                    color={Colors.primaryText}
                   />
                   <Text style={styles.changePwTitle}>Thông tin nhà hàng</Text>
                 </View>
@@ -487,7 +486,7 @@ export function ProfileScreen() {
                   <Ionicons
                     name="card-outline"
                     size={18}
-                    color={RestaurantColors.primaryText}
+                    color={Colors.primaryText}
                   />
                   <Text style={styles.changePwTitle}>Tín dụng & Thanh toán</Text>
                 </View>
@@ -519,7 +518,7 @@ export function ProfileScreen() {
                     <Ionicons
                       name="checkmark-circle-outline"
                       size={40}
-                      color={isBrandedRole ? RestaurantColors.primaryText : Colors.primary}
+                      color={isBrandedRole ? Colors.primaryText : Colors.primary}
                     />
                     <Text style={styles.successTitle}>Đổi mật khẩu thành công!</Text>
                     <Text style={styles.successDesc}>Mật khẩu của bạn đã được cập nhật.</Text>
@@ -720,11 +719,11 @@ const styles = StyleSheet.create({
   },
   editBtnText: { fontSize: 12, fontWeight: '600', color: Colors.primary },
   restaurantEditBtn: {
-    backgroundColor: RestaurantColors.primaryLight,
+    backgroundColor: Colors.primaryLight,
     borderWidth: 1,
-    borderColor: RestaurantColors.primary,
+    borderColor: Colors.primary,
   },
-  restaurantEditBtnText: { color: RestaurantColors.primaryText },
+  restaurantEditBtnText: { color: Colors.primaryText },
   cancelBtn: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -747,10 +746,10 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   restaurantCard: {
-    backgroundColor: RestaurantColors.surface,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: RestaurantColors.border,
-    shadowColor: RestaurantColors.deepTeal,
+    borderColor: Colors.border,
+    shadowColor: Colors.deepTeal,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.02,
     shadowRadius: 4,

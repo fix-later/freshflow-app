@@ -11,8 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RestaurantColors as Colors } from '../../restaurant/theme';
-import { RestaurantText as Text } from '../../restaurant/components/RestaurantText';
+import { Colors } from '../../../constants/colors';
+import { Text } from '../../../components/ui/Text';
 import { creditApi, type CreditStatementDto } from '../api/creditApi';
 import { type RestaurantProfileStackParamList } from '../../../navigation/types';
 
