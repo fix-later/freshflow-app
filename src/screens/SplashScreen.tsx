@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../constants/colors';
+import { LogoMark } from '../components/ui/LogoMark';
 
 export function SplashScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -69,9 +70,7 @@ export function SplashScreen() {
           },
         ]}
       >
-        <View style={styles.logoIcon}>
-          <Text style={styles.logoEmoji}>🌿</Text>
-        </View>
+        <LogoMark size={72} dark />
         <Text style={styles.logoText}>FreshFlow</Text>
         <Text style={styles.tagline}>Nền tảng thu mua thực phẩm thông minh</Text>
       </Animated.View>
@@ -96,7 +95,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.deepTeal,
   },
   decoCircle1: {
     position: 'absolute',
@@ -119,19 +118,8 @@ const styles = StyleSheet.create({
   logoWrapper: {
     alignItems: 'center',
   },
-  logoIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  logoEmoji: {
-    fontSize: 40,
-  },
   logoText: {
+    marginTop: 20,
     fontSize: 42,
     fontWeight: '800',
     color: '#FFFFFF',

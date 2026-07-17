@@ -12,10 +12,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
 import { theme } from '../../../config/theme';
 import { Button } from '../../../components/ui/Button';
+import { Logo } from '../../../components/ui/Logo';
 import { authApi } from '../api/authApi';
 
 // Password must match backend: min 8 chars, 1 uppercase, 1 digit, 1 special char
@@ -207,9 +208,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
           {/* ─── Brand Section ────────────────── */}
           <View style={styles.brandSection}>
             <View style={styles.brandDeco} />
-            <View style={styles.logoIcon}>
-              <MaterialCommunityIcons name="sprout" size={32} color="#FFFFFF" />
-            </View>
+            <Logo width={140} dark />
             <Text style={styles.brandTitle}>Đăng ký tài khoản Nhà hàng</Text>
             <Text style={styles.brandSub}>
               Trở thành đối tác đặt hàng thực phẩm tươi sống mỗi ngày
@@ -484,7 +483,7 @@ const styles = StyleSheet.create({
 
   // ─── Brand ───────────────────────────────
   brandSection: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.deepTeal,
     marginHorizontal: 16,
     marginTop: 12,
     paddingVertical: 28,
@@ -502,16 +501,8 @@ const styles = StyleSheet.create({
     borderRadius: 80,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
-  logoIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
   brandTitle: {
+    marginTop: 14,
     fontSize: 22,
     fontWeight: '800',
     color: '#FFFFFF',

@@ -11,11 +11,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { Colors } from "../../../constants/colors";
 import { useAuthStore } from "../../../store/authStore";
 import { Button } from "../../../components/ui/Button";
+import { Logo } from "../../../components/ui/Logo";
 import { authApi } from "../api/authApi";
 
 export function LoginScreen() {
@@ -77,10 +78,7 @@ export function LoginScreen() {
           {/* ─── Brand Section ─────────────── */}
           <View style={styles.brandSection}>
             <View style={styles.brandDeco} />
-            <View style={styles.logoIcon}>
-              <MaterialCommunityIcons name="sprout" size={36} color="#FFFFFF" />
-            </View>
-            <Text style={styles.brandName}>FreshFlow</Text>
+            <Logo width={180} dark />
             <Text style={styles.brandSub}>Đăng nhập để tiếp tục</Text>
           </View>
 
@@ -209,7 +207,7 @@ const styles = StyleSheet.create({
 
   // ─── Brand ───────────────────────────────
   brandSection: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.deepTeal,
     paddingTop: 48,
     paddingBottom: 48,
     alignItems: "center",
@@ -226,23 +224,8 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
-  logoIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  brandName: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: 0.5,
-  },
   brandSub: {
-    marginTop: 6,
+    marginTop: 14,
     fontSize: 15,
     color: "rgba(255, 255, 255, 0.7)",
   },

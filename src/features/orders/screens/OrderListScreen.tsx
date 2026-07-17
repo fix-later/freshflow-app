@@ -22,6 +22,7 @@ import {
   Text,
   TextInput,
 } from "../../../components/ui/Text";
+import { LogoMark } from "../../../components/ui/LogoMark";
 import { useAuthStore } from "../../../store/authStore";
 import { useCartStore } from "../../../store/cartStore";
 import { useFavoritesStore } from "../../../store/favoritesStore";
@@ -755,7 +756,7 @@ export function OrderListScreen({ route }: { route?: any }) {
         <View style={styles.headerTop}>
           <View style={styles.headerLogo}>
             <View style={styles.headerLogoMark}>
-              <Ionicons name="leaf-outline" size={20} color={Colors.deepTeal} />
+              <LogoMark size={26} />
             </View>
             <Text style={styles.headerLogoText}>FreshFlow</Text>
           </View>
@@ -929,7 +930,7 @@ export function OrderListScreen({ route }: { route?: any }) {
               <View style={styles.footerSection}>
                 {/* Brand & Desc */}
                 <View style={styles.footerBrand}>
-                  <Ionicons name="leaf-outline" size={24} color={Colors.primaryText} />
+                  <LogoMark size={24} />
                   <Text style={styles.footerBrandText}>FreshFlow</Text>
                 </View>
                 <Text style={styles.footerDesc}>
@@ -1645,7 +1646,6 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
   },
   headerLogoText: {
     fontSize: 21,
