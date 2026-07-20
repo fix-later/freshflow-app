@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,36 +13,30 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
-import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../../constants/colors';
 import { type DriverStackParamList } from '../../../navigation/types';
-import { MOCK_STOP_MAP } from '../mockData';
-import { updateStopStatus } from '../stopStatusStore';
+import { driverApi } from '../api/driverApi';
+import { driverRouteStore } from '../store/driverRouteStore';
+import { type DeliveryIssueType } from '../types/delivery.types';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'ReportDeliveryIssue'>;
 
-type IssueType = {
-  id: string;
+type IssueOption = {
+  id: DeliveryIssueType;
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   description: string;
 };
 
-const ISSUE_TYPES: IssueType[] = [
+const ISSUE_TYPES: IssueOption[] = [
   {
-    id: 'no_recipient',
-    icon: 'person-remove-outline',
-    label: 'Không có người nhận',
-    description: 'Không liên lạc được hoặc không có ai tại địa điểm giao.',
-  },
-  {
-    id: 'wrong_address',
+    id: 'undeliverable',
     icon: 'location-outline',
-    label: 'Địa chỉ sai / không tìm thấy',
-    description: 'Địa chỉ không chính xác hoặc không thể tìm thấy địa điểm.',
+    label: 'Không thể giao',
+    description: 'Không có người nhận, không liên lạc được hoặc không tìm thấy địa chỉ.',
   },
   {
-    id: 'refused',
+    id: 'customer_rejected',
     icon: 'hand-left-outline',
     label: 'Nhà hàng từ chối nhận',
     description: 'Nhà hàng từ chối nhận hàng hoặc huỷ đơn tại chỗ.',
@@ -55,65 +48,48 @@ const ISSUE_TYPES: IssueType[] = [
     description: 'Hàng bị hư hỏng trong quá trình vận chuyển hoặc thiếu số lượng.',
   },
   {
-    id: 'traffic',
-    icon: 'car-outline',
-    label: 'Vấn đề giao thông',
-    description: 'Kẹt xe, đường cấm hoặc tai nạn khiến không thể giao đúng hạn.',
-  },
-  {
     id: 'other',
     icon: 'ellipsis-horizontal-outline',
     label: 'Lý do khác',
-    description: 'Vấn đề không thuộc các loại trên.',
+    description: 'Vấn đề không thuộc các loại trên (kẹt xe, tai nạn, v.v.).',
   },
 ];
 
 export function ReportDeliveryIssueScreen({ route, navigation }: Props) {
-  const { stopId } = route.params;
-  const stop = MOCK_STOP_MAP[stopId];
+  const { deliveryId } = route.params;
+  const stop = driverRouteStore.getStop(deliveryId);
 
-  const [selectedIssue, setSelectedIssue] = useState<string | null>(null);
+  const [selectedIssue, setSelectedIssue] = useState<DeliveryIssueType | null>(null);
   const [notes, setNotes] = useState('');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const canSubmit = selectedIssue !== null && !submitting;
 
-  const handleAttachPhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Quyền truy cập', 'Ứng dụng cần quyền truy cập camera để chụp ảnh bằng chứng.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-      allowsEditing: false,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
-    }
-  };
-
   const handleSubmit = () => {
     const issue = ISSUE_TYPES.find(i => i.id === selectedIssue);
+    if (!issue) return;
+
     Alert.alert(
       'Xác nhận báo lỗi',
-      `Lý do: "${issue?.label}"\n\nSau khi xác nhận, điểm giao này sẽ được ghi nhận là không giao được.`,
+      `Lý do: "${issue.label}"\n\nSau khi xác nhận, điểm giao này sẽ được ghi nhận là không giao được.`,
       [
         { text: 'Huỷ', style: 'cancel' },
         {
           text: 'Xác nhận',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             setSubmitting(true);
-            // TODO: await driverApi.reportIssue(stopId, { issueType: selectedIssue, notes, photoUri })
-            setTimeout(() => {
-              updateStopStatus(stopId, 'failed');
-              setSubmitting(false);
-              // Pop back to NavigationScreen — it reads from store via useFocusEffect
+            const description = notes.trim() || issue.label;
+            try {
+              await driverApi.reportDeliveryIssue(deliveryId, issue.id, description);
+              await driverApi.updateDeliveryStatus(deliveryId, 'FAILED', description);
+              driverRouteStore.setDeliveryStatus(deliveryId, 'failed');
               navigation.goBack();
-            }, 500);
+            } catch {
+              Alert.alert('Lỗi', 'Không thể gửi báo cáo. Vui lòng thử lại.');
+            } finally {
+              setSubmitting(false);
+            }
           },
         },
       ],
@@ -151,8 +127,10 @@ export function ReportDeliveryIssueScreen({ route, navigation }: Props) {
             <View style={{ flex: 1 }}>
               <Text style={styles.stopName}>{stop.restaurantName}</Text>
               <View style={styles.addressRow}>
-                <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
-                <Text style={styles.stopAddress} numberOfLines={1}>{stop.address}</Text>
+                <Ionicons name="receipt-outline" size={12} color={Colors.textMuted} />
+                <Text style={styles.stopAddress} numberOfLines={1}>
+                  Đơn #{stop.orderId.slice(0, 8).toUpperCase()}
+                </Text>
               </View>
             </View>
             <View style={styles.failedChip}>
@@ -210,36 +188,6 @@ export function ReportDeliveryIssueScreen({ route, navigation }: Props) {
             />
             <Text style={styles.charCount}>{notes.length}/500</Text>
           </View>
-
-          {/* ── Photo evidence ── */}
-          <Text style={styles.sectionTitle}>Ảnh bằng chứng <Text style={styles.optional}>(tuỳ chọn)</Text></Text>
-          {photoUri ? (
-            <View style={styles.photoCard}>
-              <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
-              <View style={styles.photoActions}>
-                <Pressable style={styles.photoActionBtn} onPress={handleAttachPhoto}>
-                  <Ionicons name="refresh-outline" size={14} color={Colors.primary} />
-                  <Text style={styles.photoActionText}>Chụp lại</Text>
-                </Pressable>
-                <View style={styles.photoActionDivider} />
-                <Pressable
-                  style={styles.photoActionBtn}
-                  onPress={() => setPhotoUri(null)}
-                >
-                  <Ionicons name="trash-outline" size={14} color={Colors.danger} />
-                  <Text style={[styles.photoActionText, { color: Colors.danger }]}>Xoá</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : (
-            <Pressable style={styles.photoPlaceholder} onPress={handleAttachPhoto}>
-              <Ionicons name="camera-outline" size={28} color={Colors.textMuted} />
-              <Text style={styles.photoPlaceholderTitle}>Chụp ảnh bằng chứng</Text>
-              <Text style={styles.photoPlaceholderSub}>
-                Ảnh khu vực giao, chứng minh lý do không giao được.
-              </Text>
-            </Pressable>
-          )}
 
           <View style={{ height: 100 }} />
         </ScrollView>
@@ -302,7 +250,6 @@ const styles = StyleSheet.create({
     fontSize: 13, fontWeight: '700', color: Colors.textPrimary, marginTop: 2,
   },
   required: { color: Colors.danger },
-  optional: { fontSize: 12, fontWeight: '400', color: Colors.textMuted },
 
   // Issue grid
   issueGrid: { gap: 8 },
@@ -351,32 +298,6 @@ const styles = StyleSheet.create({
     textAlign: 'right', fontSize: 11, color: Colors.textMuted,
     paddingHorizontal: 12, paddingBottom: 8,
   },
-
-  // Photo
-  photoCard: {
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: 14, borderWidth: 1, borderColor: Colors.outlineVariant,
-    overflow: 'hidden',
-  },
-  photoPreview: { width: '100%', height: 200 },
-  photoActions: {
-    flexDirection: 'row',
-    borderTopWidth: 1, borderTopColor: Colors.outlineVariant,
-  },
-  photoActionBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 6, padding: 12,
-  },
-  photoActionText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
-  photoActionDivider: { width: 1, backgroundColor: Colors.outlineVariant },
-  photoPlaceholder: {
-    alignItems: 'center', gap: 8, padding: 28,
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: 14, borderWidth: 1.5,
-    borderStyle: 'dashed', borderColor: Colors.outlineVariant,
-  },
-  photoPlaceholderTitle: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary },
-  photoPlaceholderSub: { fontSize: 12, color: Colors.textMuted, textAlign: 'center', lineHeight: 16 },
 
   // Footer
   footer: {

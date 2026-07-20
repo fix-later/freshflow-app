@@ -8,34 +8,37 @@ import * as Location from 'expo-location';
 import { Colors } from '../../../constants/colors';
 import { GoongMap } from '../../../components/GoongMap';
 import { type DriverStackParamList } from '../../../navigation/types';
-import { MOCK_STOP_MAP, type StopStatus } from '../mockData';
-import { stopStatusStore, updateStopStatus } from '../stopStatusStore';
+import { orderApi, type OrderItemDto } from '../../orders/api/orderApi';
+import { driverApi } from '../api/driverApi';
+import { driverRouteStore, type DeliveryStop } from '../store/driverRouteStore';
+import { type DeliveryStatus } from '../types/delivery.types';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'DriverNavigation'>;
 
-const MOCK_ETA = '~8 phút · 2.3 km';
 const COLLAPSED_H = 250;
 const EXPANDED_H = 510;
 
 export function NavigationScreen({ route, navigation }: Props) {
-  const stop = MOCK_STOP_MAP[route.params.stopId];
+  const stop: DeliveryStop | undefined = driverRouteStore.getStop(route.params.deliveryId);
   const insets = useSafeAreaInsets();
 
-  const [localStatus, setLocalStatus] = useState<StopStatus>(stop?.status ?? 'pending');
+  const [localStatus, setLocalStatus] = useState<DeliveryStatus>(stop?.status ?? 'pending');
+  const [updatingArrival, setUpdatingArrival] = useState(false);
   const [currentLat, setCurrentLat] = useState<number | undefined>(undefined);
   const [currentLng, setCurrentLng] = useState<number | undefined>(undefined);
   const [expanded, setExpanded] = useState(false);
+  const [items, setItems] = useState<OrderItemDto[] | null>(null);
+  const [notes, setNotes] = useState<string | null>(null);
+  const [itemsUnavailable, setItemsUnavailable] = useState(false);
 
   // ── Bottom sheet drag ──────────────────────────────────────────────────────
   const sheetHeightAnim = useRef(new Animated.Value(COLLAPSED_H)).current;
   const sheetCurrentH = useRef(COLLAPSED_H);
   const gestureStartHeight = useRef(COLLAPSED_H);
 
-  // Sync sheetCurrentH and expanded state dynamically based on height threshold
   useEffect(() => {
     const listenerId = sheetHeightAnim.addListener(({ value }) => {
       sheetCurrentH.current = value;
-      // Change expanded state if user drags past COLLAPSED_H + 30
       setExpanded(value > COLLAPSED_H + 30);
     });
     return () => {
@@ -64,13 +67,12 @@ export function NavigationScreen({ route, navigation }: Props) {
         gestureStartHeight.current = sheetCurrentH.current;
       },
       onPanResponderMove: (_, { dy }) => {
-        // drag up (dy < 0) → height increases
         const next = Math.max(COLLAPSED_H, Math.min(EXPANDED_H, gestureStartHeight.current - dy));
         sheetHeightAnim.setValue(next);
       },
       onPanResponderRelease: (_, { dy, vy }) => {
         const projected = gestureStartHeight.current - dy;
-        
+
         let finalH = COLLAPSED_H;
         if (vy < -0.3) {
           finalH = EXPANDED_H;
@@ -79,27 +81,34 @@ export function NavigationScreen({ route, navigation }: Props) {
         } else if (projected > (COLLAPSED_H + EXPANDED_H) / 2) {
           finalH = EXPANDED_H;
         }
-        
+
         snapTo(finalH);
       },
-    }),
-  ).current;
-
-  // ETA pill tracks sheet height so it stays just above the sheet
-  const etaBottom = useRef(
-    sheetHeightAnim.interpolate({
-      inputRange: [COLLAPSED_H, EXPANDED_H],
-      outputRange: [COLLAPSED_H + 8, EXPANDED_H + 8],
-      extrapolate: 'clamp',
     }),
   ).current;
 
   // ── Focus sync ─────────────────────────────────────────────────────────────
   useFocusEffect(
     useCallback(() => {
-      if (stop) setLocalStatus(stopStatusStore[stop.id] ?? stop.status);
+      if (stop) setLocalStatus(driverRouteStore.getStop(stop.deliveryId)?.status ?? stop.status);
     }, [stop]),
   );
+
+  // ── Order detail (items/notes) — best-effort, hide section if unavailable ──
+  useEffect(() => {
+    if (!stop) return;
+    let cancelled = false;
+    orderApi.getById(stop.orderId)
+      .then(order => {
+        if (cancelled) return;
+        setItems(order.items);
+        setNotes(order.notes);
+      })
+      .catch(() => {
+        if (!cancelled) setItemsUnavailable(true);
+      });
+    return () => { cancelled = true; };
+  }, [stop]);
 
   // ── GPS ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -118,25 +127,28 @@ export function NavigationScreen({ route, navigation }: Props) {
       .catch(() => Alert.alert('Lỗi', 'Không thể mở bản đồ'));
   };
 
-  const handleCall = () => {
+  const handleArrived = async () => {
     if (!stop) return;
-    Linking.openURL(`tel:${stop.contactPhone}`);
-  };
-
-  const handleArrived = () => {
-    if (!stop) return;
-    updateStopStatus(stop.id, 'arrived');
-    setLocalStatus('arrived');
+    setUpdatingArrival(true);
+    try {
+      await driverApi.updateDeliveryStatus(stop.deliveryId, 'ARRIVED');
+      driverRouteStore.setDeliveryStatus(stop.deliveryId, 'arrived');
+      setLocalStatus('arrived');
+    } catch {
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái. Vui lòng thử lại.');
+    } finally {
+      setUpdatingArrival(false);
+    }
   };
 
   const handleDelivered = () => {
     if (!stop) return;
-    navigation.navigate('ProofOfDelivery', { stopId: stop.id });
+    navigation.navigate('ProofOfDelivery', { deliveryId: stop.deliveryId });
   };
 
   const handleFailed = () => {
     if (!stop) return;
-    navigation.navigate('ReportDeliveryIssue', { stopId: stop.id });
+    navigation.navigate('ReportDeliveryIssue', { deliveryId: stop.deliveryId });
   };
 
   if (!stop) {
@@ -152,7 +164,7 @@ export function NavigationScreen({ route, navigation }: Props) {
   }
 
   const isDone = localStatus === 'delivered' || localStatus === 'failed';
-  const totalItems = stop.items.reduce((s, i) => s + i.quantity, 0);
+  const totalItems = items?.reduce((s, i) => s + i.quantity, 0) ?? 0;
   const bottomPad = Math.max(insets.bottom, 12);
 
   return (
@@ -180,30 +192,19 @@ export function NavigationScreen({ route, navigation }: Props) {
         </Pressable>
       </View>
 
-      {/* ── ETA pill — floats above sheet ── */}
-      {currentLat !== undefined && (
-        <Animated.View style={[styles.etaPill, { bottom: etaBottom }]}>
-          <Ionicons name="time-outline" size={13} color={Colors.primary} />
-          <Text style={styles.etaText}>{MOCK_ETA}</Text>
-        </Animated.View>
-      )}
-
       {/* ── Bottom sheet ── */}
       <Animated.View style={[styles.sheet, { height: sheetHeightAnim }]}>
 
-        {/* Header container that handles dragging and toggling */}
         <View {...panResponder.panHandlers} style={styles.sheetHeaderContainer}>
-          {/* Drag handle — centered, full-width touch area */}
-          <Pressable 
+          <Pressable
             onPress={() => snapTo(expanded ? COLLAPSED_H : EXPANDED_H)}
             style={styles.dragHandleArea}
           >
             <View style={styles.dragHandle} />
           </Pressable>
 
-          {/* Stop header: badge, text, call button */}
           <View style={styles.stopHeaderRow}>
-            <Pressable 
+            <Pressable
               onPress={() => snapTo(expanded ? COLLAPSED_H : EXPANDED_H)}
               style={styles.stopHeaderLeft}
             >
@@ -217,15 +218,10 @@ export function NavigationScreen({ route, navigation }: Props) {
 
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={styles.restaurantName} numberOfLines={1}>{stop.restaurantName}</Text>
-                <View style={styles.addressRow}>
-                  <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
-                  <Text style={styles.addressText} numberOfLines={1}>{stop.address}</Text>
-                </View>
+                <Text style={styles.orderIdText} numberOfLines={1}>
+                  Đơn #{stop.orderId.slice(0, 8).toUpperCase()}
+                </Text>
               </View>
-            </Pressable>
-
-            <Pressable style={styles.callBtn} onPress={handleCall} hitSlop={8}>
-              <Ionicons name="call" size={16} color={Colors.onPrimary} />
             </Pressable>
           </View>
         </View>
@@ -239,35 +235,25 @@ export function NavigationScreen({ route, navigation }: Props) {
           bounces={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── Expanded content ── */}
           {expanded ? (
             <View style={styles.expandedSection}>
-              {/* Contact row */}
-              <View style={styles.contactRow}>
-                <View style={styles.contactAvatar}>
-                  <Ionicons name="person" size={15} color={Colors.primary} />
-                </View>
-                <View style={{ flex: 1, gap: 1 }}>
-                  <Text style={styles.contactName}>{stop.contactName}</Text>
-                  <Text style={styles.contactPhone}>{stop.contactPhone}</Text>
-                </View>
-              </View>
-
-              {/* Goods section */}
               <Text style={styles.goodsLabel}>HÀNG HOÁ CẦN GIAO</Text>
 
-              {stop.items.map((item, i) => (
-                <View key={i} style={styles.itemRow}>
+              {items?.map(item => (
+                <View key={item.orderItemId} style={styles.itemRow}>
                   <Ionicons name="cube-outline" size={16} color={Colors.primary} />
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemQty}>{item.quantity} {item.unit}</Text>
+                  <Text style={styles.itemName}>{item.productNameSnapshot}</Text>
+                  <Text style={styles.itemQty}>{item.quantity}</Text>
                 </View>
               ))}
+              {itemsUnavailable && (
+                <Text style={styles.itemsUnavailableText}>Không thể tải chi tiết đơn hàng.</Text>
+              )}
 
-              {stop.notes && (
+              {notes && (
                 <View style={styles.notesRow}>
                   <Ionicons name="document-text-outline" size={14} color={Colors.textMuted} />
-                  <Text style={styles.notesText}>{stop.notes}</Text>
+                  <Text style={styles.notesText}>{notes}</Text>
                 </View>
               )}
 
@@ -279,7 +265,6 @@ export function NavigationScreen({ route, navigation }: Props) {
               )}
             </View>
           ) : (
-            /* ── Collapsed: horizontal items strip ── */
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -288,24 +273,16 @@ export function NavigationScreen({ route, navigation }: Props) {
             >
               <View style={styles.itemsCountChip}>
                 <Ionicons name="cube-outline" size={12} color={Colors.primary} />
-                <Text style={styles.itemsCountText}>{stop.items.length} loại · {totalItems} đv</Text>
+                <Text style={styles.itemsCountText}>{items?.length ?? 0} loại · {totalItems} đv</Text>
               </View>
-              {stop.items.map((item, i) => (
-                <View key={i} style={styles.itemChip}>
+              {items?.map(item => (
+                <View key={item.orderItemId} style={styles.itemChip}>
                   <Text style={styles.itemChipText}>
-                    {item.name}{' '}
-                    <Text style={{ fontWeight: '800', color: Colors.primary }}>
-                      {item.quantity}{item.unit}
-                    </Text>
+                    {item.productNameSnapshot}{' '}
+                    <Text style={{ fontWeight: '800', color: Colors.primary }}>{item.quantity}</Text>
                   </Text>
                 </View>
               ))}
-              {stop.notes && (
-                <View style={[styles.itemChip, { backgroundColor: Colors.warningLight }]}>
-                  <Ionicons name="document-text-outline" size={11} color={Colors.textMuted} />
-                  <Text style={[styles.itemChipText, { color: Colors.textSecondary }]}>{stop.notes}</Text>
-                </View>
-              )}
             </ScrollView>
           )}
         </ScrollView>
@@ -317,11 +294,12 @@ export function NavigationScreen({ route, navigation }: Props) {
 
             {localStatus === 'pending' && (
               <Pressable
-                style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.85 }]}
-                onPress={handleArrived}
+                style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.85 }, updatingArrival && { opacity: 0.6 }]}
+                onPress={updatingArrival ? undefined : handleArrived}
+                disabled={updatingArrival}
               >
                 <Ionicons name="location" size={18} color={Colors.onPrimary} />
-                <Text style={styles.primaryBtnText}>Đã tới nơi</Text>
+                <Text style={styles.primaryBtnText}>{updatingArrival ? 'Đang cập nhật...' : 'Đã tới nơi'}</Text>
               </Pressable>
             )}
 
@@ -391,7 +369,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#1C1C1E' },
   fullMap: { flex: 1, borderRadius: 0 },
 
-  // Floating header
   floatingHeader: {
     position: 'absolute', left: 12, right: 12,
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -418,19 +395,6 @@ const styles = StyleSheet.create({
   },
   mapsBtnText: { fontSize: 12, fontWeight: '700', color: Colors.onPrimary },
 
-  // ETA pill
-  etaPill: {
-    position: 'absolute', left: 12,
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: SHEET_BG,
-    paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 20,
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  etaText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
-
-  // Bottom sheet
   sheet: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: SHEET_BG,
@@ -440,7 +404,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // Drag handle
   dragHandleArea: {
     alignItems: 'center', paddingTop: 8, paddingBottom: 8,
     width: '100%',
@@ -450,7 +413,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.outlineVariant,
   },
 
-  // Scrollable area
   sheetScroll: { flex: 1 },
 
   sheetHeaderContainer: {
@@ -480,15 +442,8 @@ const styles = StyleSheet.create({
   },
   stopNumText: { fontSize: 14, fontWeight: '900', color: Colors.onPrimary },
   restaurantName: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
-  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  addressText: { flex: 1, fontSize: 11, color: Colors.textMuted },
-  callBtn: {
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: Colors.primary,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
+  orderIdText: { fontSize: 11, color: Colors.textMuted },
 
-  // Collapsed: horizontal items strip
   itemsStrip: { maxHeight: 36 },
   itemsStripContent: { paddingHorizontal: 16, gap: 6, flexDirection: 'row', alignItems: 'center' },
   itemsCountChip: {
@@ -504,22 +459,9 @@ const styles = StyleSheet.create({
   },
   itemChipText: { fontSize: 11, color: Colors.textSecondary },
 
-  // Expanded content
   expandedSection: {
     paddingHorizontal: 16, paddingBottom: 8, gap: 8,
   },
-  contactRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: Colors.surfaceContainerHigh,
-    borderRadius: 12, padding: 10,
-  },
-  contactAvatar: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  contactName: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
-  contactPhone: { fontSize: 12, color: Colors.textMuted },
   goodsLabel: {
     fontSize: 11, fontWeight: '800',
     color: Colors.textMuted,
@@ -533,6 +475,7 @@ const styles = StyleSheet.create({
   },
   itemName: { flex: 1, fontSize: 14, color: Colors.textPrimary },
   itemQty: { fontSize: 14, fontWeight: '800', color: Colors.primary },
+  itemsUnavailableText: { fontSize: 12, color: Colors.textMuted, paddingVertical: 8 },
   notesRow: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 6,
     backgroundColor: Colors.warningLight,
@@ -546,7 +489,6 @@ const styles = StyleSheet.create({
   },
   arrivedMsgText: { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.primary },
 
-  // Actions (always at bottom)
   actionsSection: { flexShrink: 0 },
   sheetDivider: { height: 1, backgroundColor: Colors.outlineVariant, marginHorizontal: 16 },
   actionsBar: { padding: 16, gap: 10 },
@@ -585,7 +527,6 @@ const styles = StyleSheet.create({
   },
   backListBtnText: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
 
-  // Error state
   backBtn: {
     backgroundColor: Colors.primary, borderRadius: 12,
     paddingHorizontal: 24, paddingVertical: 12,
