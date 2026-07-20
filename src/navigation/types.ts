@@ -20,7 +20,6 @@ export type RestaurantProfileStackParamList = {
   RestaurantProfileEdit: undefined;
   DeliveryAddresses: undefined;
   CreditOverview: undefined;
-  CreditTransactions: { restaurantId: string };
   CreditStatements: { restaurantId: string };
 };
 

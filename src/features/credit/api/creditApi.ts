@@ -1,4 +1,4 @@
-import { apiClient } from '../../../services/api/client';
+import { apiClient, getCursorPaged } from '../../../services/api/client';
 
 export interface CreditDto {
   restaurantId: string;
@@ -17,6 +17,7 @@ export interface CreditTransactionDto {
   orderId: string | null;
   reference: string | null;
   note: string | null;
+  paymentMethod: string | null;
   createdAt: string;
 }
 
@@ -39,16 +40,16 @@ export interface CreditStatementDto {
 }
 
 export const TRANSACTION_TYPE_LABEL: Record<string, string> = {
-  debit: 'Sử dụng tín dụng',
-  credit: 'Hoàn tiền',
+  charge: 'Ghi nợ đơn hàng',
   settlement: 'Thanh toán công nợ',
+  refund: 'Hoàn tiền',
   adjustment: 'Điều chỉnh',
 };
 
 export const TRANSACTION_TYPE_COLOR: Record<string, string> = {
-  debit: '#EF4444',
-  credit: '#22C55E',
+  charge: '#EF4444',
   settlement: '#3B82F6',
+  refund: '#22C55E',
   adjustment: '#F59E0B',
 };
 
@@ -62,22 +63,20 @@ export const creditApi = {
 
   async getTransactions(
     restaurantId: string,
-    params?: { cursor?: string; pageSize?: number },
+    params?: { cursor?: string; pageSize?: number; from?: string; to?: string },
   ): Promise<{ data: CreditTransactionDto[]; meta: CreditTransactionMeta }> {
-    const { data } = await apiClient.get<{ data: CreditTransactionDto[]; meta: CreditTransactionMeta }>(
+    return getCursorPaged<CreditTransactionDto>(
       `/api/v1/restaurants/${restaurantId}/credit/transactions`,
       { params },
     );
-    return data;
   },
 
   async getStatements(
     restaurantId: string,
-  ): Promise<{ data: CreditStatementDto[] }> {
-    const { data } = await apiClient.get<{ data: CreditStatementDto[] }>(
+  ): Promise<{ data: CreditStatementDto[]; meta: CreditTransactionMeta }> {
+    return getCursorPaged<CreditStatementDto>(
       `/api/v1/restaurants/${restaurantId}/credit/statements`,
     );
-    return data;
   },
 
   async generateStatement(

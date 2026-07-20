@@ -8,7 +8,6 @@ import { DeliveryAddressesScreen } from '../features/restaurant/screens/Delivery
 import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
 import { CreditOverviewScreen } from '../features/credit/screens/CreditOverviewScreen';
-import { CreditTransactionsScreen } from '../features/credit/screens/CreditTransactionsScreen';
 import { CreditStatementsScreen } from '../features/credit/screens/CreditStatementsScreen';
 import { type RestaurantProfileStackParamList } from './types';
 
@@ -50,11 +49,6 @@ export function RestaurantProfileTab() {
         name="CreditOverview"
         component={CreditOverviewScreen}
         options={{ title: 'Tín dụng & Thanh toán' }}
-      />
-      <Stack.Screen
-        name="CreditTransactions"
-        component={CreditTransactionsScreen}
-        options={{ title: 'Lịch sử giao dịch' }}
       />
       <Stack.Screen
         name="CreditStatements"
