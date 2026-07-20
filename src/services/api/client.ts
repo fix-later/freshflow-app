@@ -1,4 +1,5 @@
 import axios, {
+  type AxiosRequestConfig,
   type AxiosError,
   type AxiosResponse,
   type InternalAxiosRequestConfig,
@@ -56,12 +57,35 @@ interface RefreshResponse {
   data: { accessToken: string; refreshToken: string; expiresIn: number };
 }
 
+interface EnvelopeAwareRequestConfig extends AxiosRequestConfig {
+  preserveEnvelope?: boolean;
+}
+
+interface CursorPagedEnvelope<T> {
+  success: true;
+  data: T[];
+  meta: {
+    pageSize: number;
+    nextCursor: string | null;
+  };
+}
+
+export interface CursorPagedResult<T> {
+  data: T[];
+  meta: {
+    pageSize: number;
+    nextCursor: string | null;
+  };
+}
+
 apiClient.interceptors.response.use(
   // ── Success: unwrap BE envelope { success: true, data: T } → T ─────────────────
   (response: AxiosResponse) => {
     const body = response.data;
     if (body && typeof body === 'object' && 'success' in body) {
       if (body.success === true) {
+        const config = response.config as EnvelopeAwareRequestConfig;
+        if (config.preserveEnvelope) return response;
         response.data = body.data as unknown;
       }
     }
@@ -145,3 +169,32 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+/**
+ * Executes a cursor-paginated request without losing the BE envelope metadata.
+ * Normal apiClient calls still unwrap `{ success, data }` for backwards compatibility.
+ */
+export async function getCursorPaged<T>(
+  url: string,
+  config?: AxiosRequestConfig,
+): Promise<CursorPagedResult<T>> {
+  const requestConfig = {
+    ...config,
+    preserveEnvelope: true,
+  } as EnvelopeAwareRequestConfig;
+
+  const response = await apiClient.get<CursorPagedEnvelope<T>>(url, requestConfig);
+  const envelope = response.data;
+
+  if (!envelope?.success || !Array.isArray(envelope.data) || !envelope.meta) {
+    throw new Error('Phản hồi phân trang từ máy chủ không hợp lệ');
+  }
+
+  return {
+    data: envelope.data,
+    meta: {
+      pageSize: envelope.meta.pageSize,
+      nextCursor: envelope.meta.nextCursor,
+    },
+  };
+}
