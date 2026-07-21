@@ -8,10 +8,20 @@ import { Text } from '../../../components/ui/Text';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import { HUB_BATCHES } from '../data/hubOperations';
+import { AssignedInboundTaskScreen } from './AssignedInboundTaskScreen';
 
 type Props = NativeStackScreenProps<HubStackParamList, 'CheckIn'>;
 
-export function CheckInScreen({ route, navigation }: Props) {
+export function CheckInScreen(props: Props) {
+  const assignedTask = props.route.params.assignedTask;
+  if (assignedTask) {
+    return <AssignedInboundTaskScreen task={assignedTask} navigation={props.navigation} />;
+  }
+
+  return <LegacyCheckInScreen {...props} />;
+}
+
+function LegacyCheckInScreen({ route, navigation }: Props) {
   const batch = HUB_BATCHES.find((item) => item.id === route.params.batchId) ?? HUB_BATCHES[0];
   const [actualQuantities, setActualQuantities] = useState<Record<string, number>>(
     Object.fromEntries(batch.products.map((product) => [product.id, product.expectedQuantity])),

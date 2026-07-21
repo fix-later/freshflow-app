@@ -1,4 +1,5 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
+import type { HubInboundTask } from '../features/hub/api/hubApi';
 
 export type AuthStackParamList = {
   Login: undefined;
@@ -71,7 +72,7 @@ export type HubTabParamList = {
 export type HubStackParamList = {
   HubTabs: NavigatorScreenParams<HubTabParamList> | undefined;
   MarketDispatch: undefined;
-  CheckIn: { batchId: string };
+  CheckIn: { batchId: string; assignedTask?: HubInboundTask };
   QualityCheck: { batchId: string };
   DriverHandoff: { routeId: string };
   IncidentReport: { batchId?: string; orderId?: string } | undefined;
