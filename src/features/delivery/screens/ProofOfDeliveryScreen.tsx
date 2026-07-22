@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,18 +15,17 @@ import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import { Colors } from '../../../constants/colors';
 import { type DriverStackParamList } from '../../../navigation/types';
-import { MOCK_ROUTE, MOCK_STOP_MAP } from '../mockData';
-import { updateStopStatus } from '../stopStatusStore';
+import { driverApi } from '../api/driverApi';
+import { uploadProofOfDelivery } from '../services/proofOfDeliveryUpload';
+import { driverRouteStore } from '../store/driverRouteStore';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'ProofOfDelivery'>;
 
-type ProofMethod = 'photo' | 'otp' | 'signature' | 'qr';
+type ProofMethod = 'photo' | 'signature';
 
 const METHODS: { id: ProofMethod; icon: React.ComponentProps<typeof Ionicons>['name']; label: string }[] = [
   { id: 'photo', icon: 'camera', label: 'Ảnh' },
-  { id: 'otp', icon: 'keypad', label: 'OTP' },
   { id: 'signature', icon: 'create', label: 'Chữ ký' },
-  { id: 'qr', icon: 'qr-code', label: 'QR Code' },
 ];
 
 // ── Signature canvas (WebView) ──────────────────────────────────────────────
@@ -88,79 +86,13 @@ function SignatureCanvas({ onCapture, onClear }: { onCapture: (data: string) => 
   );
 }
 
-// ── OTP Box Input ───────────────────────────────────────────────────────────
-function OtpInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const inputRef = useRef<TextInput>(null);
-  const LEN = 6;
-
-  return (
-    <View style={styles.otpWrap}>
-      <Text style={styles.otpHint}>
-        Nhập mã OTP được cung cấp bởi nhà hàng để xác nhận giao hàng.
-      </Text>
-      <Pressable style={styles.otpBoxRow} onPress={() => inputRef.current?.focus()}>
-        {Array.from({ length: LEN }).map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.otpBox,
-              value.length === i && styles.otpBoxActive,
-              value.length > i && styles.otpBoxFilled,
-            ]}
-          >
-            <Text style={styles.otpChar}>{value[i] ?? ''}</Text>
-          </View>
-        ))}
-        <TextInput
-          ref={inputRef}
-          value={value}
-          onChangeText={t => onChange(t.replace(/\D/g, '').slice(0, LEN))}
-          keyboardType="numeric"
-          maxLength={LEN}
-          style={styles.otpHiddenInput}
-          autoFocus={false}
-          caretHidden
-        />
-      </Pressable>
-      {value.length === LEN && (
-        <View style={styles.otpSuccessRow}>
-          <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-          <Text style={styles.otpSuccessText}>Mã OTP hợp lệ</Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// ── QR Placeholder ──────────────────────────────────────────────────────────
-function QrPlaceholder() {
-  return (
-    <View style={styles.qrWrap}>
-      <View style={styles.qrBox}>
-        <Ionicons name="scan-outline" size={64} color={Colors.textMuted} />
-        <Text style={styles.qrTitle}>Quét mã QR</Text>
-        <Text style={styles.qrSub}>
-          Tính năng quét QR sẽ được tích hợp sau khi cài đặt{'\n'}camera module.
-        </Text>
-      </View>
-      <View style={styles.instructBox}>
-        <Ionicons name="information-circle-outline" size={14} color={Colors.secondary} />
-        <Text style={styles.instructText}>
-          Yêu cầu nhà hàng hiển thị mã QR để tài xế quét xác nhận giao hàng.
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 // ── Main Screen ─────────────────────────────────────────────────────────────
 export function ProofOfDeliveryScreen({ route, navigation }: Props) {
-  const { stopId } = route.params;
-  const stop = MOCK_STOP_MAP[stopId];
+  const { deliveryId } = route.params;
+  const stop = driverRouteStore.getStop(deliveryId);
 
   const [method, setMethod] = useState<ProofMethod>('photo');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [otp, setOtp] = useState('');
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -168,9 +100,7 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
 
   const proofReady =
     (method === 'photo' && photoUri !== null) ||
-    (method === 'otp' && otp.length === 6) ||
-    (method === 'signature' && signatureData !== null) ||
-    method === 'qr'; // QR is mock — always "ready" for now
+    (method === 'signature' && signatureData !== null);
 
   const handleTakePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -188,19 +118,27 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    const localUri = method === 'photo' ? photoUri : signatureData;
+    if (!localUri) return;
+
     setSubmitting(true);
-    // TODO: await driverApi.submitProof(stopId, { method, photoUri, otp, signatureData })
-    setTimeout(() => {
-      updateStopStatus(stopId, 'delivered');
+    try {
+      await uploadProofOfDelivery(deliveryId, localUri);
+      await driverApi.updateDeliveryStatus(deliveryId, 'DELIVERED');
+      driverRouteStore.setDeliveryStatus(deliveryId, 'delivered');
+
       const now = new Date();
       setDeliveredAt(
         now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) +
         ' · ' + now.toLocaleDateString('vi-VN'),
       );
-      setSubmitting(false);
       setSuccess(true);
-    }, 600);
+    } catch {
+      Alert.alert('Lỗi', 'Không thể xác nhận giao hàng. Vui lòng thử lại.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!stop) {
@@ -226,12 +164,10 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
           <Text style={styles.successSub}>{stop.restaurantName}</Text>
           <Text style={styles.successTime}>{deliveredAt}</Text>
 
-          {/* Photo proof thumbnail */}
           {method === 'photo' && photoUri && (
             <Image source={{ uri: photoUri }} style={styles.successPhoto} resizeMode="cover" />
           )}
 
-          {/* Method badge */}
           <View style={styles.methodBadge}>
             <Ionicons
               name={METHODS.find(m => m.id === method)?.icon ?? 'checkmark-circle-outline'}
@@ -245,7 +181,7 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
 
           <Pressable
             style={({ pressed }) => [styles.backNavBtn, pressed && { opacity: 0.85 }]}
-            onPress={() => navigation.navigate('StopList', { routeId: MOCK_ROUTE.id })}
+            onPress={() => navigation.goBack()}
           >
             <Ionicons name="list-outline" size={16} color={Colors.onPrimary} />
             <Text style={styles.backNavBtnText}>Về danh sách điểm dừng</Text>
@@ -267,8 +203,10 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
           <View style={{ flex: 1 }}>
             <Text style={styles.stopName}>{stop.restaurantName}</Text>
             <View style={styles.addressRow}>
-              <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
-              <Text style={styles.stopAddress} numberOfLines={1}>{stop.address}</Text>
+              <Ionicons name="receipt-outline" size={12} color={Colors.textMuted} />
+              <Text style={styles.stopAddress} numberOfLines={1}>
+                Đơn #{stop.orderId.slice(0, 8).toUpperCase()}
+              </Text>
             </View>
           </View>
         </View>
@@ -325,18 +263,12 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
             </>
           )}
 
-          {method === 'otp' && (
-            <OtpInput value={otp} onChange={setOtp} />
-          )}
-
           {method === 'signature' && (
             <SignatureCanvas
               onCapture={data => setSignatureData(data)}
               onClear={() => setSignatureData(null)}
             />
           )}
-
-          {method === 'qr' && <QrPlaceholder />}
         </View>
 
         {/* ── Status hint ── */}
@@ -345,7 +277,6 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
             <Ionicons name="alert-circle-outline" size={14} color={Colors.warning} />
             <Text style={styles.hintText}>
               {method === 'photo' && 'Chụp ảnh để tiếp tục xác nhận giao hàng.'}
-              {method === 'otp' && 'Nhập đủ 6 chữ số mã OTP để tiếp tục.'}
               {method === 'signature' && 'Ký tên vào khung bên trên để tiếp tục.'}
             </Text>
           </View>
@@ -447,26 +378,6 @@ const styles = StyleSheet.create({
   },
   retakeBtnText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
 
-  // OTP
-  otpWrap: { padding: 20, gap: 14 },
-  otpHint: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center', lineHeight: 18 },
-  otpBoxRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', position: 'relative' },
-  otpBox: {
-    width: 44, height: 52, borderRadius: 10,
-    borderWidth: 1.5, borderColor: Colors.outlineVariant,
-    backgroundColor: Colors.surfaceContainerHigh,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  otpBoxActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
-  otpBoxFilled: { borderColor: Colors.primary + '80' },
-  otpChar: { fontSize: 20, fontWeight: '900', color: Colors.textPrimary },
-  otpHiddenInput: {
-    position: 'absolute', opacity: 0,
-    width: 1, height: 1, top: 0, left: 0,
-  },
-  otpSuccessRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  otpSuccessText: { fontSize: 13, fontWeight: '600', color: Colors.success },
-
   // Signature
   sigWrap: { gap: 0 },
   sigCanvas: { height: 320, borderRadius: 12, overflow: 'hidden' },
@@ -476,22 +387,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: Colors.outlineVariant,
   },
   clearBtnText: { fontSize: 12, color: Colors.textMuted },
-
-  // QR
-  qrWrap: { padding: 20, gap: 12 },
-  qrBox: {
-    alignItems: 'center', gap: 10, padding: 28,
-    backgroundColor: Colors.surfaceContainerHigh,
-    borderRadius: 12, borderWidth: 1,
-    borderStyle: 'dashed', borderColor: Colors.outlineVariant,
-  },
-  qrTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  qrSub: { fontSize: 12, color: Colors.textMuted, textAlign: 'center', lineHeight: 17 },
-  instructBox: {
-    flexDirection: 'row', gap: 7, alignItems: 'flex-start',
-    backgroundColor: '#EFF6FF', borderRadius: 10, padding: 10,
-  },
-  instructText: { flex: 1, fontSize: 12, color: Colors.secondary, lineHeight: 17 },
 
   // Hint
   hintBox: {

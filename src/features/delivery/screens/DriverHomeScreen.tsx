@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
   Modal,
   PanResponder,
@@ -12,27 +14,42 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import { Colors } from '../../../constants/colors';
 import { RouteOverviewMap, type RouteStop } from '../../../components/RouteOverviewMap';
 import { type DriverStackParamList } from '../../../navigation/types';
-import { MOCK_ROUTE, MOCK_STOPS } from '../mockData';
-import { stopOrderStore } from '../stopOrderStore';
+import { driverApi } from '../api/driverApi';
+import { driverRouteStore, type DeliveryStop } from '../store/driverRouteStore';
+import { type RouteStatus } from '../types/delivery.types';
 
 type Nav = NativeStackNavigationProp<DriverStackParamList>;
 
+const ROUTE_STATUS_LABEL: Record<RouteStatus, string> = {
+  planned: 'Đã lên kế hoạch',
+  selected: 'Đã chọn',
+  reviewed: 'Đã duyệt',
+  assigned: 'Đã phân công',
+  in_progress: 'Đang giao',
+  completed: 'Hoàn tất',
+  cancelled: 'Đã huỷ',
+};
+
+const NOT_STARTED_STATUSES: RouteStatus[] = ['planned', 'selected', 'reviewed', 'assigned'];
+
 // Estimated height of each card + 8px gap (used for drag index calculation)
-const ITEM_HEIGHT = 70;
+const ITEM_HEIGHT = 62;
 
 function StopOrderCard({
   stop,
+  displayOrder,
   reorderMode,
   isDragging,
   isTarget,
 }: {
-  stop: (typeof MOCK_STOPS)[0] & { displayOrder: number };
+  stop: DeliveryStop;
+  displayOrder: number;
   reorderMode: boolean;
   isDragging: boolean;
   isTarget: boolean;
@@ -48,15 +65,12 @@ function StopOrderCard({
     >
       <View style={[styles.stopNumBadge, isDragging && styles.stopNumBadgeDragging]}>
         <Text style={[styles.stopNumText, isDragging && styles.stopNumTextDragging]}>
-          {stop.displayOrder}
+          {displayOrder}
         </Text>
       </View>
       <View style={styles.stopInfo}>
         <Text style={styles.stopName} numberOfLines={1}>{stop.restaurantName}</Text>
-        <View style={styles.stopAddressRow}>
-          <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.stopAddress} numberOfLines={1}>{stop.address}</Text>
-        </View>
+        <Text style={styles.stopOrderId} numberOfLines={1}>Đơn #{stop.orderId.slice(0, 8).toUpperCase()}</Text>
       </View>
       {reorderMode && (
         <Ionicons
@@ -70,37 +84,33 @@ function StopOrderCard({
   );
 }
 
-function buildMapStops(ids: string[]): RouteStop[] {
-  return ids.map((id, idx) => {
-    const s = MOCK_STOPS.find(ms => ms.id === id)!;
-    return { order: idx + 1, lat: s.lat, lng: s.lng, status: 'pending' as const };
-  });
-}
-
 export function DriverHomeScreen() {
   const navigation = useNavigation<Nav>();
-  const route = MOCK_ROUTE;
 
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [routeStatus, setRouteStatus] = useState<RouteStatus | null>(null);
+  const [serviceDate, setServiceDate] = useState('');
   const [showRouteMap, setShowRouteMap] = useState(false);
   const [currentLat, setCurrentLat] = useState<number | undefined>();
   const [currentLng, setCurrentLng] = useState<number | undefined>();
+  const [startingRoute, setStartingRoute] = useState(false);
+
   const [reorderMode, setReorderMode] = useState(false);
-  const [orderIds, setOrderIds] = useState<string[]>(() => MOCK_STOPS.map(s => s.id));
+  const [stopById, setStopById] = useState<Map<string, DeliveryStop>>(new Map());
+  const [orderIds, setOrderIds] = useState<string[]>([]);
   // Map only re-renders when reorder mode exits ("Xong")
-  const [mapOrderIds, setMapOrderIds] = useState<string[]>(() => MOCK_STOPS.map(s => s.id));
+  const [mapOrderIds, setMapOrderIds] = useState<string[]>([]);
 
   const [draggingIdx, setDraggingIdx] = useState(-1);
   const [insertIdx, setInsertIdx] = useState(-1);
 
-  // Refs for PanResponder callbacks (avoid stale closures)
   const reorderModeRef = useRef(false);
-  const orderIdsRef = useRef(orderIds);
+  const orderIdsRef = useRef<string[]>([]);
   const draggingIdxRef = useRef(-1);
   const insertIdxRef = useRef(-1);
   const dragY = useRef(new Animated.Value(0)).current;
 
-  // Measure list container's absolute screen position so we can compute
-  // which card was touched from e.nativeEvent.pageY
   const listRef = useRef<View>(null);
   const listPageYRef = useRef(0);
   const itemHeightRef = useRef(ITEM_HEIGHT);
@@ -108,7 +118,6 @@ export function DriverHomeScreen() {
   useEffect(() => { reorderModeRef.current = reorderMode; }, [reorderMode]);
   useEffect(() => { orderIdsRef.current = orderIds; }, [orderIds]);
 
-  // Re-measure list position whenever reorder mode activates (banner shifts layout)
   useEffect(() => {
     if (reorderMode) {
       setTimeout(() => {
@@ -119,14 +128,51 @@ export function DriverHomeScreen() {
     }
   }, [reorderMode]);
 
+  // Reflects whatever driverRouteStore currently holds (including any client-side
+  // reorder) into local render state, without hitting the network.
+  const syncFromStore = useCallback(() => {
+    const route = driverRouteStore.getRoute();
+    const stops = driverRouteStore.getStops();
+    setStopById(new Map(stops.map(s => [s.deliveryId, s])));
+    const ids = stops.map(s => s.deliveryId);
+    setOrderIds(ids);
+    setMapOrderIds(ids);
+    setRouteStatus(route?.status ?? null);
+    setServiceDate(route?.serviceDate ?? '');
+  }, []);
+
+  const loadRoute = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await driverRouteStore.load();
+      syncFromStore();
+    } catch {
+      setError('Không thể tải tuyến đường hôm nay. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  }, [syncFromStore]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Only hit the network the first time — refetching on every focus would
+      // overwrite the driver's in-progress custom stop order with the server default.
+      if (driverRouteStore.getRoute() === null) {
+        loadRoute();
+      } else {
+        syncFromStore();
+        setLoading(false);
+      }
+    }, [loadRoute, syncFromStore]),
+  );
+
   const listPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => reorderModeRef.current,
       onMoveShouldSetPanResponder: () => reorderModeRef.current,
 
       onPanResponderGrant: (e) => {
-        // Use pageY (absolute screen coord) minus list container's screen top
-        // because locationY is relative to the touched child, not the container
         const relY = e.nativeEvent.pageY - listPageYRef.current;
         const h = itemHeightRef.current;
         const total = orderIdsRef.current.length;
@@ -162,7 +208,6 @@ export function DriverHomeScreen() {
             return next;
           });
         }
-        // Snap card back before hiding
         Animated.spring(dragY, { toValue: 0, useNativeDriver: true, speed: 40 }).start();
         draggingIdxRef.current = -1;
         insertIdxRef.current = -1;
@@ -181,12 +226,13 @@ export function DriverHomeScreen() {
   ).current;
 
   const orderedStops = orderIds.map((id, idx) => ({
-    ...MOCK_STOPS.find(ms => ms.id === id)!,
+    stop: stopById.get(id)!,
     displayOrder: idx + 1,
-  }));
+  })).filter(({ stop }) => stop);
 
   const handleReorderDone = () => {
-    setMapOrderIds([...orderIds]); // update map now
+    driverRouteStore.setStopOrder(orderIds);
+    setMapOrderIds([...orderIds]);
     setReorderMode(false);
   };
 
@@ -195,9 +241,7 @@ export function DriverHomeScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         setCurrentLat(pos.coords.latitude);
         setCurrentLng(pos.coords.longitude);
       }
@@ -206,12 +250,71 @@ export function DriverHomeScreen() {
     }
   };
 
-  const handleGoToHub = () => {
-    stopOrderStore.set(orderIds);
-    navigation.navigate('PickupConfirm', { routeId: route.id });
+  const handleGoToHub = async () => {
+    const route = driverRouteStore.getRoute();
+    if (!route) return;
+    // Commit whatever order the driver last arranged, even if they never tapped "Xong".
+    driverRouteStore.setStopOrder(orderIds);
+    try {
+      if (NOT_STARTED_STATUSES.includes(route.status)) {
+        setStartingRoute(true);
+        await driverApi.startRoute(route.routeId);
+        driverRouteStore.setRouteStatus('in_progress');
+        setRouteStatus('in_progress');
+      }
+      navigation.navigate('PickupConfirm', { routeId: route.routeId });
+    } catch {
+      Alert.alert('Lỗi', 'Không thể bắt đầu tuyến đường. Vui lòng thử lại.');
+    } finally {
+      setStartingRoute(false);
+    }
   };
 
+  const buildMapStops = (ids: string[]): RouteStop[] =>
+    ids.map((id, idx) => {
+      const s = stopById.get(id);
+      return { order: idx + 1, lat: s?.lat ?? 0, lng: s?.lng ?? 0, status: s?.status ?? 'pending' };
+    });
+
   const mapStops = buildMapStops(mapOrderIds);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['bottom']}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.helperText}>Đang tải tuyến đường hôm nay...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['bottom']}>
+        <View style={styles.centered}>
+          <Ionicons name="cloud-offline-outline" size={52} color={Colors.error} />
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable style={styles.retryBtn} onPress={loadRoute}>
+            <Ionicons name="refresh" size={18} color={Colors.onPrimary} />
+            <Text style={styles.retryBtnText}>Thử lại</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!routeStatus || orderedStops.length === 0) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['bottom']}>
+        <View style={styles.centered}>
+          <Ionicons name="calendar-outline" size={52} color={Colors.textMuted} />
+          <Text style={styles.emptyTitle}>Chưa có tuyến đường</Text>
+          <Text style={styles.helperText}>Bạn chưa được phân công tuyến giao hàng nào cho hôm nay.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -226,10 +329,6 @@ export function DriverHomeScreen() {
             <Text style={styles.greetTitle}>Xin chào, Tài xế!</Text>
             <Text style={styles.greetSub}>Chúc bạn một ca làm việc thuận lợi.</Text>
           </View>
-          <View style={styles.vehiclePill}>
-            <Ionicons name="car-outline" size={13} color={Colors.primary} />
-            <Text style={styles.vehiclePlate}>{route.vehicle.plateNumber}</Text>
-          </View>
         </View>
 
         {/* ── Route summary ── */}
@@ -238,22 +337,16 @@ export function DriverHomeScreen() {
           <View style={styles.routeCardHeader}>
             <View style={styles.statusBadge}>
               <Ionicons name="bicycle-outline" size={13} color={Colors.primary} />
-              <Text style={styles.statusLabel}>Đang giao</Text>
+              <Text style={styles.statusLabel}>{ROUTE_STATUS_LABEL[routeStatus]}</Text>
             </View>
-            <Text style={styles.routeDate}>{route.serviceDate}</Text>
+            <Text style={styles.routeDate}>{serviceDate}</Text>
           </View>
 
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Ionicons name="location-outline" size={22} color={Colors.primary} />
-              <Text style={styles.statVal}>{route.totalStops}</Text>
-              <Text style={styles.statLbl}>Điểm dừng</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Ionicons name="navigate-outline" size={22} color={Colors.secondary} />
-              <Text style={styles.statVal}>{route.totalDistanceKm} km</Text>
-              <Text style={styles.statLbl}>Quãng đường</Text>
+              <Text style={styles.statVal}>{orderedStops.length}</Text>
+              <Text style={styles.statLbl}>Điểm giao</Text>
             </View>
           </View>
 
@@ -278,7 +371,7 @@ export function DriverHomeScreen() {
         <View style={styles.stopSectionHeader}>
           <View style={{ gap: 2 }}>
             <Text style={styles.sectionLabel}>Thứ tự điểm giao</Text>
-            <Text style={styles.stopSectionSub}>Sắp xếp trước khi ra lấy hàng</Text>
+            <Text style={styles.stopSectionSub}>Sắp xếp trước khi ra lấy hàng nếu cần</Text>
           </View>
           {reorderMode ? (
             <TouchableOpacity style={styles.reorderDoneBtn} onPress={handleReorderDone}>
@@ -314,14 +407,13 @@ export function DriverHomeScreen() {
             });
           }}
         >
-          {orderedStops.map((stop, idx) => {
+          {orderedStops.map(({ stop, displayOrder }, idx) => {
             const isDragging = idx === draggingIdx;
             const isTarget = draggingIdx >= 0 && !isDragging && idx === insertIdx;
             return (
               <Animated.View
-                key={stop.id}
+                key={stop.deliveryId}
                 onLayout={idx === 0 ? (e) => {
-                  // Measure actual card height + gap for accurate index calculation
                   itemHeightRef.current = e.nativeEvent.layout.height + 8;
                 } : undefined}
                 style={[
@@ -340,6 +432,7 @@ export function DriverHomeScreen() {
               >
                 <StopOrderCard
                   stop={stop}
+                  displayOrder={displayOrder}
                   reorderMode={reorderMode}
                   isDragging={isDragging}
                   isTarget={isTarget}
@@ -355,11 +448,12 @@ export function DriverHomeScreen() {
       {/* ── Footer ── */}
       <View style={styles.footer}>
         <Pressable
-          style={({ pressed }) => [styles.hubBtn, pressed && { opacity: 0.85 }]}
-          onPress={handleGoToHub}
+          style={({ pressed }) => [styles.hubBtn, pressed && { opacity: 0.85 }, startingRoute && { opacity: 0.6 }]}
+          onPress={startingRoute ? undefined : handleGoToHub}
+          disabled={startingRoute}
         >
           <Ionicons name="cube-outline" size={18} color={Colors.onPrimary} />
-          <Text style={styles.hubBtnText}>Nhận hàng tại Hub</Text>
+          <Text style={styles.hubBtnText}>{startingRoute ? 'Đang bắt đầu...' : 'Nhận hàng tại Hub'}</Text>
         </Pressable>
       </View>
 
@@ -374,13 +468,9 @@ export function DriverHomeScreen() {
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>Bản đồ tuyến đường</Text>
-              <Text style={styles.modalSub}>{route.serviceDate} · {route.totalStops} điểm giao</Text>
+              <Text style={styles.modalSub}>{serviceDate} · {orderedStops.length} điểm giao</Text>
             </View>
-            <Pressable
-              onPress={() => setShowRouteMap(false)}
-              hitSlop={12}
-              style={styles.closeBtn}
-            >
+            <Pressable onPress={() => setShowRouteMap(false)} hitSlop={12} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color={Colors.textPrimary} />
             </Pressable>
           </View>
@@ -399,6 +489,16 @@ export function DriverHomeScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   body: { padding: 16, gap: 12 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
+  helperText: { maxWidth: 300, fontSize: 13, lineHeight: 19, textAlign: 'center', color: Colors.textMuted },
+  errorText: { maxWidth: 300, fontSize: 14, lineHeight: 20, textAlign: 'center', color: Colors.error },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
+  retryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    marginTop: 4, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 11,
+    backgroundColor: Colors.primary,
+  },
+  retryBtnText: { fontSize: 14, fontWeight: '700', color: Colors.onPrimary },
 
   greetCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -406,11 +506,6 @@ const styles = StyleSheet.create({
   },
   greetTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
   greetSub: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
-  vehiclePill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
-  },
-  vehiclePlate: { fontSize: 12, fontWeight: '700', color: Colors.primary },
 
   sectionLabel: {
     fontSize: 12, fontWeight: '700', color: Colors.textMuted,
@@ -434,7 +529,6 @@ const styles = StyleSheet.create({
 
   statsRow: { flexDirection: 'row', alignItems: 'center' },
   statItem: { flex: 1, alignItems: 'center', gap: 4 },
-  statDivider: { width: 1, height: 40, backgroundColor: Colors.outlineVariant },
   statVal: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
   statLbl: { fontSize: 10, color: Colors.textMuted, textAlign: 'center' },
 
@@ -505,10 +599,9 @@ const styles = StyleSheet.create({
   stopNumText: { fontSize: 14, fontWeight: '800', color: Colors.primary },
   stopNumTextDragging: { color: Colors.onPrimary },
 
-  stopInfo: { flex: 1, gap: 4 },
+  stopInfo: { flex: 1, gap: 2 },
   stopName: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
-  stopAddressRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  stopAddress: { flex: 1, fontSize: 11, color: Colors.textMuted },
+  stopOrderId: { fontSize: 11, color: Colors.textMuted },
 
   dragHandle: { flexShrink: 0, paddingHorizontal: 2 },
 

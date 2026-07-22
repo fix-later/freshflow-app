@@ -1,25 +1,25 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
 import { type DriverStackParamList } from '../../../navigation/types';
-import { MOCK_STOPS, MOCK_ROUTE, type MockStop, type StopStatus } from '../mockData';
-import { stopStatusStore, isRouteComplete } from '../stopStatusStore';
-import { stopOrderStore } from '../stopOrderStore';
+import { driverRouteStore, type DeliveryStop } from '../store/driverRouteStore';
+import { type DeliveryStatus } from '../types/delivery.types';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'StopList'>;
-const STATUS_CONFIG: Record<StopStatus, { label: string; color: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
+
+const STATUS_CONFIG: Record<DeliveryStatus, { label: string; color: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
   pending: { label: 'Chờ giao', color: '#6B7280', icon: 'time-outline' },
   arrived: { label: 'Đã tới', color: Colors.warning, icon: 'location' },
   delivered: { label: 'Đã giao', color: Colors.success, icon: 'checkmark-circle' },
   failed: { label: 'Không giao được', color: Colors.danger, icon: 'close-circle' },
 };
+
 function StopCard({
   stop,
-  status,
   onPress,
   reorderMode,
   canMoveUp,
@@ -27,8 +27,7 @@ function StopCard({
   onMoveUp,
   onMoveDown,
 }: {
-  stop: MockStop;
-  status: StopStatus;
+  stop: DeliveryStop;
   onPress: () => void;
   reorderMode?: boolean;
   canMoveUp?: boolean;
@@ -36,9 +35,8 @@ function StopCard({
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }) {
-  const cfg = STATUS_CONFIG[status];
-  const isDone = status === 'delivered' || status === 'failed';
-  const totalQty = stop.items.reduce((s, i) => s + i.quantity, 0);
+  const cfg = STATUS_CONFIG[stop.status];
+  const isDone = stop.status === 'delivered' || stop.status === 'failed';
   return (
     <Pressable
       style={({ pressed }) => [styles.card, isDone && styles.cardDone, pressed && { opacity: 0.75 }]}
@@ -57,19 +55,15 @@ function StopCard({
             <Text style={[styles.statusChipText, { color: cfg.color }]}>{cfg.label}</Text>
           </View>
         </View>
-        <View style={styles.addressRow}>
-          <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.address} numberOfLines={1}>{stop.address}</Text>
-        </View>
         <View style={styles.metaRow}>
-          <Ionicons name="cube-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.meta}>{stop.items.length} loại · {totalQty} đơn vị</Text>
+          <Ionicons name="receipt-outline" size={12} color={Colors.textMuted} />
+          <Text style={styles.meta}>Đơn #{stop.orderId.slice(0, 8).toUpperCase()}</Text>
         </View>
         {!isDone && !reorderMode && (
-          <Pressable style={styles.navBtn} onPress={onPress}>
+          <View style={styles.navBtn}>
             <Ionicons name="navigate-outline" size={13} color={Colors.primary} />
             <Text style={styles.navBtnText}>Điều hướng</Text>
-          </Pressable>
+          </View>
         )}
       </View>
       {/* Reorder arrows — only on moveable (non-done) stops */}
@@ -99,11 +93,11 @@ function StopCard({
     </Pressable>
   );
 }
-function RouteCompleteView({ delivered, failed, durationText, km, onGoHome }: {
+
+function RouteCompleteView({ delivered, failed, durationText, onGoHome }: {
   delivered: number;
   failed: number;
   durationText: string;
-  km: number;
   onGoHome: () => void;
 }) {
   return (
@@ -113,7 +107,6 @@ function RouteCompleteView({ delivered, failed, durationText, km, onGoHome }: {
       </View>
       <Text style={styles.completeTitle}>Tuyến đường hoàn tất!</Text>
       <Text style={styles.completeSub}>Bạn đã hoàn thành ca giao hàng hôm nay.</Text>
-      {/* Delivery stats */}
       <View style={styles.completeSummaryCard}>
         <View style={styles.completeStat}>
           <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
@@ -133,18 +126,11 @@ function RouteCompleteView({ delivered, failed, durationText, km, onGoHome }: {
           <Text style={styles.completeStatLbl}>Tổng điểm</Text>
         </View>
       </View>
-      {/* Shift stats */}
       <View style={styles.shiftCard}>
         <View style={styles.shiftStat}>
           <Ionicons name="time-outline" size={20} color={Colors.secondary} />
           <Text style={styles.shiftStatVal}>{durationText}</Text>
           <Text style={styles.shiftStatLbl}>Thời gian ca</Text>
-        </View>
-        <View style={styles.completeStatDivider} />
-        <View style={styles.shiftStat}>
-          <Ionicons name="navigate-outline" size={20} color={Colors.secondary} />
-          <Text style={styles.shiftStatVal}>{km} km</Text>
-          <Text style={styles.shiftStatLbl}>Quãng đường</Text>
         </View>
       </View>
       <Pressable style={styles.goHomeBtn} onPress={onGoHome}>
@@ -154,53 +140,51 @@ function RouteCompleteView({ delivered, failed, durationText, km, onGoHome }: {
     </View>
   );
 }
+
 export function StopListScreen({ route, navigation }: Props) {
-  const { routeId: _routeId } = route.params; // reserved for API call
+  const { routeId: _routeId } = route.params;
   const shiftStartRef = useRef(Date.now());
-  const [statuses, setStatuses] = useState<Record<string, StopStatus>>(
-    () => ({ ...stopStatusStore }),
-  );
+  const [loading, setLoading] = useState(driverRouteStore.getStops().length === 0);
+  const [stops, setStops] = useState<DeliveryStop[]>(driverRouteStore.getStops());
   const [routeCompleted, setRouteCompleted] = useState(false);
   const [durationText, setDurationText] = useState('');
   const [reorderMode, setReorderMode] = useState(false);
-  const [stopOrderIds, setStopOrderIds] = useState<string[]>(
-    () => stopOrderStore.isEmpty() ? MOCK_STOPS.map(s => s.id) : stopOrderStore.get(),
-  );
-  // Refresh statuses from shared store every time screen is focused
+
   useFocusEffect(
     useCallback(() => {
-      setStatuses({ ...stopStatusStore });
-      if (isRouteComplete()) setRouteCompleted(true);
+      if (driverRouteStore.getStops().length === 0) {
+        setLoading(true);
+        driverRouteStore.load().finally(() => {
+          setStops(driverRouteStore.getStops());
+          setLoading(false);
+        });
+      } else {
+        setStops([...driverRouteStore.getStops()]);
+        setLoading(false);
+      }
     }, []),
   );
-  const stopsWithStatus = stopOrderIds.map((id, idx) => {
-    const s = MOCK_STOPS.find(ms => ms.id === id)!;
-    return {
-      ...s,
-      order: idx + 1,
-      status: statuses[s.id] ?? s.status,
-    };
-  });
 
-  const moveStop = (id: string, dir: 'up' | 'down') => {
-    setStopOrderIds(prev => {
-      const idx = prev.indexOf(id);
+  const moveStop = (deliveryId: string, dir: 'up' | 'down') => {
+    setStops(prev => {
+      const idx = prev.findIndex(s => s.deliveryId === deliveryId);
       const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
       if (targetIdx < 0 || targetIdx >= prev.length) return prev;
-      // Don't swap past a done stop
-      const targetId = prev[targetIdx];
-      const targetStatus = statuses[targetId] ?? MOCK_STOPS.find(s => s.id === targetId)?.status ?? 'pending';
-      if (targetStatus === 'delivered' || targetStatus === 'failed') return prev;
+      const target = prev[targetIdx];
+      if (target.status === 'delivered' || target.status === 'failed') return prev;
       const next = [...prev];
       [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
-      return next;
+      driverRouteStore.setStopOrder(next.map(s => s.deliveryId));
+      return driverRouteStore.getStops();
     });
   };
-  const delivered = stopsWithStatus.filter(s => s.status === 'delivered').length;
-  const failed = stopsWithStatus.filter(s => s.status === 'failed').length;
+
+  const delivered = stops.filter(s => s.status === 'delivered').length;
+  const failed = stops.filter(s => s.status === 'failed').length;
   const done = delivered + failed;
-  const allDone = done === stopsWithStatus.length;
-  const pct = Math.round((done / stopsWithStatus.length) * 100);
+  const allDone = stops.length > 0 && done === stops.length;
+  const pct = stops.length > 0 ? Math.round((done / stops.length) * 100) : 0;
+
   const handleCompleteRoute = () => {
     Alert.alert(
       'Hoàn tất tuyến đường',
@@ -214,13 +198,25 @@ export function StopListScreen({ route, navigation }: Props) {
             const h = Math.floor(mins / 60);
             const m = mins % 60;
             setDurationText(h > 0 ? `${h}g ${m}ph` : `${m} phút`);
-            // TODO: await driverApi.completeRoute(routeId)
+            // No backend endpoint to mark the route as completed yet — this is a
+            // client-side summary screen only.
             setRouteCompleted(true);
           },
         },
       ],
     );
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['bottom']}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (routeCompleted) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -228,35 +224,37 @@ export function StopListScreen({ route, navigation }: Props) {
           delivered={delivered}
           failed={failed}
           durationText={durationText}
-          km={MOCK_ROUTE.totalDistanceKm}
-          onGoHome={() => navigation.popToTop()}
+          onGoHome={() => {
+            // Clear the finished route so DriverHomeScreen's focus-effect guard
+            // (which otherwise only reloads once) fetches fresh instead of
+            // re-showing this now-completed route.
+            driverRouteStore.reset();
+            navigation.popToTop();
+          }}
         />
       </SafeAreaView>
     );
   }
+
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <FlatList
-        data={stopsWithStatus}
-        keyExtractor={item => item.id}
+        data={stops}
+        keyExtractor={item => item.deliveryId}
         renderItem={({ item, index }) => {
           const isDone = item.status === 'delivered' || item.status === 'failed';
-          // Can move up if prev stop is not done
-          const prevId = stopOrderIds[index - 1];
-          const prevStatus = prevId ? (statuses[prevId] ?? MOCK_STOPS.find(s => s.id === prevId)?.status) : 'delivered';
-          const canMoveUp = !isDone && index > 0 && prevStatus !== 'delivered' && prevStatus !== 'failed';
-          // Can move down if next stop exists
-          const canMoveDown = !isDone && index < stopOrderIds.length - 1;
+          const prev = stops[index - 1];
+          const canMoveUp = !isDone && index > 0 && prev.status !== 'delivered' && prev.status !== 'failed';
+          const canMoveDown = !isDone && index < stops.length - 1;
           return (
             <StopCard
               stop={item}
-              status={item.status}
-              onPress={() => navigation.navigate('DriverNavigation', { stopId: item.id })}
+              onPress={() => navigation.navigate('DriverNavigation', { deliveryId: item.deliveryId })}
               reorderMode={reorderMode}
               canMoveUp={canMoveUp}
               canMoveDown={canMoveDown}
-              onMoveUp={() => moveStop(item.id, 'up')}
-              onMoveDown={() => moveStop(item.id, 'down')}
+              onMoveUp={() => moveStop(item.deliveryId, 'up')}
+              onMoveDown={() => moveStop(item.deliveryId, 'down')}
             />
           );
         }}
@@ -268,7 +266,7 @@ export function StopListScreen({ route, navigation }: Props) {
               <View style={styles.progressRow}>
                 <View>
                   <Text style={styles.progressTitle}>Tiến độ</Text>
-                  <Text style={styles.progressFrac}>{done}/{stopsWithStatus.length} điểm đã xong</Text>
+                  <Text style={styles.progressFrac}>{done}/{stops.length} điểm đã xong</Text>
                 </View>
                 <Text style={styles.progressPct}>{pct}%</Text>
               </View>
@@ -286,27 +284,20 @@ export function StopListScreen({ route, navigation }: Props) {
                 </View>
                 <View style={styles.progressMetaItem}>
                   <View style={[styles.dot, { backgroundColor: '#6B7280' }]} />
-                  <Text style={styles.progressMetaText}>{stopsWithStatus.length - done} còn lại</Text>
+                  <Text style={styles.progressMetaText}>{stops.length - done} còn lại</Text>
                 </View>
               </View>
             </View>
-            {/* List label row with reorder toggle */}
             <View style={styles.listLabelRow}>
               <Text style={styles.listLabel}>Danh sách điểm giao</Text>
-              {!allDone && stopOrderStore.isEmpty() && (
+              {!allDone && (
                 reorderMode ? (
-                  <TouchableOpacity
-                    style={styles.reorderDoneBtn}
-                    onPress={() => setReorderMode(false)}
-                  >
+                  <TouchableOpacity style={styles.reorderDoneBtn} onPress={() => setReorderMode(false)}>
                     <Ionicons name="checkmark" size={13} color={Colors.onPrimary} />
                     <Text style={styles.reorderDoneBtnText}>Xong</Text>
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity
-                    style={styles.reorderToggleBtn}
-                    onPress={() => setReorderMode(true)}
-                  >
+                  <TouchableOpacity style={styles.reorderToggleBtn} onPress={() => setReorderMode(true)}>
                     <Ionicons name="swap-vertical-outline" size={13} color={Colors.primary} />
                     <Text style={styles.reorderToggleBtnText}>Sắp xếp lại</Text>
                   </TouchableOpacity>
@@ -326,14 +317,11 @@ export function StopListScreen({ route, navigation }: Props) {
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         ListFooterComponent={<View style={{ height: allDone ? 120 : 16 }} />}
       />
-      {/* ── Hoàn tất tuyến footer ── */}
       {allDone && (
         <View style={styles.completeFooter}>
           <View style={styles.completeFooterInfo}>
             <Ionicons name="flag" size={18} color={Colors.success} />
-            <Text style={styles.completeFooterText}>
-              Tất cả {stopsWithStatus.length} điểm đã hoàn tất!
-            </Text>
+            <Text style={styles.completeFooterText}>Tất cả {stops.length} điểm đã hoàn tất!</Text>
           </View>
           <Pressable
             style={({ pressed }) => [styles.completeBtn, pressed && { opacity: 0.85 }]}
@@ -347,8 +335,10 @@ export function StopListScreen({ route, navigation }: Props) {
     </SafeAreaView>
   );
 }
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { padding: 16 },
   header: { gap: 14, marginBottom: 8 },
   progressCard: {
@@ -400,8 +390,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, flexShrink: 0,
   },
   statusChipText: { fontSize: 10, fontWeight: '700' },
-  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  address: { flex: 1, fontSize: 12, color: Colors.textSecondary },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   meta: { fontSize: 12, color: Colors.textMuted },
   navBtn: {
@@ -468,19 +456,6 @@ const styles = StyleSheet.create({
   shiftStatVal: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
   shiftStatLbl: { fontSize: 11, color: Colors.textMuted, textAlign: 'center' },
   // Reorder mode
-  reorderBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
-    marginBottom: 4,
-  },
-  reorderBannerText: { flex: 1, fontSize: 12, color: Colors.primary, fontWeight: '600' },
-  reorderDoneBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primary, borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 6,
-  },
-  reorderDoneBtnText: { fontSize: 12, fontWeight: '700', color: Colors.onPrimary },
   listLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   reorderToggleBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -488,6 +463,19 @@ const styles = StyleSheet.create({
     borderRadius: 8, borderWidth: 1, borderColor: Colors.primary,
   },
   reorderToggleBtnText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
+  reorderDoneBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: Colors.primary, borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  reorderDoneBtnText: { fontSize: 12, fontWeight: '700', color: Colors.onPrimary },
+  reorderBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+    marginTop: -4,
+  },
+  reorderBannerText: { flex: 1, fontSize: 12, color: Colors.primary, fontWeight: '600' },
   reorderBtns: { justifyContent: 'center', gap: 2, flexShrink: 0 },
   reorderArrow: {
     width: 32, height: 32, borderRadius: 8,

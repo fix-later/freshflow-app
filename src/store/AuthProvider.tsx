@@ -3,6 +3,7 @@ import { type User } from '../types/common.types';
 import { AuthContext } from './authStore';
 import { TOKEN_KEY, registerSignOut } from '../services/api/client';
 import { authApi, userFromToken, REFRESH_TOKEN_KEY } from '../features/auth/api/authApi';
+import { driverRouteStore } from '../features/delivery/store/driverRouteStore';
 import * as SecureStore from 'expo-secure-store';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -17,6 +18,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setToken(null);
       setSessionExpired(true);
+      // Module-level feature stores (e.g. driverRouteStore) survive across sign-in/out —
+      // clear them here so a stale driver's route/stops can't leak into the next session.
+      driverRouteStore.reset();
     });
   }, []);
 
@@ -49,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY).catch(() => null);
     setUser(null);
     setToken(null);
+    driverRouteStore.reset();
     if (refreshToken) {
       authApi.logout(refreshToken).catch(() => {});
     } else {
