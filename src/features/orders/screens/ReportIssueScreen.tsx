@@ -179,6 +179,22 @@ export function ReportIssueScreen({ route, navigation }: Props) {
     );
   }
 
+  if (order.status !== 'delivered') {
+    return (
+      <SafeAreaView style={styles.screen} edges={['bottom']}>
+        <View style={styles.centered}>
+          <Ionicons name="time-outline" size={48} color={Colors.warning} />
+          <Text style={styles.errorText}>
+            Chỉ có thể báo sự cố sau khi đơn hàng đã chuyển sang trạng thái Đã giao.
+          </Text>
+          <Pressable style={styles.retryBtn} onPress={() => navigation.goBack()}>
+            <Text style={styles.retryBtnText}>Quay lại</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const items = order.items ?? [];
   const code = (order.orderId || '').slice(0, 8).toUpperCase() || 'N/A';
 
@@ -299,7 +315,7 @@ export function ReportIssueScreen({ route, navigation }: Props) {
               if (formError) setFormError(null);
             }}
             multiline
-            maxLength={500}
+            maxLength={1000}
           />
         </View>
 

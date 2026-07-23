@@ -169,6 +169,17 @@ export function ManageRecurringOrdersScreen() {
           </View>
         ) : null}
 
+        <Pressable
+          style={styles.instancesBtn}
+          onPress={() => navigation.navigate('ScheduledOrderInstances', {
+            scheduledOrderId: item.scheduledOrderId,
+          })}
+        >
+          <Ionicons name="list-outline" size={15} color={Colors.primaryText} />
+          <Text style={styles.instancesBtnText}>Xem các đơn đã tạo</Text>
+          <Ionicons name="chevron-forward" size={15} color={Colors.primaryText} />
+        </Pressable>
+
         {!isCancelled ? (
           <View style={styles.actionRow}>
             <Pressable
@@ -245,7 +256,7 @@ export function ManageRecurringOrdersScreen() {
             <View style={styles.emptyContainer}>
               <Ionicons name="repeat-outline" size={60} color={Colors.outline} />
               <Text style={styles.emptyTitle}>Chưa có lịch đặt hàng định kỳ</Text>
-              <Text style={styles.emptySub}>Bấm nút + ở trên để tạo lịch tự động đặt hàng mới.</Text>
+              <Text style={styles.emptySub}>Bấm nút + ở trên để tạo lịch tự động sinh bản nháp mới.</Text>
             </View>
           }
         />
@@ -258,6 +269,17 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
 
   headerAddBtn: { padding: 4, marginRight: 4 },
+  instancesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+  },
+  instancesBtnText: { flex: 1, fontSize: 12, fontWeight: '700', color: Colors.primaryText },
 
   filterRow: {
     flexDirection: 'row',

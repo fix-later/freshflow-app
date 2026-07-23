@@ -8,7 +8,8 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../../constants/colors';
 import { Text } from '../../../components/ui/Text';
@@ -17,36 +18,40 @@ import {
   type OrderListItemDto,
   type OrderStatus,
 } from '../../orders/api/orderApi';
+import { createOrderStatusConnection } from '../../orders/realtime/orderRealtime';
+import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 
-type DeliveryFilter = 'active' | 'in_transit' | 'delivered';
+type DeliveryFilter = 'active' | 'delivering' | 'delivered';
 
 const DELIVERY_STATUSES: OrderStatus[] = [
   'confirmed',
-  'processing',
-  'ready_for_pickup',
-  'in_transit',
+  'batched',
+  'picked_up',
+  'at_hub',
+  'delivering',
   'delivered',
 ];
 
 const FILTERS: { key: DeliveryFilter; label: string }[] = [
   { key: 'active', label: 'Đang xử lý' },
-  { key: 'in_transit', label: 'Đang giao' },
+  { key: 'delivering', label: 'Đang giao' },
   { key: 'delivered', label: 'Đã giao' },
 ];
 
 const DELIVERY_STATUS: Record<
-  Extract<OrderStatus, 'confirmed' | 'processing' | 'ready_for_pickup' | 'in_transit' | 'delivered'>,
+  Extract<OrderStatus, 'confirmed' | 'batched' | 'picked_up' | 'at_hub' | 'delivering' | 'delivered'>,
   { label: string; color: string; step: number }
 > = {
   confirmed: { label: 'Đã xác nhận', color: Colors.secondary, step: 1 },
-  processing: { label: 'Đang chuẩn bị', color: Colors.tertiary, step: 1 },
-  ready_for_pickup: { label: 'Sẵn sàng giao', color: Colors.tertiary, step: 1 },
-  in_transit: { label: 'Đang giao', color: Colors.warning, step: 2 },
-  delivered: { label: 'Đã giao', color: Colors.success, step: 3 },
+  batched: { label: 'Đã gom phiên thu mua', color: Colors.tertiary, step: 2 },
+  picked_up: { label: 'Đã lấy tại chợ', color: Colors.tertiary, step: 2 },
+  at_hub: { label: 'Đã về hub', color: Colors.secondary, step: 3 },
+  delivering: { label: 'Đang giao', color: Colors.warning, step: 4 },
+  delivered: { label: 'Đã giao', color: Colors.success, step: 5 },
 };
 
 function getOrderId(order: OrderListItemDto) {
-  return order.orderId || order.id || '';
+  return order.orderId;
 }
 
 function formatDate(value: string) {
@@ -60,7 +65,7 @@ function formatDate(value: string) {
 }
 
 function DeliveryProgress({ step }: { step: number }) {
-  const labels = ['Chuẩn bị', 'Đang giao', 'Đã giao'];
+  const labels = ['Xác nhận', 'Thu mua', 'Tại hub', 'Đang giao', 'Đã giao'];
 
   return (
     <View style={styles.progressRow}>
@@ -94,6 +99,7 @@ function DeliveryProgress({ step }: { step: number }) {
 }
 
 export function TrackOrderScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RestaurantOrdersStackParamList>>();
   const [orders, setOrders] = useState<OrderListItemDto[]>([]);
   const [filter, setFilter] = useState<DeliveryFilter>('active');
   const [loading, setLoading] = useState(true);
@@ -106,7 +112,7 @@ export function TrackOrderScreen() {
 
     setError(null);
     try {
-      const response = await orderApi.list({ pageSize: 50 });
+      const response = await orderApi.list({ page: 1, pageSize: 100 });
       setOrders(response.data.filter((order) => DELIVERY_STATUSES.includes(order.status)));
     } catch (loadError) {
       console.error('Error fetching restaurant deliveries:', loadError);
@@ -120,13 +126,31 @@ export function TrackOrderScreen() {
   useFocusEffect(
     useCallback(() => {
       loadDeliveries();
+      const connection = createOrderStatusConnection((event) => {
+        setOrders((current) =>
+          current
+            .map((order) =>
+              order.orderId === event.orderId
+                ? { ...order, status: event.newStatus }
+                : order,
+            )
+            .filter((order) => DELIVERY_STATUSES.includes(order.status)),
+        );
+      });
+      connection.start().catch((connectionError) => {
+        console.warn('Order realtime connection failed:', connectionError);
+      });
+
+      return () => {
+        connection.stop().catch(() => undefined);
+      };
     }, [loadDeliveries]),
   );
 
   const filteredOrders = useMemo(() => {
     if (filter === 'active') {
       return orders.filter((order) =>
-        ['confirmed', 'processing', 'ready_for_pickup'].includes(order.status),
+        ['confirmed', 'batched', 'picked_up', 'at_hub'].includes(order.status),
       );
     }
     return orders.filter((order) => order.status === filter);
@@ -139,7 +163,10 @@ export function TrackOrderScreen() {
     ];
 
     return (
-      <View style={styles.card}>
+      <Pressable
+        style={styles.card}
+        onPress={() => navigation.navigate('OrderDetail', { orderId })}
+      >
         <View style={styles.cardHeader}>
           <View style={styles.orderTitleRow}>
             <View style={styles.orderIcon}>
@@ -187,12 +214,44 @@ export function TrackOrderScreen() {
             {(item.totalAmount || 0).toLocaleString('vi-VN')}đ
           </Text>
         </View>
-      </View>
+        <View style={styles.detailLink}>
+          <Text style={styles.detailLinkText}>Xem chi tiết</Text>
+          <Ionicons name="arrow-forward" size={15} color={Colors.primaryText} />
+        </View>
+      </Pressable>
     );
   };
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
+      <View style={styles.shortcutRow}>
+        <Pressable
+          style={styles.shortcutCard}
+          onPress={() => navigation.navigate('OrderHistory')}
+        >
+          <View style={styles.shortcutIcon}>
+            <Ionicons name="receipt-outline" size={20} color={Colors.primaryText} />
+          </View>
+          <View style={styles.shortcutText}>
+            <Text style={styles.shortcutTitle}>Tất cả đơn</Text>
+            <Text style={styles.shortcutSubtitle}>Bản nháp, đã giao, đã hủy</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={17} color={Colors.textMuted} />
+        </Pressable>
+        <Pressable
+          style={styles.shortcutCard}
+          onPress={() => navigation.navigate('ManageRecurringOrders')}
+        >
+          <View style={styles.shortcutIcon}>
+            <Ionicons name="repeat-outline" size={20} color={Colors.primaryText} />
+          </View>
+          <View style={styles.shortcutText}>
+            <Text style={styles.shortcutTitle}>Đặt định kỳ</Text>
+            <Text style={styles.shortcutSubtitle}>Quản lý lịch tạo đơn</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={17} color={Colors.textMuted} />
+        </Pressable>
+      </View>
       <View style={styles.filterBar}>
         {FILTERS.map((item) => {
           const active = item.key === filter;
@@ -266,11 +325,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 6,
     marginHorizontal: 16,
-    marginTop: 12,
+    marginTop: 4,
     marginBottom: 6,
     borderRadius: 8,
     backgroundColor: Colors.surfaceContainer,
   },
+  shortcutRow: { paddingHorizontal: 16, paddingTop: 12, gap: 8 },
+  shortcutCard: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  shortcutIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
+  },
+  shortcutText: { flex: 1 },
+  shortcutTitle: { fontSize: 13, color: Colors.deepTeal, fontWeight: '700' },
+  shortcutSubtitle: { marginTop: 2, fontSize: 10, color: Colors.textMuted },
   filterButton: {
     flex: 1,
     minHeight: 38,
@@ -433,6 +515,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.primaryText,
   },
+  detailLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 5,
+    marginTop: 10,
+  },
+  detailLinkText: { fontSize: 11, color: Colors.primaryText, fontWeight: '700' },
   centered: {
     flex: 1,
     alignItems: 'center',

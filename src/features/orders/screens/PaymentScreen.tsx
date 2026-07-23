@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
-import type { CartItem } from './OrderListScreen';
+import { Text } from '../../../components/ui/Text';
+import type { CartItem } from '../../../store/cartStore';
 
 type PaymentMethod = 'cod' | 'bank_transfer';
 

@@ -132,7 +132,7 @@ export function UpdatePriceScreen() {
       result = result.filter(
         (p) =>
           p.productName.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q) ||
+          p.category?.toLowerCase().includes(q) ||
           p.unit.toLowerCase().includes(q),
       );
     }

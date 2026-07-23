@@ -22,28 +22,6 @@ import { restaurantApi } from '../../restaurant/api/restaurantApi';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'ConfirmOrder'>;
 
-// ─── Cutoff info (mock — replace with API when BE ready) ───────────────
-const CUTOFF_HOUR = 22;
-
-const DELIVERY_CYCLE_ROWS = [
-  { days: 'Thứ 2 – Thứ 7', window: '5:00 – 8:00 sáng', note: 'Đặt trước 22:00 hôm trước' },
-  { days: 'Chủ nhật', window: 'Không giao', note: '—' },
-];
-
-function getCutoffInfo() {
-  const now = new Date();
-  const cutoff = new Date();
-  cutoff.setHours(CUTOFF_HOUR, 0, 0, 0);
-  const diff = cutoff.getTime() - now.getTime();
-  const next = new Date(now);
-  next.setDate(now.getDate() + (diff <= 0 ? 2 : 1));
-  const nextLabel = `${next.getDate()}/${next.getMonth() + 1}`;
-  if (diff <= 0) return { isPast: true, isSafe: false, hoursLeft: 0, minutesLeft: 0, nextLabel };
-  const hoursLeft = Math.floor(diff / 3_600_000);
-  const minutesLeft = Math.floor((diff % 3_600_000) / 60_000);
-  return { isPast: false, isSafe: diff > 2 * 3_600_000, hoursLeft, minutesLeft, nextLabel };
-}
-
 function CreditAlertBanner({ ratio, available }: { ratio: number; available: number }) {
   if (ratio < 0.7) return null;
   const isDanger = ratio >= 0.9;
@@ -66,32 +44,29 @@ function CreditAlertBanner({ ratio, available }: { ratio: number; available: num
   );
 }
 
-function CutoffBanner() {
-  const { isPast, isSafe, hoursLeft, minutesLeft, nextLabel } = getCutoffInfo();
-  const accent = isPast ? '#EF4444' : isSafe ? '#10B981' : '#F59E0B';
-  const bg = isPast ? '#FEE2E2' : isSafe ? '#ECFDF5' : '#FEF3C7';
-  const icon = isPast ? 'alert-circle' : isSafe ? 'checkmark-circle' : 'time';
-  const title = isPast
-    ? 'Đã qua cutoff hôm nay'
-    : isSafe
-      ? 'Kịp cutoff hôm nay'
-      : `Còn ${hoursLeft}g ${minutesLeft}p để đặt`;
-  const sub = isPast
-    ? `Đơn sẽ giao sáng ngày ${nextLabel} lúc 5:00`
-    : `Đặt trước 22:00 → giao sáng ${nextLabel} lúc 5:00`;
-
+function OrderRuleBanner() {
   return (
-    <View style={[styles.cutoffBanner, { backgroundColor: bg, borderColor: accent + '50' }]}>
-      <Ionicons name={icon as any} size={22} color={accent} />
+    <View style={[styles.cutoffBanner, { backgroundColor: '#ECFDF5', borderColor: '#10B98150' }]}>
+      <Ionicons name="shield-checkmark-outline" size={22} color="#10B981" />
       <View style={{ flex: 1 }}>
-        <Text style={[styles.cutoffTitle, { color: accent }]}>{title}</Text>
-        <Text style={styles.cutoffSub}>{sub}</Text>
+        <Text style={[styles.cutoffTitle, { color: '#047857' }]}>Kiểm tra trước khi xác nhận</Text>
+        <Text style={styles.cutoffSub}>
+          Hệ thống sẽ kiểm tra công nợ, trạng thái bản nháp và tự điều chỉnh lịch giao theo cutoff hiện hành.
+        </Text>
       </View>
     </View>
   );
 }
 
-function SuccessView({ orderId, onDone }: { orderId: string; onDone: () => void }) {
+function SuccessView({
+  orderId,
+  scheduledFor,
+  onDone,
+}: {
+  orderId: string;
+  scheduledFor: string | null;
+  onDone: () => void;
+}) {
   return (
     <View style={styles.successWrap}>
       <View style={styles.successCircle}>
@@ -99,7 +74,10 @@ function SuccessView({ orderId, onDone }: { orderId: string; onDone: () => void 
       </View>
       <Text style={styles.successTitle}>Đặt hàng thành công!</Text>
       <Text style={styles.successSub}>Mã đơn: {orderId.slice(0, 8).toUpperCase()}</Text>
-      <Text style={styles.successDesc}>Đơn hàng của bạn đang chờ xác nhận từ hệ thống.</Text>
+      <Text style={styles.successDesc}>
+        Đơn đã được xác nhận
+        {scheduledFor ? ` và dự kiến giao ${new Date(scheduledFor).toLocaleString('vi-VN')}.` : '.'}
+      </Text>
       <Pressable style={styles.successBtn} onPress={onDone}>
         <Text style={styles.successBtnText}>Về trang chủ</Text>
       </Pressable>
@@ -136,6 +114,8 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
   const { items, scheduledFor, deliveryLabel, notes } = route.params;
   const [loading, setLoading] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
+  const [placedScheduledFor, setPlacedScheduledFor] = useState<string | null>(null);
+  const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
   const [creditRatio, setCreditRatio] = useState<number | null>(null);
   const [availableCredit, setAvailableCredit] = useState<number>(0);
   const { clearCart } = useCartStore();
@@ -159,30 +139,62 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
   const subtotal = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
   const itemCount = items.reduce((sum, it) => sum + it.quantity, 0);
 
+  const openOrderManagement = (orderId: string) => {
+    navigation.getParent<any>()?.navigate('RestaurantTracking', {
+        screen: 'OrderDetail',
+        params: { orderId },
+      });
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const draft = await orderApi.create({
-        items: items.map(it => ({ marketProductId: it.marketProductId, quantity: it.quantity, note: it.note })),
-        scheduledFor,
-        notes,
-      });
-      const draftId = draft?.orderId;
-      if (!draftId) throw new Error('Không nhận được mã đơn hàng từ server.');
+      let currentDraftId = draftOrderId;
+      if (!currentDraftId) {
+        const itemNotes = items
+          .filter((item) => item.note?.trim())
+          .map((item) => `${item.productName}: ${item.note!.trim()}`);
+        const apiNotes = [notes?.trim(), ...itemNotes].filter(Boolean).join('\n') || undefined;
+        const draft = await orderApi.create({
+          items: items.map(it => ({ marketProductId: it.marketProductId, quantity: it.quantity })),
+          scheduledFor,
+          notes: apiNotes,
+        });
+        currentDraftId = draft.orderId;
+        setDraftOrderId(currentDraftId);
+      }
 
-      await orderApi.confirm(draftId);
+      const preview = await orderApi.previewConfirmation(currentDraftId);
+      if (!preview.wouldSucceed) {
+        const issues = preview.issues.map((issue) => `• ${issue.message}`).join('\n');
+        Alert.alert(
+          'Chưa thể xác nhận đơn',
+          `${issues || 'Đơn hàng chưa đáp ứng điều kiện xác nhận.'}\n\nBản nháp đã được lưu trong lịch sử đơn hàng.`,
+          [
+            {
+              text: 'Xem bản nháp',
+              onPress: () => openOrderManagement(currentDraftId),
+            },
+            { text: 'Đóng', style: 'cancel' },
+          ],
+        );
+        return;
+      }
+
+      const confirmed = await orderApi.confirm(currentDraftId);
 
       clearCart();
-      setPlacedOrderId(draftId);
+      setPlacedScheduledFor(confirmed.scheduledFor);
+      setPlacedOrderId(confirmed.orderId);
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       if (code === 'INSUFFICIENT_STOCK') {
         Alert.alert('Không đủ hàng', message ?? 'Một hoặc nhiều sản phẩm không đủ số lượng tồn kho.');
-      } else if (code === 'RESTAURANT_NOT_APPROVED') {
+      } else if (code === 'RESTAURANT_NOT_APPROVED' || code === 'RESTAURANT_NOT_ACTIVE') {
         Alert.alert('Tài khoản chưa được duyệt', 'Nhà hàng cần được Admin phê duyệt trước khi đặt hàng.');
-      } else if (code === 'SCHEDULED_FOR_TOO_SOON') {
-        Alert.alert('Thời gian không hợp lệ', 'Thời gian giao phải cách thời điểm hiện tại ít nhất 2 giờ.');
+      } else if (code === 'DELIVERY_DATE_OUT_OF_WINDOW') {
+        Alert.alert('Thời gian không hợp lệ', 'Ngày giao phải từ hiện tại đến tối đa 7 ngày tiếp theo.');
       } else if (
         code === 'CREDIT_LIMIT_EXCEEDED' ||
         code === 'INSUFFICIENT_CREDIT' ||
@@ -203,7 +215,11 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
   if (placedOrderId) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
-        <SuccessView orderId={placedOrderId} onDone={() => navigation.popToTop()} />
+        <SuccessView
+          orderId={placedOrderId}
+          scheduledFor={placedScheduledFor}
+          onDone={() => openOrderManagement(placedOrderId)}
+        />
       </SafeAreaView>
     );
   }
@@ -213,29 +229,12 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
 
         {/* ── Cutoff banner ── */}
-        <CutoffBanner />
+        <OrderRuleBanner />
 
         {/* ── Credit alert ── */}
         {creditRatio !== null && (
           <CreditAlertBanner ratio={creditRatio} available={availableCredit} />
         )}
-
-        {/* ── Delivery cycle ── */}
-        <Text style={styles.sectionTitle}>Chu kỳ giao hàng</Text>
-        <View style={styles.card}>
-          {DELIVERY_CYCLE_ROWS.map((row, i) => (
-            <View
-              key={i}
-              style={[styles.cycleRow, i > 0 && { borderTopWidth: 1, borderTopColor: Colors.surfaceVariant }]}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cycleDays}>{row.days}</Text>
-                <Text style={styles.cycleNote}>{row.note}</Text>
-              </View>
-              <Text style={styles.cycleWindow}>{row.window}</Text>
-            </View>
-          ))}
-        </View>
 
         {/* ── Items ── */}
         <Text style={styles.sectionTitle}>Sản phẩm ({itemCount} sản phẩm)</Text>
