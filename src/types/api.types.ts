@@ -44,6 +44,7 @@ export interface ProductDto {
   createdAt: string;
   updatedAt: string;
   isDeleted: boolean;
+  imageUrl: string | null;
 }
 
 export interface MarketDto {
@@ -61,6 +62,7 @@ export interface MarketDto {
 export interface CategoryDto {
   id: string;
   name: string;
+  parentId: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -81,13 +83,13 @@ export interface MarketProductDto {
   productId: string;
   marketId: string;
   productName: string;
-  category: string;
+  category: string | null;
   unit: string;
   currentPrice: number;
   currentQuantity: number;
   availableQuantity: number;
   updatedAt: string;
-  updatedBy: string;
+  updatedBy: string | null;
 }
 
 /** A price/quantity change record for a market product. */

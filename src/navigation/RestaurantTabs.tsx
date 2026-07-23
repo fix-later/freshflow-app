@@ -3,10 +3,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { TrackOrderScreen } from '../features/delivery/screens/TrackOrderScreen';
 import { RestaurantProfileTab } from './RestaurantProfileTab';
 import { RestaurantOrdersTab } from './RestaurantOrdersTab';
+import { RestaurantOrderManagementTab } from './RestaurantOrderManagementTab';
 import { FavoritesScreen } from '../features/orders/screens/FavoritesScreen';
+import { RestaurantAssistantScreen } from '../features/assistant/screens/RestaurantAssistantScreen';
 import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
 import { type RestaurantTabParamList } from './types';
@@ -24,10 +25,15 @@ const TAB_CONFIG = {
     icon: 'heart-outline' as const,
     activeIcon: 'heart' as const,
   },
+  RestaurantAssistant: {
+    label: 'AI',
+    icon: 'sparkles' as const,
+    activeIcon: 'sparkles' as const,
+  },
   RestaurantTracking: {
-    label: 'Theo dõi',
-    icon: 'clipboard-outline' as const,
-    activeIcon: 'clipboard' as const,
+    label: 'Đơn hàng',
+    icon: 'receipt-outline' as const,
+    activeIcon: 'receipt' as const,
   },
   RestaurantProfile: {
     label: 'Tài khoản',
@@ -43,6 +49,7 @@ export function RestaurantTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => {
         const config = TAB_CONFIG[route.name as keyof typeof TAB_CONFIG];
+        const isAssistant = route.name === 'RestaurantAssistant';
         return {
           headerShown: true,
           headerStyle: {
@@ -67,19 +74,43 @@ export function RestaurantTabs() {
             shadowOffset: { width: 0, height: -1 },
             shadowOpacity: 0.04,
             shadowRadius: 3,
-            height: 68 + Math.max(insets.bottom - 8, 0),
+            height: 72 + Math.max(insets.bottom - 8, 0),
             paddingBottom: Math.max(insets.bottom, 12),
-            paddingTop: 8,
+            paddingTop: 7,
           },
           tabBarLabelStyle: {
             fontFamily: Fonts.semibold,
             fontSize: 11,
             lineHeight: 14,
-            marginTop: 2,
+            marginTop: isAssistant ? 12 : 2,
           },
           tabBarActiveTintColor: Colors.primaryText,
           tabBarInactiveTintColor: Colors.textSecondary,
           tabBarIcon: ({ focused, size }) => {
+            if (isAssistant) {
+              return (
+                <View
+                  style={{
+                    width: 58,
+                    height: 58,
+                    marginTop: -25,
+                    borderRadius: 29,
+                    backgroundColor: Colors.deepTeal,
+                    borderWidth: 5,
+                    borderColor: Colors.surface,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: Colors.deepTeal,
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 10,
+                    elevation: 8,
+                  }}
+                >
+                  <Ionicons name="sparkles" size={25} color={Colors.primary} />
+                </View>
+              );
+            }
             return (
               <View
                 style={{
@@ -117,9 +148,14 @@ export function RestaurantTabs() {
         options={{ title: 'Yêu thích' }}
       />
       <Tab.Screen
+        name="RestaurantAssistant"
+        component={RestaurantAssistantScreen}
+        options={{ headerShown: false }}
+      />
+      <Tab.Screen
         name="RestaurantTracking"
-        component={TrackOrderScreen}
-        options={{ title: 'Theo dõi' }}
+        component={RestaurantOrderManagementTab}
+        options={{ headerShown: false }}
       />
       <Tab.Screen
         name="RestaurantProfile"

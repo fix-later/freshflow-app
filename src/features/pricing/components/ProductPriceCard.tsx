@@ -104,12 +104,12 @@ export function ProductPriceCard({
       <View style={styles.topRow}>
         <View style={styles.categoryBadge}>
           <Ionicons
-            name={getCategoryIcon(product.category)}
+            name={getCategoryIcon(product.category ?? '')}
             size={14}
             color={Colors.primary}
             style={styles.categoryIcon}
           />
-          <Text style={styles.categoryText}>{product.category}</Text>
+          <Text style={styles.categoryText}>{product.category || 'Chưa phân loại'}</Text>
         </View>
 
         <View

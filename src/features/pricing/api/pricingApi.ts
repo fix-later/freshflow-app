@@ -2,7 +2,14 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { apiClient, TOKEN_KEY } from '../../../services/api/client';
 import { ENV } from '../../../config/env';
-import type { MarketDto, MarketProductDto, CategoryDto, PriceHistoryItemDto } from '../../../types/api.types';
+import type {
+  MarketDto,
+  MarketProductDto,
+  CategoryDto,
+  PriceHistoryItemDto,
+  ProductDto,
+  PaginationMeta,
+} from '../../../types/api.types';
 
 export interface GetMarketProductsParams {
   category?: string;
@@ -54,6 +61,26 @@ export const pricingApi = {
   /** GET /api/v1/categories — List all active product categories. */
   async getCategories(): Promise<CategoryDto[]> {
     const { data } = await apiClient.get('/api/v1/categories');
+    return data;
+  },
+
+  /** GET /api/v1/products — product metadata including description and image. */
+  async getProducts(params?: {
+    search?: string;
+    category?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ data: ProductDto[]; meta: PaginationMeta }> {
+    const { data } = await apiClient.get<{ data: ProductDto[]; meta: PaginationMeta }>(
+      '/api/v1/products',
+      {
+        params: {
+          ...params,
+          page: params?.page ?? 1,
+          pageSize: params?.pageSize ?? 100,
+        },
+      },
+    );
     return data;
   },
 

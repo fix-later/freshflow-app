@@ -5,7 +5,7 @@ export const Colors = {
   primaryLight: '#E5FCEE',
   primaryContainer: '#50F0A3',
   // Deep teal keeps normal-size labels accessible on the very light mint fill.
-  onPrimary: '#083B4B',
+  onPrimary: '#064255',
   onPrimaryContainer: '#2B8057',
   primaryText: '#2B8057',
 
@@ -16,7 +16,7 @@ export const Colors = {
   onSecondaryContainer: '#1A214D',
   accent: '#313F90',
   accent600: '#2C3881',
-  deepTeal: '#083B4B',
+  deepTeal: '#064255',
   white: '#FFFFFF',
 
   // Tertiary (status accent, no web brand equivalent)
@@ -61,7 +61,7 @@ export const Colors = {
   outlineVariant: '#E2E8F0',
 
   // Overlay
-  overlay: 'rgba(8, 59, 75, 0.5)',
+  overlay: 'rgba(6, 66, 85, 0.52)',
 } as const;
 
 export type ColorKey = keyof typeof Colors;

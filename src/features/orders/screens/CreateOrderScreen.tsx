@@ -48,6 +48,13 @@ function formatCustomLabel(date: Date, time: Date): string {
   return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
 }
 
+function getDeliveryUpperBound(): Date {
+  const upperBound = new Date();
+  upperBound.setHours(0, 0, 0, 0);
+  upperBound.setDate(upperBound.getDate() + 7);
+  return upperBound;
+}
+
 function ItemRow({ item }: { item: CreateOrderItem }) {
   return (
     <View style={styles.itemRow}>
@@ -119,7 +126,15 @@ export function CreateOrderScreen({ route, navigation }: Props) {
       scheduledFor = d.toISOString();
       deliveryLabel = 'Sáng mai (5:00)';
     } else if (timeOption === 'custom') {
-      scheduledFor = buildScheduledForCustom(selectedDate, selectedTime);
+      const customDate = new Date(buildScheduledForCustom(selectedDate, selectedTime));
+      if (customDate <= new Date() || customDate > getDeliveryUpperBound()) {
+        Alert.alert(
+          'Thời gian giao không hợp lệ',
+          'Ngày giao phải ở tương lai và nằm trong cửa sổ 7 ngày theo quy định của hệ thống.',
+        );
+        return;
+      }
+      scheduledFor = customDate.toISOString();
       deliveryLabel = formatCustomLabel(selectedDate, selectedTime);
     }
 
@@ -204,6 +219,7 @@ export function CreateOrderScreen({ route, navigation }: Props) {
               mode="date"
               display="default"
               minimumDate={new Date()}
+              maximumDate={getDeliveryUpperBound()}
               onChange={onChangeDate}
             />
           )}

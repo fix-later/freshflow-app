@@ -1,16 +1,10 @@
 import {
-  GoogleSansFlex_400Regular,
-  GoogleSansFlex_500Medium,
-  GoogleSansFlex_600SemiBold,
-  GoogleSansFlex_700Bold,
-  GoogleSansFlex_800ExtraBold,
-} from '@expo-google-fonts/google-sans-flex';
-import {
-  IBMPlexMono_400Regular,
-  IBMPlexMono_500Medium,
-  IBMPlexMono_600SemiBold,
-  IBMPlexMono_700Bold,
-} from '@expo-google-fonts/ibm-plex-mono';
+  Montserrat_400Regular,
+  Montserrat_500Medium,
+  Montserrat_600SemiBold,
+  Montserrat_700Bold,
+  Montserrat_800ExtraBold,
+} from '@expo-google-fonts/montserrat';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -24,22 +18,17 @@ void SplashScreen.preventAutoHideAsync();
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
-    GoogleSansFlex_400Regular,
-    GoogleSansFlex_500Medium,
-    GoogleSansFlex_600SemiBold,
-    GoogleSansFlex_700Bold,
-    GoogleSansFlex_800ExtraBold,
-    IBMPlexMono_400Regular,
-    IBMPlexMono_500Medium,
-    IBMPlexMono_600SemiBold,
-    IBMPlexMono_700Bold,
-
-    // Preserve the legacy names used by existing screens while rendering the
-    // new web-aligned Google Sans Flex faces.
-    'Inter-Regular': GoogleSansFlex_400Regular,
-    'Inter-Medium': GoogleSansFlex_500Medium,
-    'Inter-SemiBold': GoogleSansFlex_600SemiBold,
-    'Inter-Bold': GoogleSansFlex_700Bold,
+    Montserrat_400Regular,
+    Montserrat_500Medium,
+    Montserrat_600SemiBold,
+    Montserrat_700Bold,
+    Montserrat_800ExtraBold,
+    // Preserve the legacy aliases used by existing screens while rendering
+    // Montserrat consistently throughout the Restaurant experience.
+    'Inter-Regular': Montserrat_400Regular,
+    'Inter-Medium': Montserrat_500Medium,
+    'Inter-SemiBold': Montserrat_600SemiBold,
+    'Inter-Bold': Montserrat_700Bold,
   });
 
   useEffect(() => {

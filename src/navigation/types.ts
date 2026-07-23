@@ -10,9 +10,10 @@ export type AuthStackParamList = {
 };
 
 export type RestaurantTabParamList = {
-  RestaurantOrders: undefined;
+  RestaurantOrders: NavigatorScreenParams<RestaurantOrdersStackParamList> | undefined;
   RestaurantFavorites: undefined;
-  RestaurantTracking: undefined;
+  RestaurantAssistant: undefined;
+  RestaurantTracking: NavigatorScreenParams<RestaurantOrdersStackParamList> | undefined;
   RestaurantProfile: undefined;
 };
 
@@ -36,6 +37,8 @@ export type CreateOrderItem = {
 };
 
 export type RestaurantOrdersStackParamList = {
+  TrackOrders: undefined;
+  Notifications: undefined;
   OrderList: { openCart?: boolean } | undefined;
   CreateOrder: { items: CreateOrderItem[] };
   ConfirmOrder: {
@@ -45,10 +48,12 @@ export type RestaurantOrdersStackParamList = {
     notes?: string;
   };
   OrderDetail: { orderId: string };
+  AddDraftOrderItem: { orderId: string };
   OrderHistory: undefined;
   ReportIssue: { orderId: string };
   CreateRecurringOrder: { scheduledOrderId?: string } | undefined;
   ManageRecurringOrders: undefined;
+  ScheduledOrderInstances: { scheduledOrderId: string };
 };
 
 export type MarketHomeStackParamList = {

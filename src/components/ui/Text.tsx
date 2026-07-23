@@ -26,14 +26,14 @@ export type BrandFontWeight =
 type BrandTypographyProps = {
   /** Explicit weight override. A fontWeight in style is used when omitted. */
   weight?: BrandFontWeight;
-  /** Use IBM Plex Mono for prices, quantities, identifiers, and other numeric data. */
+  /** Apply the numeric weight mapping for prices, quantities, and identifiers. */
   numeric?: boolean;
 };
 
 export type BrandTextProps = TextProps & BrandTypographyProps;
 export type BrandTextInputProps = TextInputProps & BrandTypographyProps;
 
-const GOOGLE_SANS_BY_WEIGHT: Record<SupportedFontWeight, string> = {
+const BRAND_SANS_BY_WEIGHT: Record<SupportedFontWeight, string> = {
   '400': Fonts.regular,
   '500': Fonts.medium,
   '600': Fonts.semibold,
@@ -41,12 +41,11 @@ const GOOGLE_SANS_BY_WEIGHT: Record<SupportedFontWeight, string> = {
   '800': Fonts.extrabold,
 };
 
-const IBM_PLEX_MONO_BY_WEIGHT: Record<SupportedFontWeight, string> = {
+const NUMERIC_BY_WEIGHT: Record<SupportedFontWeight, string> = {
   '400': Fonts.monoRegular,
   '500': Fonts.monoMedium,
   '600': Fonts.monoSemibold,
   '700': Fonts.monoBold,
-  // IBM Plex Mono has no 800 face in the installed package; use its bold face.
   '800': Fonts.monoBold,
 };
 
@@ -98,8 +97,8 @@ function resolveTypographyStyle(
 
   return {
     fontFamily: resolvedNumeric
-      ? IBM_PLEX_MONO_BY_WEIGHT[resolvedWeight]
-      : GOOGLE_SANS_BY_WEIGHT[resolvedWeight],
+      ? NUMERIC_BY_WEIGHT[resolvedWeight]
+      : BRAND_SANS_BY_WEIGHT[resolvedWeight],
     // The selected font asset already carries the requested weight. Resetting
     // this prevents Android from trying to synthesize another font face.
     fontWeight: 'normal',

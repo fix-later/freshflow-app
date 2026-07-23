@@ -5,19 +5,19 @@ export interface CreditDto {
   creditLimit: number;
   outstandingBalance: number;
   availableCredit: number;
-  updatedAt: string | null;
+  updatedAt: string;
 }
 
 export interface CreditTransactionDto {
   id: string;
   restaurantId: string;
+  orderId: string | null;
   type: string;
   amount: number;
   balanceAfter: number;
-  orderId: string | null;
-  reference: string | null;
   note: string | null;
   paymentMethod: string | null;
+  reference: string | null;
   createdAt: string;
 }
 
@@ -26,17 +26,32 @@ export interface CreditTransactionMeta {
   pageSize: number;
 }
 
-export interface CreditStatementDto {
+export interface CreditStatementSummaryDto {
   id: string;
   restaurantId: string;
-  year: number;
-  month: number;
+  periodStart: string;
+  periodEnd: string;
   openingBalance: number;
   closingBalance: number;
-  totalDebits: number;
-  totalCredits: number;
-  status: 'open' | 'closed';
+  totalCharges: number;
+  totalSettlements: number;
+  totalRefunds: number;
   generatedAt: string;
+}
+
+export interface CreditStatementLineDto {
+  transactionId: string;
+  type: string;
+  amount: number;
+  balanceAfter: number;
+  occurredAt: string;
+  note: string | null;
+  reference: string | null;
+}
+
+export interface CreditStatementDto extends CreditStatementSummaryDto {
+  dueDate: string;
+  lines: CreditStatementLineDto[];
 }
 
 export const TRANSACTION_TYPE_LABEL: Record<string, string> = {
@@ -73,9 +88,11 @@ export const creditApi = {
 
   async getStatements(
     restaurantId: string,
-  ): Promise<{ data: CreditStatementDto[]; meta: CreditTransactionMeta }> {
-    return getCursorPaged<CreditStatementDto>(
+    params?: { cursor?: string; pageSize?: number },
+  ): Promise<{ data: CreditStatementSummaryDto[]; meta: CreditTransactionMeta }> {
+    return getCursorPaged<CreditStatementSummaryDto>(
       `/api/v1/restaurants/${restaurantId}/credit/statements`,
+      { params },
     );
   },
 
@@ -97,6 +114,17 @@ export const creditApi = {
   ): Promise<CreditStatementDto> {
     const { data } = await apiClient.get<CreditStatementDto>(
       `/api/v1/restaurants/${restaurantId}/credit/statements/${statementId}`,
+    );
+    return data;
+  },
+
+  async getStatementPdf(
+    restaurantId: string,
+    statementId: string,
+  ): Promise<ArrayBuffer> {
+    const { data } = await apiClient.get<ArrayBuffer>(
+      `/api/v1/restaurants/${restaurantId}/credit/statements/${statementId}/pdf`,
+      { responseType: 'arraybuffer' },
     );
     return data;
   },

@@ -30,8 +30,8 @@ type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'CreateRecur
 type PickerMode = 'date' | 'time' | null;
 
 const RECURRENCE_OPTIONS: { id: RecurrenceType; label: string; sub: string }[] = [
-  { id: 'daily', label: 'Hằng ngày', sub: 'Tự động tạo đơn mỗi ngày' },
-  { id: 'weekly', label: 'Hằng tuần', sub: 'Tự động tạo đơn mỗi tuần, đúng thứ của lần đầu' },
+  { id: 'daily', label: 'Hằng ngày', sub: 'Tự động tạo bản nháp mỗi ngày' },
+  { id: 'weekly', label: 'Hằng tuần', sub: 'Tự động tạo bản nháp mỗi tuần, đúng thứ của lần đầu' },
 ];
 
 function getDefaultFirstRun(): Date {
@@ -143,7 +143,7 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
         ]);
       } else {
         await orderApi.createScheduledOrder(payload);
-        Alert.alert('Đã tạo lịch đặt hàng', 'Đơn hàng sẽ được tự động tạo theo chu kỳ bạn chọn.', [
+        Alert.alert('Đã tạo lịch đặt hàng', 'Bản nháp sẽ được tự động tạo theo chu kỳ bạn chọn.', [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
       }
@@ -175,7 +175,8 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
         <View style={styles.infoBox}>
           <Ionicons name="information-circle-outline" size={16} color={Colors.primaryText} />
           <Text style={styles.infoText}>
-            Hệ thống sẽ tự động tạo đơn hàng mới theo chu kỳ bạn chọn, bắt đầu từ thời gian chạy lần đầu.
+            Theo contract hiện tại của BE, lịch sẽ tạo một bản nháp chưa có sản phẩm. Bạn cần mở
+            bản nháp, thêm sản phẩm rồi xác nhận để khóa giá và ghi nhận công nợ.
           </Text>
         </View>
 

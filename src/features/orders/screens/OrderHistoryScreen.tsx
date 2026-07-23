@@ -38,13 +38,17 @@ const DATE_RANGE_CHIPS: { key: DateRangeOption; label: string }[] = [
 
 const STATUS_CHIPS: { key: 'all' | OrderStatus; label: string }[] = [
   { key: 'all', label: 'Tất cả trạng thái' },
-  { key: 'pending', label: 'Chờ xác nhận' },
+  { key: 'draft', label: 'Bản nháp' },
   { key: 'confirmed', label: 'Đã xác nhận' },
-  { key: 'processing', label: 'Đang xử lý' },
-  { key: 'in_transit', label: 'Đang giao' },
+  { key: 'batched', label: 'Đã gom phiên' },
+  { key: 'picked_up', label: 'Đã lấy hàng' },
+  { key: 'at_hub', label: 'Đã về hub' },
+  { key: 'delivering', label: 'Đang giao' },
   { key: 'delivered', label: 'Đã giao' },
   { key: 'cancelled', label: 'Đã huỷ' },
 ];
+
+const PAGE_SIZE = 15;
 
 const getStartOfToday = () => {
   const d = new Date();
@@ -93,7 +97,8 @@ export function OrderHistoryScreen() {
 
   // List data state
   const [orders, setOrders] = useState<OrderListItemDto[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Loading states
   const [loading, setLoading] = useState(true);
@@ -102,21 +107,19 @@ export function OrderHistoryScreen() {
   const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   const fetchOrders = useCallback(
-    async (resetList = false, showSpinner = false, cursorOverride?: string | null) => {
+    async (targetPage: number, resetList = false, showSpinner = false) => {
       if (showSpinner) setLoading(true);
       try {
-        const currentCursor = resetList ? undefined : ((cursorOverride !== undefined ? cursorOverride : nextCursor) || undefined);
-
         let fromDate: string | undefined = undefined;
         if (dateRange === 'today') fromDate = getStartOfToday();
         else if (dateRange === '7days') fromDate = getSevenDaysAgo();
         else if (dateRange === 'month') fromDate = getStartOfMonth();
 
-        const response = await orderApi.list({
+        const response = await orderApi.listHistory({
           status: statusFilter === 'all' ? undefined : statusFilter,
           from: fromDate,
-          cursor: currentCursor,
-          pageSize: 15,
+          page: targetPage,
+          pageSize: PAGE_SIZE,
         });
 
         if (resetList) {
@@ -124,7 +127,8 @@ export function OrderHistoryScreen() {
         } else {
           setOrders((prev) => [...prev, ...response.data]);
         }
-        setNextCursor(response.meta.nextCursor);
+        setPage(response.meta.page);
+        setTotalPages(Math.max(1, Math.ceil(response.meta.total / response.meta.pageSize)));
       } catch (err) {
         console.error('Error fetching orders:', err);
       } finally {
@@ -138,20 +142,20 @@ export function OrderHistoryScreen() {
 
   // Trigger reload when filters change
   useEffect(() => {
-    setNextCursor(null);
-    fetchOrders(true, true, null);
+    setPage(1);
+    setTotalPages(1);
+    fetchOrders(1, true, true);
   }, [statusFilter, dateRange, fetchOrders]);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    setNextCursor(null);
-    fetchOrders(true, false);
+    fetchOrders(1, true);
   };
 
   const handleLoadMore = () => {
-    if (nextCursor && !loadingMore && !loading) {
+    if (page < totalPages && !loadingMore && !loading) {
       setLoadingMore(true);
-      fetchOrders(false, false, nextCursor);
+      fetchOrders(page + 1);
     }
   };
 
@@ -194,9 +198,9 @@ export function OrderHistoryScreen() {
       .toString()
       .padStart(2, '0')}`;
 
-    const orderId = item.orderId || item.id || '';
+    const orderId = item.orderId;
     const isReordering = reorderingId === orderId;
-    const canReorder = item.status === 'delivered';
+    const canReorder = item.itemCount > 0;
 
     return (
       <Pressable
@@ -349,7 +353,7 @@ export function OrderHistoryScreen() {
       ) : (
         <FlatList
           data={orders}
-          keyExtractor={(item, index) => item.orderId || item.id || `order-${index}`}
+          keyExtractor={(item) => item.orderId}
           renderItem={renderItem}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}

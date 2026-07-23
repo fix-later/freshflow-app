@@ -24,7 +24,6 @@ import {
   Text,
   TextInput,
 } from '../../../components/ui/Text';
-import { useCartStore } from '../../../store/cartStore';
 import {
   orderApi,
   type OrderDto,
@@ -34,13 +33,21 @@ import {
   ORDER_STATUS_LABEL,
 } from '../api/orderApi';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
+import { createOrderStatusConnection } from '../realtime/orderRealtime';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'OrderDetail'>;
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Order can only be cancelled by the restaurant before the market/hub starts processing it.
-const CANCELLABLE_STATUSES: OrderStatus[] = ['draft', 'pending', 'confirmed'];
+const CANCELLABLE_STATUSES: OrderStatus[] = ['draft', 'confirmed'];
+
+const PAYMENT_STATUS_LABEL: Record<OrderDto['paymentStatus'], string> = {
+  not_applicable: 'Chưa phát sinh công nợ',
+  outstanding: 'Công nợ chưa thanh toán',
+  settled: 'Đã tất toán',
+  waived: 'Đã miễn/hoàn công nợ',
+};
 
 const OTHER_REASON_ID = 'other';
 const CANCEL_REASON_OPTIONS = [
@@ -81,7 +88,21 @@ function formatDateTime(iso: string | null | undefined) {
     .padStart(2, '0')}`;
 }
 
-function ItemRow({ item, index }: { item: OrderItemDto; index: number }) {
+function ItemRow({
+  item,
+  index,
+  editable,
+  busy,
+  onChangeQuantity,
+  onRemove,
+}: {
+  item: OrderItemDto;
+  index: number;
+  editable: boolean;
+  busy: boolean;
+  onChangeQuantity: (quantity: number) => void;
+  onRemove: () => void;
+}) {
   const quantity = item.quantity ?? 0;
   const unitPrice = item.unitPrice ?? 0;
   const subtotal = item.subtotal ?? unitPrice * quantity;
@@ -91,16 +112,43 @@ function ItemRow({ item, index }: { item: OrderItemDto; index: number }) {
       <View style={styles.itemInfo}>
         <Text style={styles.itemName} numberOfLines={2}>{item.productNameSnapshot || 'Sản phẩm'}</Text>
         <Text style={styles.itemUnitPrice}>{unitPrice.toLocaleString('vi-VN')}đ x {quantity}</Text>
+        {item.actualQuantity !== null && item.actualQuantity !== quantity ? (
+          <Text style={styles.actualQuantity}>Thực nhận: {item.actualQuantity}</Text>
+        ) : null}
+        {editable ? (
+          <View style={styles.draftItemActions}>
+            <Pressable
+              style={styles.quantityButton}
+              onPress={() => onChangeQuantity(quantity - 1)}
+              disabled={busy || quantity <= 1}
+            >
+              <Ionicons name="remove" size={15} color={Colors.primaryText} />
+            </Pressable>
+            <Text style={styles.quantityValue}>{quantity}</Text>
+            <Pressable
+              style={styles.quantityButton}
+              onPress={() => onChangeQuantity(quantity + 1)}
+              disabled={busy}
+            >
+              <Ionicons name="add" size={15} color={Colors.primaryText} />
+            </Pressable>
+            <Pressable style={styles.removeItemButton} onPress={onRemove} disabled={busy}>
+              <Ionicons name="trash-outline" size={16} color={Colors.error} />
+            </Pressable>
+          </View>
+        ) : null}
       </View>
-      <Text style={styles.itemSubtotal}>{subtotal.toLocaleString('vi-VN')}đ</Text>
+      {busy ? (
+        <ActivityIndicator size="small" color={Colors.primary} />
+      ) : (
+        <Text style={styles.itemSubtotal}>{subtotal.toLocaleString('vi-VN')}đ</Text>
+      )}
     </View>
   );
 }
 
 export function OrderDetailScreen({ route, navigation }: Props) {
   const { orderId } = route.params;
-
-  const { addToCart, updateItemQty, clearCart } = useCartStore();
 
   const [order, setOrder] = useState<OrderDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -112,36 +160,41 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const [cancelReasonError, setCancelReasonError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [confirmingReceipt, setConfirmingReceipt] = useState(false);
+  const [confirmingOrder, setConfirmingOrder] = useState(false);
+  const [reordering, setReordering] = useState(false);
+  const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
+
+  const performReorder = async () => {
+    if (!order) return;
+    setReordering(true);
+    try {
+      const draft = await orderApi.reorder(order.orderId);
+      Alert.alert(
+        'Đã tạo bản nháp mới',
+        'Giá và tồn kho đã được kiểm tra lại theo dữ liệu hiện tại.',
+        [
+          {
+            text: 'Xem bản nháp',
+            onPress: () => navigation.push('OrderDetail', { orderId: draft.orderId }),
+          },
+        ],
+      );
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      Alert.alert('Không thể đặt lại đơn', message ?? 'Sản phẩm hiện không còn đủ điều kiện để đặt lại.');
+    } finally {
+      setReordering(false);
+    }
+  };
 
   const handleReorder = () => {
-    if (!order || !order.items) return;
-    
-    clearCart();
-    
-    order.items.forEach((item, index) => {
-      addToCart({
-        id: item.marketProductId,
-        name: item.productNameSnapshot || 'Sản phẩm',
-        market: 'Chợ đầu mối',
-        unit: 'Kg',
-        price: item.unitPrice,
-        image: productImage(index),
-      });
-      updateItemQty(item.marketProductId, item.quantity);
-    });
-
     Alert.alert(
-      'Đã sao chép vào giỏ',
-      'Tất cả sản phẩm từ đơn hàng này đã được thêm vào giỏ hàng.',
+      'Đặt lại đơn hàng',
+      'Tạo một bản nháp mới từ đơn này với giá và tồn kho hiện tại?',
       [
-        {
-          text: 'Xem giỏ hàng',
-          onPress: () => {
-            navigation.navigate('OrderList', { openCart: true });
-          },
-        },
-        { text: 'Đóng', style: 'cancel' },
-      ]
+        { text: 'Không', style: 'cancel' },
+        { text: 'Tạo bản nháp', onPress: performReorder },
+      ],
     );
   };
 
@@ -168,6 +221,16 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     useCallback(() => {
       setLoading(true);
       fetchOrder();
+      const connection = createOrderStatusConnection((event) => {
+        if (event.orderId === orderId) fetchOrder();
+      });
+      connection.start().catch((connectionError) => {
+        console.warn('Order detail realtime connection failed:', connectionError);
+      });
+
+      return () => {
+        connection.stop().catch(() => undefined);
+      };
     }, [fetchOrder]),
   );
 
@@ -175,16 +238,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     setCancelling(true);
     try {
       const result = await orderApi.cancel(orderId, reason);
-      setOrder((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: 'cancelled',
-              cancelledAt: result.cancelledAt,
-              cancellationReason: result.cancellationReason,
-            }
-          : prev,
-      );
+      setOrder(result);
       setCancelModalVisible(false);
       Alert.alert('Đã hủy đơn', 'Đơn hàng của bạn đã được hủy thành công.');
     } catch (err: unknown) {
@@ -223,15 +277,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     setConfirmingReceipt(true);
     try {
       const result = await orderApi.confirmReceipt(orderId);
-      setOrder((prev) =>
-        prev
-          ? {
-              ...prev,
-              confirmedReceiptAt: result.confirmedReceiptAt ?? new Date().toISOString(),
-              status: result.status ?? prev.status,
-            }
-          : prev,
-      );
+      setOrder(result);
       Alert.alert('Đã xác nhận', 'Bạn đã xác nhận nhận hàng cho đơn này.');
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -248,6 +294,79 @@ export function OrderDetailScreen({ route, navigation }: Props) {
       [
         { text: 'Chưa', style: 'cancel' },
         { text: 'Đã nhận hàng', onPress: performConfirmReceipt },
+      ],
+    );
+  };
+
+  const updateDraftItem = async (item: OrderItemDto, quantity: number) => {
+    if (quantity < 1) return;
+    setUpdatingItemId(item.orderItemId);
+    try {
+      setOrder(await orderApi.updateItem(orderId, item.orderItemId, quantity));
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      Alert.alert('Không thể cập nhật sản phẩm', message ?? 'Vui lòng kiểm tra tồn kho và thử lại.');
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
+
+  const removeDraftItem = (item: OrderItemDto) => {
+    Alert.alert(
+      'Xóa sản phẩm',
+      `Xóa "${item.productNameSnapshot}" khỏi bản nháp?`,
+      [
+        { text: 'Không', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: async () => {
+            setUpdatingItemId(item.orderItemId);
+            try {
+              setOrder(await orderApi.removeItem(orderId, item.orderItemId));
+            } catch (err: unknown) {
+              const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+              Alert.alert('Không thể xóa sản phẩm', message ?? 'Vui lòng thử lại.');
+            } finally {
+              setUpdatingItemId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const performConfirmOrder = async () => {
+    setConfirmingOrder(true);
+    try {
+      const preview = await orderApi.previewConfirmation(orderId);
+      if (!preview.wouldSucceed) {
+        const issueText = preview.issues.map((issue) => `• ${issue.message}`).join('\n');
+        Alert.alert('Chưa thể xác nhận đơn', issueText || 'Đơn hàng chưa đáp ứng điều kiện xác nhận.');
+        return;
+      }
+
+      const confirmed = await orderApi.confirm(orderId);
+      setOrder(confirmed);
+      Alert.alert(
+        'Đã xác nhận đơn hàng',
+        `Dự kiến giao: ${formatDateTime(confirmed.scheduledFor)}`,
+      );
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      Alert.alert('Không thể xác nhận đơn', message ?? 'Vui lòng thử lại.');
+    } finally {
+      setConfirmingOrder(false);
+    }
+  };
+
+  const handleConfirmOrder = () => {
+    Alert.alert(
+      'Xác nhận đơn hàng',
+      'Hệ thống sẽ khóa giá và ghi nhận công nợ cho đơn này.',
+      [
+        { text: 'Chưa', style: 'cancel' },
+        { text: 'Xác nhận', onPress: performConfirmOrder },
       ],
     );
   };
@@ -283,8 +402,10 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const items = order.items ?? [];
   const itemCount = items.reduce((sum, it) => sum + (it.quantity ?? 0), 0);
   const canCancel = CANCELLABLE_STATUSES.includes(order.status);
+  const canConfirmOrder = order.status === 'draft' && items.length > 0;
   const canConfirmReceipt = order.status === 'delivered' && !order.confirmedReceiptAt;
   const canReportIssue = order.status === 'delivered';
+  const canReorder = items.length > 0;
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -331,11 +452,35 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           <FlatList
             data={items}
             keyExtractor={(it, index) => it.orderItemId ?? it.marketProductId ?? String(index)}
-            renderItem={({ item, index }) => <ItemRow item={item} index={index} />}
+            renderItem={({ item, index }) => (
+              <ItemRow
+                item={item}
+                index={index}
+                editable={order.status === 'draft'}
+                busy={updatingItemId === item.orderItemId}
+                onChangeQuantity={(quantity) => updateDraftItem(item, quantity)}
+                onRemove={() => removeDraftItem(item)}
+              />
+            )}
             scrollEnabled={false}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
+            ListEmptyComponent={
+              <View style={styles.emptyItems}>
+                <Ionicons name="basket-outline" size={28} color={Colors.outline} />
+                <Text style={styles.emptyItemsText}>Bản nháp chưa có sản phẩm.</Text>
+              </View>
+            }
           />
         </View>
+        {order.status === 'draft' ? (
+          <Pressable
+            style={styles.addDraftItemButton}
+            onPress={() => navigation.navigate('AddDraftOrderItem', { orderId })}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={Colors.primaryText} />
+            <Text style={styles.addDraftItemButtonText}>Thêm sản phẩm</Text>
+          </Pressable>
+        ) : null}
 
         {/* ── Notes ── */}
         {order.notes ? (
@@ -357,27 +502,63 @@ export function OrderDetailScreen({ route, navigation }: Props) {
             <Text style={styles.summaryTotalLabel}>Tổng tiền</Text>
             <Text style={styles.summaryTotalValue}>{(order.totalAmount ?? 0).toLocaleString('vi-VN')}đ</Text>
           </View>
+          <View style={[styles.summaryRow, styles.summarySecondaryRow]}>
+            <Text style={styles.summarySecondaryLabel}>Thanh toán B2B</Text>
+            <Text style={styles.summarySecondaryValue}>
+              {PAYMENT_STATUS_LABEL[order.paymentStatus]}
+            </Text>
+          </View>
         </View>
 
         {/* ── Reorder Button (B2B Convenience) ── */}
-        <Pressable 
-          style={({ pressed }) => [styles.reorderCardBtn, pressed && { opacity: 0.85 }]}
-          onPress={handleReorder}
-        >
-          <Ionicons name="repeat" size={18} color={Colors.primaryText} />
-          <Text style={styles.reorderCardBtnText}>Đặt lại đơn hàng này</Text>
-        </Pressable>
+        {canReorder ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.reorderCardBtn,
+              (pressed || reordering) && { opacity: 0.65 },
+            ]}
+            onPress={handleReorder}
+            disabled={reordering}
+          >
+            {reordering ? (
+              <ActivityIndicator size="small" color={Colors.primaryText} />
+            ) : (
+              <Ionicons name="repeat" size={18} color={Colors.primaryText} />
+            )}
+            <Text style={styles.reorderCardBtnText}>Tạo bản nháp từ đơn này</Text>
+          </Pressable>
+        ) : null}
 
         <View style={{ height: 16 }} />
       </ScrollView>
 
-      {/* ── Cancel footer ── */}
-      {canCancel ? (
+      {/* ── Draft/confirmed actions ── */}
+      {canCancel || canConfirmOrder ? (
         <View style={styles.footer}>
-          <Pressable style={styles.cancelBtn} onPress={openCancelModal}>
-            <Ionicons name="close-circle-outline" size={18} color={Colors.error} />
-            <Text style={styles.cancelBtnText}>Hủy đơn hàng</Text>
-          </Pressable>
+          <View style={styles.footerRow}>
+            {canCancel ? (
+              <Pressable style={styles.cancelBtn} onPress={openCancelModal}>
+                <Ionicons name="close-circle-outline" size={18} color={Colors.error} />
+                <Text style={styles.cancelBtnText}>Hủy đơn hàng</Text>
+              </Pressable>
+            ) : null}
+            {canConfirmOrder ? (
+              <Pressable
+                style={[styles.confirmReceiptBtn, confirmingOrder && styles.confirmReceiptBtnDisabled]}
+                onPress={handleConfirmOrder}
+                disabled={confirmingOrder}
+              >
+                {confirmingOrder ? (
+                  <ActivityIndicator color={Colors.onPrimary} size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={18} color={Colors.onPrimary} />
+                    <Text style={styles.confirmReceiptBtnText}>Xác nhận đơn</Text>
+                  </>
+                )}
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       ) : null}
 
@@ -575,12 +756,47 @@ const styles = StyleSheet.create({
   cancelInfoText: { flex: 1, fontSize: 12, color: Colors.error, lineHeight: 16 },
 
   // Items
-  itemRow: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
+  itemRow: { flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 },
   itemImg: { width: 48, height: 48, borderRadius: 10, backgroundColor: Colors.surfaceVariant },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 13, fontWeight: '600', color: Colors.onSurface, marginBottom: 4 },
   itemUnitPrice: { fontSize: 12, color: Colors.textSecondary },
   itemSubtotal: { fontSize: 14, fontWeight: '700', color: Colors.primaryText },
+  emptyItems: { alignItems: 'center', gap: 7, padding: 20 },
+  emptyItemsText: { fontSize: 12, color: Colors.textMuted },
+  actualQuantity: { marginTop: 4, fontSize: 11, color: Colors.warning, fontWeight: '600' },
+  addDraftItemButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 10,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 12,
+    backgroundColor: Colors.primaryLight,
+  },
+  addDraftItemButtonText: { fontSize: 13, fontWeight: '800', color: Colors.primaryText },
+  draftItemActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  quantityButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: Colors.primaryLight,
+  },
+  quantityValue: { minWidth: 20, textAlign: 'center', fontSize: 13, fontWeight: '700' },
+  removeItemButton: {
+    width: 30,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+    borderRadius: 8,
+    backgroundColor: Colors.dangerLight,
+  },
 
   // Info rows (notes)
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 14, paddingVertical: 12 },
@@ -596,6 +812,9 @@ const styles = StyleSheet.create({
   },
   summaryTotalLabel: { fontSize: 14, fontWeight: '700', color: Colors.onSurface },
   summaryTotalValue: { fontSize: 17, fontWeight: '800', color: Colors.primaryText },
+  summarySecondaryRow: { borderTopWidth: 1, borderTopColor: Colors.surfaceVariant },
+  summarySecondaryLabel: { fontSize: 12, color: Colors.textMuted },
+  summarySecondaryValue: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
 
   // Cancel footer
   footer: {
@@ -606,6 +825,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLowest,
   },
   cancelBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

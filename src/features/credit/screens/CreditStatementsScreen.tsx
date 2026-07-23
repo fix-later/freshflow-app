@@ -13,35 +13,37 @@ import { Ionicons } from '@expo/vector-icons';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
 import { Text } from '../../../components/ui/Text';
-import { creditApi, type CreditStatementDto } from '../api/creditApi';
+import { creditApi, type CreditStatementSummaryDto } from '../api/creditApi';
 import { type RestaurantProfileStackParamList } from '../../../navigation/types';
 
 type Props = NativeStackScreenProps<RestaurantProfileStackParamList, 'CreditStatements'>;
 
-const MONTH_VI = [
-  '', 'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4',
-  'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8',
-  'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12',
-];
+const STATEMENT_PAGE_SIZE = 20;
 
 function formatVnd(amount: number) {
   return amount.toLocaleString('vi-VN') + 'đ';
 }
 
-function StatementCard({ item }: { item: CreditStatementDto }) {
-  const isClosed = item.status === 'closed';
-  const statusColor = isClosed ? Colors.primaryText : Colors.warning;
-  const statusLabel = isClosed ? 'Đã đóng' : 'Đang mở';
+function formatPeriod(start: string, end: string) {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const inclusiveEnd = new Date(endDate.getTime() - 1);
 
+  return `${startDate.toLocaleDateString('vi-VN')} – ${inclusiveEnd.toLocaleDateString('vi-VN')}`;
+}
+
+function StatementCard({ item }: { item: CreditStatementSummaryDto }) {
   return (
     <View style={styles.card}>
-      {/* Header */}
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
-          <Text style={styles.cardMonth}>{MONTH_VI[item.month]} {item.year}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor + '18' }]}>
-            <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
-          </View>
+          <Text style={styles.cardMonth}>
+            Tháng {new Date(item.periodStart).toLocaleDateString('vi-VN', {
+              month: '2-digit',
+              year: 'numeric',
+            })}
+          </Text>
+          <Text style={styles.periodText}>{formatPeriod(item.periodStart, item.periodEnd)}</Text>
         </View>
         <Text style={styles.generatedDate}>
           {new Date(item.generatedAt).toLocaleDateString('vi-VN')}
@@ -50,7 +52,6 @@ function StatementCard({ item }: { item: CreditStatementDto }) {
 
       <View style={styles.cardDivider} />
 
-      {/* Stats */}
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Số dư đầu kỳ</Text>
@@ -65,16 +66,24 @@ function StatementCard({ item }: { item: CreditStatementDto }) {
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Tổng đã dùng</Text>
           <Text style={[styles.statValue, { color: Colors.danger }]}>
-            –{formatVnd(item.totalDebits)}
+            –{formatVnd(item.totalCharges)}
           </Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Tổng đã thanh toán</Text>
           <Text style={[styles.statValue, { color: Colors.primaryText }]}>
-            +{formatVnd(item.totalCredits)}
+            +{formatVnd(item.totalSettlements)}
           </Text>
         </View>
       </View>
+      {item.totalRefunds > 0 ? (
+        <View style={styles.refundRow}>
+          <Text style={styles.statLabel}>Tổng hoàn tiền</Text>
+          <Text style={[styles.statValue, { color: Colors.primaryText }]}>
+            +{formatVnd(item.totalRefunds)}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -82,16 +91,23 @@ function StatementCard({ item }: { item: CreditStatementDto }) {
 export function CreditStatementsScreen({ route }: Props) {
   const { restaurantId } = route.params;
 
-  const [statements, setStatements] = useState<CreditStatementDto[]>([]);
+  const [statements, setStatements] = useState<CreditStatementSummaryDto[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await creditApi.getStatements(restaurantId);
-      setStatements(Array.isArray(res) ? res : (res as any).data ?? []);
+      const res = await creditApi.getStatements(restaurantId, {
+        pageSize: STATEMENT_PAGE_SIZE,
+      });
+      setStatements(res.data);
+      setNextCursor(res.meta.nextCursor);
+      setLoadMoreError(false);
       setError(null);
     } catch {
       setError('Không thể tải danh sách sao kê');
@@ -102,13 +118,35 @@ export function CreditStatementsScreen({ route }: Props) {
   }, [restaurantId]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    load();
+    void load();
   };
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore) return;
+
+    setLoadingMore(true);
+    setLoadMoreError(false);
+    try {
+      const res = await creditApi.getStatements(restaurantId, {
+        cursor: nextCursor,
+        pageSize: STATEMENT_PAGE_SIZE,
+      });
+      setStatements((current) => {
+        const existingIds = new Set(current.map((item) => item.id));
+        return [...current, ...res.data.filter((item) => !existingIds.has(item.id))];
+      });
+      setNextCursor(res.meta.nextCursor);
+    } catch {
+      setLoadMoreError(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, nextCursor, restaurantId]);
 
   const handleGenerate = () => {
     const now = new Date();
@@ -116,7 +154,7 @@ export function CreditStatementsScreen({ route }: Props) {
     const month = now.getMonth() + 1;
     Alert.alert(
       'Tạo sao kê',
-      `Tạo sao kê tín dụng cho ${MONTH_VI[month]} ${year}?`,
+      `Tạo sao kê tín dụng cho tháng ${month}/${year}?`,
       [
         { text: 'Huỷ', style: 'cancel' },
         {
@@ -204,6 +242,19 @@ export function CreditStatementsScreen({ route }: Props) {
             <Text style={styles.emptySub}>Nhấn "Tạo sao kê" để tạo sao kê tháng hiện tại</Text>
           </View>
         }
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.footer}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+            </View>
+          ) : loadMoreError ? (
+            <Pressable style={styles.footer} onPress={() => void loadMore()}>
+              <Text style={styles.loadMoreError}>Không tải được trang tiếp theo · Thử lại</Text>
+            </Pressable>
+          ) : null
+        }
+        onEndReached={() => void loadMore()}
+        onEndReachedThreshold={0.25}
       />
     </SafeAreaView>
   );
@@ -250,10 +301,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardHeaderLeft: { flex: 1, gap: 2 },
   cardMonth: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  statusText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  periodText: { fontSize: 11, color: Colors.textMuted },
   generatedDate: { fontSize: 11, color: Colors.textMuted },
 
   cardDivider: { height: 1, backgroundColor: Colors.surfaceContainerHigh },
@@ -262,6 +312,11 @@ const styles = StyleSheet.create({
   statItem: { flex: 1, gap: 3 },
   statLabel: { fontSize: 11, color: Colors.textMuted },
   statValue: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  refundRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
 
   empty: {
     alignItems: 'center',
@@ -271,4 +326,6 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginTop: 8 },
   emptySub: { fontSize: 13, color: Colors.textMuted, textAlign: 'center', lineHeight: 18 },
+  footer: { minHeight: 52, alignItems: 'center', justifyContent: 'center', padding: 12 },
+  loadMoreError: { fontSize: 12, color: Colors.error, textAlign: 'center' },
 });

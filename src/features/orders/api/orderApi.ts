@@ -2,13 +2,19 @@ import { apiClient } from '../../../services/api/client';
 
 export type OrderStatus =
   | 'draft'
-  | 'pending'
   | 'confirmed'
-  | 'processing'
-  | 'ready_for_pickup'
-  | 'in_transit'
+  | 'batched'
+  | 'picked_up'
+  | 'at_hub'
+  | 'delivering'
   | 'delivered'
   | 'cancelled';
+
+export type OrderPaymentStatus =
+  | 'not_applicable'
+  | 'outstanding'
+  | 'settled'
+  | 'waived';
 
 export interface OrderItemDto {
   orderItemId: string;
@@ -24,7 +30,7 @@ export interface OrderDto {
   orderId: string;
   restaurantId: string;
   status: OrderStatus;
-  paymentStatus: string;
+  paymentStatus: OrderPaymentStatus;
   orderGroupId: string | null;
   scheduledOrderId: string | null;
   items: OrderItemDto[];
@@ -39,11 +45,12 @@ export interface OrderDto {
 }
 
 export interface OrderListItemDto {
-  id?: string;
-  orderId?: string;
+  orderId: string;
   restaurantId: string;
-  restaurantName: string;
+  orderGroupId: string | null;
+  scheduledOrderId: string | null;
   status: OrderStatus;
+  paymentStatus: OrderPaymentStatus;
   totalAmount: number;
   itemCount: number;
   scheduledFor: string | null;
@@ -51,12 +58,13 @@ export interface OrderListItemDto {
 }
 
 export interface OrderListMeta {
+  total: number;
+  page: number;
   pageSize: number;
-  nextCursor: string | null;
 }
 
 export interface CreateOrderPayload {
-  items: { marketProductId: string; quantity: number; note?: string }[];
+  items: { marketProductId: string; quantity: number }[];
   scheduledFor?: string;
   notes?: string;
 }
@@ -64,6 +72,19 @@ export interface CreateOrderPayload {
 export interface ReorderPayload {
   scheduledFor?: string;
   notes?: string;
+}
+
+export interface OrderConfirmationPreviewIssue {
+  code: string;
+  message: string;
+}
+
+export interface OrderConfirmationPreviewDto {
+  wouldSucceed: boolean;
+  issues: OrderConfirmationPreviewIssue[];
+  totalAmount: number;
+  resolvedScheduledFor: string | null;
+  remainingCreditAfter: number | null;
 }
 
 export type RecurrenceType = 'daily' | 'weekly';
@@ -74,7 +95,11 @@ export interface CreateScheduledOrderPayload {
   notes?: string;
 }
 
-export type UpdateScheduledOrderPayload = CreateScheduledOrderPayload;
+export interface UpdateScheduledOrderPayload {
+  recurrenceType?: RecurrenceType;
+  firstRunAt?: string;
+  notes?: string;
+}
 
 export interface ScheduledOrderDto {
   scheduledOrderId: string;
@@ -130,22 +155,22 @@ export const ISSUE_TYPE_LABEL: Record<IssueType, string> = {
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   draft: 'Bản nháp',
-  pending: 'Chờ xác nhận',
   confirmed: 'Đã xác nhận',
-  processing: 'Đang xử lý',
-  ready_for_pickup: 'Sẵn sàng lấy hàng',
-  in_transit: 'Đang giao',
+  batched: 'Đã gom phiên thu mua',
+  picked_up: 'Đã lấy tại chợ',
+  at_hub: 'Đã về hub',
+  delivering: 'Đang giao',
   delivered: 'Đã giao',
   cancelled: 'Đã huỷ',
 };
 
 export const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
   draft: '#9CA3AF',
-  pending: '#F59E0B',
   confirmed: '#3B82F6',
-  processing: '#8B5CF6',
-  ready_for_pickup: '#06B6D4',
-  in_transit: '#F97316',
+  batched: '#8B5CF6',
+  picked_up: '#06B6D4',
+  at_hub: '#0EA5E9',
+  delivering: '#F97316',
   delivered: '#10B981',
   cancelled: '#EF4444',
 };
@@ -161,15 +186,38 @@ export const orderApi = {
     return data;
   },
 
+  async previewConfirmation(orderId: string): Promise<OrderConfirmationPreviewDto> {
+    const { data } = await apiClient.get<OrderConfirmationPreviewDto>(
+      `/api/v1/orders/${orderId}/confirm-preview`,
+    );
+    return data;
+  },
+
   async list(params?: {
     status?: OrderStatus;
     from?: string;
     to?: string;
-    cursor?: string;
+    sort?: 'createdAt:asc' | 'createdAt:desc';
+    page?: number;
     pageSize?: number;
   }): Promise<{ data: OrderListItemDto[]; meta: OrderListMeta }> {
     const { data } = await apiClient.get<{ data: OrderListItemDto[]; meta: OrderListMeta }>(
       '/api/v1/orders',
+      { params },
+    );
+    return data;
+  },
+
+  async listHistory(params?: {
+    status?: OrderStatus;
+    from?: string;
+    to?: string;
+    sort?: 'createdAt:asc' | 'createdAt:desc';
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ data: OrderListItemDto[]; meta: OrderListMeta }> {
+    const { data } = await apiClient.get<{ data: OrderListItemDto[]; meta: OrderListMeta }>(
+      '/api/v1/orders/history',
       { params },
     );
     return data;
@@ -183,14 +231,37 @@ export const orderApi = {
   async cancel(
     orderId: string,
     reason?: string,
-  ): Promise<{ id: string; status: string; cancelledAt: string; cancellationReason: string | null }> {
-    const { data } = await apiClient.patch(`/api/v1/orders/${orderId}/cancel`, { reason });
+  ): Promise<OrderDto> {
+    const { data } = await apiClient.patch<OrderDto>(`/api/v1/orders/${orderId}/cancel`, { reason });
+    return data;
+  },
+
+  async addItem(orderId: string, marketProductId: string, quantity: number): Promise<OrderDto> {
+    const { data } = await apiClient.post<OrderDto>(`/api/v1/orders/${orderId}/items`, {
+      marketProductId,
+      quantity,
+    });
+    return data;
+  },
+
+  async updateItem(orderId: string, orderItemId: string, quantity: number): Promise<OrderDto> {
+    const { data } = await apiClient.put<OrderDto>(
+      `/api/v1/orders/${orderId}/items/${orderItemId}`,
+      { quantity },
+    );
+    return data;
+  },
+
+  async removeItem(orderId: string, orderItemId: string): Promise<OrderDto> {
+    const { data } = await apiClient.delete<OrderDto>(
+      `/api/v1/orders/${orderId}/items/${orderItemId}`,
+    );
     return data;
   },
 
   /** PATCH /api/v1/orders/{orderId}/receipt — only allowed once the order status is 'delivered'. */
-  async confirmReceipt(orderId: string): Promise<{ confirmedReceiptAt: string; status?: OrderStatus }> {
-    const { data } = await apiClient.patch(`/api/v1/orders/${orderId}/receipt`);
+  async confirmReceipt(orderId: string): Promise<OrderDto> {
+    const { data } = await apiClient.patch<OrderDto>(`/api/v1/orders/${orderId}/receipt`);
     return data;
   },
 
@@ -225,6 +296,17 @@ export const orderApi = {
   /** GET /api/v1/orders/scheduled/{scheduledOrderId} — recurring schedule detail. */
   async getScheduledOrder(scheduledOrderId: string): Promise<ScheduledOrderDto> {
     const { data } = await apiClient.get<ScheduledOrderDto>(`/api/v1/orders/scheduled/${scheduledOrderId}`);
+    return data;
+  },
+
+  async listScheduledOrderInstances(
+    scheduledOrderId: string,
+    params?: { page?: number; pageSize?: number },
+  ): Promise<{ data: OrderListItemDto[]; meta: OrderListMeta }> {
+    const { data } = await apiClient.get<{ data: OrderListItemDto[]; meta: OrderListMeta }>(
+      `/api/v1/orders/scheduled/${scheduledOrderId}/instances`,
+      { params },
+    );
     return data;
   },
 
