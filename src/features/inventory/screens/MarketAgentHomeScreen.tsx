@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -17,6 +17,43 @@ import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import { inventoryApi, type AssignedMarketDto } from '../api/inventoryApi';
 import type { MarketProductDto } from '../../../types/api.types';
+import {
+  marketProcurementApi,
+  type MarketProcurementTaskDto,
+  type ProcurementTaskStatus,
+} from '../../procurement/api/marketProcurementApi';
+
+const PROCUREMENT_STATUS: Record<ProcurementTaskStatus, { label: string; color: string; background: string }> = {
+  Built: { label: 'Đang lập phiếu', color: Colors.textMuted, background: Colors.surfaceContainerHigh },
+  Manifested: { label: 'Chờ thu mua', color: '#8A5900', background: Colors.warningLight },
+  Purchasing: { label: 'Đang thu mua', color: Colors.primaryText, background: Colors.primaryLight },
+  HandedOff: { label: 'Đã bàn giao', color: Colors.secondary, background: Colors.secondaryContainer },
+  Cancelled: { label: 'Đã huỷ', color: Colors.danger, background: Colors.dangerLight },
+};
+
+function getVietnamDate(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function formatBatchDate(value: string): string {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Intl.DateTimeFormat('vi-VN', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+  }).format(new Date(year, month - 1, day));
+}
+
+function shortBatchCode(value: string): string {
+  return `PO-${value.replaceAll('-', '').slice(0, 8).toUpperCase()}`;
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -29,11 +66,16 @@ export function MarketAgentHomeScreen() {
 
   const [assignedMarkets, setAssignedMarkets] = useState<AssignedMarketDto[]>([]);
   const [priceProducts, setPriceProducts] = useState<MarketProductDto[]>([]);
+  const [procurementTasks, setProcurementTasks] = useState<MarketProcurementTaskDto[]>([]);
 
   const fetchData = useCallback(async () => {
     try {
-      const markets = await inventoryApi.getAssignedMarkets();
+      const [markets, tasks] = await Promise.all([
+        inventoryApi.getAssignedMarkets(),
+        marketProcurementApi.getTasksInNextSevenDays(getVietnamDate()),
+      ]);
       setAssignedMarkets(markets);
+      setProcurementTasks(tasks);
 
       // Fetch products from all assigned markets for the price watchlist
       const allProducts: MarketProductDto[] = [];
@@ -81,6 +123,41 @@ export function MarketAgentHomeScreen() {
     const days = Math.floor(hours / 24);
     return `${days} ngày trước`;
   };
+
+  const procurementSummary = useMemo(() => {
+    const orderIds = new Set(
+      procurementTasks.flatMap((task) => task.members.map((member) => member.orderId)),
+    );
+    return {
+      orderCount: orderIds.size,
+      batchCount: procurementTasks.length,
+      pendingBatchCount: procurementTasks.filter((task) => task.status === 'Manifested').length,
+      quantity: procurementTasks.reduce(
+        (total, task) => total + task.items.reduce((sum, item) => sum + item.totalQuantity, 0),
+        0,
+      ),
+    };
+  }, [procurementTasks]);
+
+  const procurementGroups = useMemo(() => {
+    const groups = new Map<string, MarketProcurementTaskDto[]>();
+    procurementTasks.forEach((task) => {
+      const tasks = groups.get(task.batchDate) ?? [];
+      tasks.push(task);
+      groups.set(task.batchDate, tasks);
+    });
+
+    return Array.from(groups.entries()).map(([date, tasks]) => {
+      const orderIds = new Set(
+        tasks.flatMap((task) => task.members.map((member) => member.orderId)),
+      );
+      const totalQuantity = tasks.reduce(
+        (total, task) => total + task.items.reduce((sum, item) => sum + item.totalQuantity, 0),
+        0,
+      );
+      return { date, tasks, orderCount: orderIds.size, totalQuantity };
+    });
+  }, [procurementTasks]);
 
   // ── Loading state ──
   if (loading) {
@@ -194,6 +271,100 @@ export function MarketAgentHomeScreen() {
           </Card>
         </View>
 
+        {/* ─── PROCUREMENT TASKS: TODAY + NEXT 6 DAYS ─────────── */}
+        <View style={styles.procurementSummaryCard}>
+          <View style={styles.procurementSummaryHeader}>
+            <View style={styles.procurementSummaryIcon}>
+              <Ionicons name="basket-outline" size={22} color={Colors.primaryText} />
+            </View>
+            <View style={styles.procurementSummaryCopy}>
+              <Text style={styles.procurementSummaryTitle}>Kế hoạch thu mua trong 7 ngày</Text>
+              <Text style={styles.procurementSummarySub}>Hôm nay và 6 ngày tiếp theo</Text>
+            </View>
+          </View>
+          <View style={styles.procurementStats}>
+            <ProcurementMetric value={procurementSummary.orderCount} label="đơn hàng" />
+            <ProcurementMetric value={procurementSummary.batchCount} label="lô thu mua" />
+            <ProcurementMetric value={procurementSummary.pendingBatchCount} label="chờ thực hiện" />
+            <ProcurementMetric value={procurementSummary.quantity} label="SL cần mua" />
+          </View>
+        </View>
+
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Nhiệm vụ thu mua được giao</Text>
+          <Text style={styles.weekLabel}>7 NGÀY</Text>
+        </View>
+
+        {procurementTasks.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Ionicons name="basket-outline" size={40} color={Colors.textMuted} />
+            <Text style={styles.emptyText}>Chưa có nhiệm vụ thu mua</Text>
+            <Text style={styles.emptySubtext}>Lô sẽ xuất hiện sau khi Operations gán cho bạn</Text>
+          </View>
+        ) : (
+          <View style={styles.procurementList}>
+            {procurementGroups.map((group) => (
+              <View key={group.date} style={styles.dayGroup}>
+                <View style={styles.dayHeader}>
+                  <View style={styles.dayDateIcon}>
+                    <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
+                  </View>
+                  <View style={styles.dayHeaderCopy}>
+                    <Text style={styles.dayDate}>{formatBatchDate(group.date)}</Text>
+                    <Text style={styles.dayOrderCount} numeric>{group.orderCount} đơn trong ngày</Text>
+                  </View>
+                  <View style={styles.dayQuantity}>
+                    <Text style={styles.dayQuantityValue} numeric>{group.totalQuantity}</Text>
+                    <Text style={styles.dayQuantityLabel}>tổng số lượng</Text>
+                  </View>
+                </View>
+
+                <View style={styles.dayTaskList}>
+                  {group.tasks.map((task) => {
+                    const status = PROCUREMENT_STATUS[task.status];
+                    const market = assignedMarkets.find((item) => item.marketId === task.marketId);
+                    const quantity = task.items.reduce((sum, item) => sum + item.totalQuantity, 0);
+
+                    return (
+                      <Pressable
+                        key={task.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mở chi tiết lô ${shortBatchCode(task.id)}`}
+                        style={({ pressed }) => [styles.procurementTaskCard, pressed && styles.taskPressed]}
+                        onPress={() => navigation.navigate('ProcurementTaskDetail', { batchId: task.id })}
+                      >
+                        <View style={styles.procurementTaskHeader}>
+                          <View style={styles.procurementTaskCopy}>
+                            <Text style={styles.procurementTaskCode} numeric>{shortBatchCode(task.id)}</Text>
+                            <Text style={styles.procurementTaskMarket} numberOfLines={1}>
+                              {market?.name ?? 'Chợ được phân công'}
+                            </Text>
+                          </View>
+                          <View style={[styles.procurementStatus, { backgroundColor: status.background }]}>
+                            <Text style={[styles.procurementStatusText, { color: status.color }]}>{status.label}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.procurementTaskStats}>
+                          <TaskStat icon="receipt-outline" value={`${task.members.length} đơn`} />
+                          <TaskStat icon="cube-outline" value={`${task.items.length} mặt hàng`} />
+                          <TaskStat icon="layers-outline" value={`${quantity} SL`} />
+                        </View>
+                        <Text style={styles.procurementProducts} numberOfLines={2}>
+                          {task.items.map((item) => `${item.productNameSnapshot} ×${item.totalQuantity}`).join(' · ')}
+                        </Text>
+                        <View style={styles.taskOpenRow}>
+                          <Text style={styles.taskOpenText}>Mở chi tiết và xác nhận thu mua</Text>
+                          <Ionicons name="chevron-forward" size={16} color={Colors.primaryText} />
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* ─── ASSIGNED MARKETS ─────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Chợ Đầu Mối Được Phân Công</Text>
 
@@ -288,6 +459,24 @@ export function MarketAgentHomeScreen() {
         <View style={styles.bottomSpacer} />
       </View>
     </ScreenContainer>
+  );
+}
+
+function ProcurementMetric({ value, label }: { value: number; label: string }) {
+  return (
+    <View style={styles.procurementMetric}>
+      <Text style={styles.procurementMetricValue} numeric>{value}</Text>
+      <Text style={styles.procurementMetricLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function TaskStat({ icon, value }: { icon: keyof typeof Ionicons.glyphMap; value: string }) {
+  return (
+    <View style={styles.taskStat}>
+      <Ionicons name={icon} size={13} color={Colors.textMuted} />
+      <Text style={styles.taskStatText} numeric>{value}</Text>
+    </View>
   );
 }
 
@@ -492,6 +681,99 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontWeight: '500',
   },
+  procurementSummaryCard: {
+    borderRadius: 16,
+    padding: 15,
+    marginBottom: 22,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.primary600,
+  },
+  procurementSummaryHeader: { flexDirection: 'row', alignItems: 'center' },
+  procurementSummaryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  procurementSummaryCopy: { flex: 1, paddingLeft: 10 },
+  procurementSummaryTitle: { fontSize: 14, fontWeight: '800', color: Colors.textPrimary },
+  procurementSummarySub: { fontSize: 10, color: Colors.textSecondary, marginTop: 3 },
+  procurementStats: { flexDirection: 'row', marginTop: 15 },
+  procurementMetric: { flex: 1, alignItems: 'center' },
+  procurementMetricValue: { fontSize: 15, fontFamily: Fonts.monoBold, color: Colors.primaryText },
+  procurementMetricLabel: { fontSize: 8, color: Colors.textMuted, textAlign: 'center', marginTop: 2 },
+  weekLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.primaryText,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  procurementList: { gap: 14, marginBottom: 24 },
+  dayGroup: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    overflow: 'hidden',
+  },
+  dayHeader: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 13,
+    backgroundColor: Colors.primaryLight,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.primary600,
+  },
+  dayDateIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+  },
+  dayHeaderCopy: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
+  dayDate: { fontSize: 13, fontWeight: '800', color: Colors.textPrimary, textTransform: 'capitalize' },
+  dayOrderCount: { fontSize: 9, fontFamily: Fonts.monoMedium, color: Colors.textSecondary, marginTop: 4 },
+  dayQuantity: { alignItems: 'flex-end', minWidth: 65 },
+  dayQuantityValue: { fontSize: 17, fontFamily: Fonts.monoBold, color: Colors.primaryText },
+  dayQuantityLabel: { fontSize: 7, color: Colors.textMuted, marginTop: 2 },
+  dayTaskList: { padding: 10, gap: 9 },
+  procurementTaskCard: {
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  procurementTaskHeader: { flexDirection: 'row', alignItems: 'flex-start' },
+  procurementTaskCopy: { flex: 1, minWidth: 0, paddingRight: 8 },
+  procurementTaskCode: { fontSize: 12, fontFamily: Fonts.monoBold, color: Colors.textPrimary },
+  procurementTaskMarket: { fontSize: 10, color: Colors.textMuted, marginTop: 3 },
+  procurementStatus: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
+  procurementStatusText: { fontSize: 8, fontWeight: '800' },
+  procurementTaskStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
+  taskStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  taskStatText: { fontSize: 9, fontFamily: Fonts.monoMedium, color: Colors.textSecondary },
+  procurementProducts: { fontSize: 10, lineHeight: 15, color: Colors.textSecondary, marginTop: 10 },
+  taskPressed: { opacity: 0.78 },
+  taskOpenRow: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.outlineVariant,
+    marginTop: 11,
+    paddingTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  taskOpenText: { fontSize: 10, fontWeight: '700', color: Colors.primaryText },
 
   // ── Section labels ──
   sectionTitle: {

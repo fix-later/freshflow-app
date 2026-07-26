@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Image,
   Modal,
   Pressable,
   RefreshControl,
@@ -20,9 +21,10 @@ import {
   TextInput,
 } from '../../../components/ui/Text';
 import { inventoryApi } from '../../inventory/api/inventoryApi';
-import type { MarketProductDto } from '../../../types/api.types';
+import type { MarketProductDto, ProductDto } from '../../../types/api.types';
 import type { PriceHistoryEntry } from '../../inventory/api/inventoryApi';
 import { PriceDashboardHeader } from '../components/PriceDashboardHeader';
+import { pricingApi } from '../api/pricingApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,33 @@ interface AssignedMarket {
   name: string;
   location: string | null;
   address: string | null;
+}
+
+type AvailabilityFilter = 'all' | 'outOfStock' | 'changed';
+const PRODUCT_PAGE_SIZE = 100;
+
+function categoryName(product: MarketProductDto): string {
+  return product.category?.trim() || 'Chưa phân loại';
+}
+
+function searchable(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase();
+}
+
+function getCategoryIcon(name: string): keyof typeof Ionicons.glyphMap {
+  const value = name.toLocaleLowerCase('vi-VN');
+  if (value.includes('rau') || value.includes('củ') || value.includes('quả')) return 'leaf-outline';
+  if (value.includes('cá') || value.includes('hải sản')) return 'fish-outline';
+  if (value.includes('thịt')) return 'restaurant-outline';
+  if (value.includes('sữa') || value.includes('trứng')) return 'cafe-outline';
+  if (value.includes('gia vị')) return 'flask-outline';
+  if (value.includes('gạo') || value.includes('khô')) return 'bag-outline';
+  return 'basket-outline';
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -67,6 +96,56 @@ function formatFullDate(dateStr: string): string {
   });
 }
 
+function adjustPrice(value: number, percentage: number): number {
+  return Math.max(100, Math.round((value * (1 + percentage / 100)) / 100) * 100);
+}
+
+async function loadAllCatalogProducts(): Promise<ProductDto[]> {
+  const first = await pricingApi.getProducts({ page: 1, pageSize: PRODUCT_PAGE_SIZE });
+  const pageCount = Math.ceil(first.meta.total / first.meta.pageSize);
+  if (pageCount <= 1) return first.data;
+
+  const remaining = await Promise.all(
+    Array.from({ length: pageCount - 1 }, (_, index) => (
+      pricingApi.getProducts({ page: index + 2, pageSize: PRODUCT_PAGE_SIZE })
+    )),
+  );
+  return [first.data, ...remaining.map((page) => page.data)].flat();
+}
+
+function ProductThumbnail({
+  imageUrl,
+  category,
+  size = 58,
+}: {
+  imageUrl: string | null | undefined;
+  category: string;
+  size?: number;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => setFailed(false), [imageUrl]);
+
+  return (
+    <View style={[styles.productImageWrap, { width: size, height: size }]}>
+      {imageUrl && !failed ? (
+        <Image
+          source={{ uri: imageUrl }}
+          resizeMode="cover"
+          style={styles.productImage}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Ionicons
+          name={getCategoryIcon(category)}
+          size={Math.round(size * 0.38)}
+          color={Colors.primaryText}
+        />
+      )}
+    </View>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function UpdatePriceScreen() {
@@ -78,6 +157,7 @@ export function UpdatePriceScreen() {
   const [markets, setMarkets] = useState<AssignedMarket[]>([]);
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(routeMarketId ?? null);
   const [products, setProducts] = useState<MarketProductDto[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<ProductDto[]>([]);
 
   // ── UI state ──
   const [loading, setLoading] = useState(true);
@@ -88,6 +168,8 @@ export function UpdatePriceScreen() {
   // ── Filter state ──
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
+  const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>('all');
+  const [editingProductId, setEditingProductId] = useState<string | null>(routeProductId ?? null);
 
   // ── Batch changes: productId → { price, quantity } ──
   const [pendingChanges, setPendingChanges] = useState<Map<string, { price: number; quantity: number }>>(new Map());
@@ -108,40 +190,60 @@ export function UpdatePriceScreen() {
     [markets, selectedMarketId],
   );
 
+  const productMetadata = useMemo(
+    () => new Map(catalogProducts.map((product) => [product.id, product])),
+    [catalogProducts],
+  );
+
   const uniqueCategories = useMemo(() => {
     const catMap = new Map<string, { name: string; count: number }>();
     for (const p of products) {
-      if (!p.category) continue;
-      const existing = catMap.get(p.category);
+      const category = categoryName(p);
+      const existing = catMap.get(category);
       if (existing) {
         existing.count++;
       } else {
-        catMap.set(p.category, { name: p.category, count: 1 });
+        catMap.set(category, { name: category, count: 1 });
       }
     }
-    return Array.from(catMap.values());
+    return Array.from(catMap.values()).sort((left, right) => (
+      right.count - left.count || left.name.localeCompare(right.name, 'vi')
+    ));
   }, [products]);
 
   const filteredProducts = useMemo(() => {
     let result = products;
     if (activeCategory) {
-      result = result.filter((p) => p.category === activeCategory);
+      result = result.filter((p) => categoryName(p) === activeCategory);
+    }
+    if (availabilityFilter === 'outOfStock') {
+      result = result.filter((p) => p.availableQuantity <= 0);
+    } else if (availabilityFilter === 'changed') {
+      result = result.filter((p) => pendingChanges.has(p.productId));
     }
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchable(searchQuery.trim());
       result = result.filter(
         (p) =>
-          p.productName.toLowerCase().includes(q) ||
-          p.category?.toLowerCase().includes(q) ||
-          p.unit.toLowerCase().includes(q),
+          searchable(p.productName).includes(q) ||
+          searchable(categoryName(p)).includes(q) ||
+          searchable(p.unit).includes(q),
       );
     }
-    return result;
-  }, [products, activeCategory, searchQuery]);
+    return [...result].sort((left, right) => {
+      const leftChanged = Number(pendingChanges.has(left.productId));
+      const rightChanged = Number(pendingChanges.has(right.productId));
+      const leftOut = Number(left.availableQuantity <= 0);
+      const rightOut = Number(right.availableQuantity <= 0);
+      return rightChanged - leftChanged
+        || rightOut - leftOut
+        || left.productName.localeCompare(right.productName, 'vi');
+    });
+  }, [products, activeCategory, availabilityFilter, searchQuery, pendingChanges]);
+
 
   const pendingCount = pendingChanges.size;
   const totalProducts = products.length;
-  const categoryCount = uniqueCategories.length;
   const lowStockCount = products.filter((p) => p.availableQuantity <= 0).length;
 
   // ── Animate FAB visibility ──
@@ -158,8 +260,12 @@ export function UpdatePriceScreen() {
   const loadInit = useCallback(async () => {
     try {
       setError(null);
-      const assignedMarkets = await inventoryApi.getAssignedMarkets();
+      const [assignedMarkets, catalog] = await Promise.all([
+        inventoryApi.getAssignedMarkets(),
+        loadAllCatalogProducts().catch(() => []),
+      ]);
       setMarkets(assignedMarkets);
+      setCatalogProducts(catalog);
       const targetMarketId =
         routeMarketId ||
         (assignedMarkets.length > 0 ? assignedMarkets[0].marketId : null);
@@ -177,10 +283,7 @@ export function UpdatePriceScreen() {
       try {
         setError(null);
         setLoadingProducts(true);
-        const result = await inventoryApi.getMarketProducts(marketId, {
-          pageSize: 100,
-        });
-        setProducts(Array.isArray(result) ? result : result.items ?? []);
+        setProducts(await inventoryApi.getAllMarketProducts(marketId));
       } catch (err: any) {
         setError(err?.message || 'Không thể tải sản phẩm');
       } finally {
@@ -263,9 +366,14 @@ export function UpdatePriceScreen() {
     if (!selectedMarketId || pendingChanges.size === 0) return;
 
     const entries = Array.from(pendingChanges.entries());
+    if (entries.some(([, changes]) => changes.price <= 0 || changes.quantity < 0)) {
+      Alert.alert('Dữ liệu chưa hợp lệ', 'Giá phải lớn hơn 0 và số lượng không được nhỏ hơn 0.');
+      return;
+    }
     const total = entries.length;
     let completed = 0;
     let failed = 0;
+    const failedChanges = new Map<string, { price: number; quantity: number }>();
 
     Alert.alert(
       'Lưu tất cả thay đổi',
@@ -286,9 +394,10 @@ export function UpdatePriceScreen() {
                   completed++;
                 } catch {
                   failed++;
+                  failedChanges.set(productId, changes);
                 }
               }
-              setPendingChanges(new Map());
+              setPendingChanges(failedChanges);
               await loadProducts(selectedMarketId);
               if (failed === 0) {
                 Alert.alert('Thành công', `Đã cập nhật ${completed} sản phẩm`);
@@ -306,15 +415,6 @@ export function UpdatePriceScreen() {
       ],
     );
   }, [selectedMarketId, pendingChanges, loadProducts]);
-
-  // ── Back to market selection ──
-  const handleBackToMarkets = () => {
-    setSelectedMarketId(null);
-    setProducts([]);
-    setPendingChanges(new Map());
-    setActiveCategory('');
-    setSearchQuery('');
-  };
 
   // ── Detail modal open/close ──
   const openDetail = (product: MarketProductDto) => {
@@ -414,10 +514,6 @@ export function UpdatePriceScreen() {
       {/* ─── Summary Header (matching MarketKiosksScreen) ─── */}
       <PriceDashboardHeader
         marketName={selectedMarket?.name ?? ''}
-        productCount={totalProducts}
-        categoryCount={categoryCount}
-        outOfStockCount={lowStockCount}
-        pendingCount={pendingCount}
       />
 
       {/* ─── Search & Category Filter (matching MarketKiosksScreen) ─── */}
@@ -438,35 +534,84 @@ export function UpdatePriceScreen() {
           )}
         </View>
 
+        <View style={styles.categoryHeading}>
+          <View>
+            <Text style={styles.categoryHeadingTitle}>Danh mục</Text>
+            <Text style={styles.categoryHeadingSub}>Chọn nhóm hàng cần cập nhật</Text>
+          </View>
+          {activeCategory ? (
+            <Pressable onPress={() => setActiveCategory('')}>
+              <Text style={styles.categoryToggle}>Xem tất cả</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterChipsContainer}
+          contentContainerStyle={styles.rootCategoryList}
         >
-          <Pressable
-            style={[styles.filterChip, activeCategory === '' && styles.filterChipActive]}
-            onPress={() => setActiveCategory('')}
-          >
-            <Text style={[styles.filterChipText, activeCategory === '' && styles.filterChipTextActive]}>
-              Tất cả ({totalProducts})
-            </Text>
-          </Pressable>
-
-          {uniqueCategories.map((cat) => {
-            const isActive = activeCategory === cat.name;
+          {[{ name: 'Tất cả', count: totalProducts }, ...uniqueCategories].map((category, index) => {
+            const isAll = index === 0;
+            const active = isAll ? activeCategory === '' : activeCategory === category.name;
             return (
               <Pressable
-                key={cat.name}
-                style={[styles.filterChip, isActive && styles.filterChipActive]}
-                onPress={() => setActiveCategory(isActive ? '' : cat.name)}
+                key={category.name}
+                style={[styles.rootCategory, active && styles.rootCategoryActive]}
+                onPress={() => setActiveCategory(isAll ? '' : category.name)}
               >
-                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                  {cat.name} ({cat.count})
+                <View style={[styles.rootCategoryIcon, active && styles.rootCategoryIconActive]}>
+                  <Ionicons
+                    name={isAll ? 'grid-outline' : getCategoryIcon(category.name)}
+                    size={21}
+                    color={active ? Colors.onPrimary : Colors.primaryText}
+                  />
+                </View>
+                <Text style={[styles.rootCategoryText, active && styles.rootCategoryTextActive]} numberOfLines={2}>
+                  {category.name}
+                </Text>
+                <Text style={[styles.rootCategoryCount, active && styles.rootCategoryTextActive]} numeric>
+                  {category.count}
                 </Text>
               </Pressable>
             );
           })}
         </ScrollView>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickFilters}>
+          <QuickFilter
+            label="Tất cả sản phẩm"
+            count={totalProducts}
+            active={availabilityFilter === 'all'}
+            onPress={() => setAvailabilityFilter('all')}
+          />
+          <QuickFilter
+            label="Hết hàng"
+            count={lowStockCount}
+            active={availabilityFilter === 'outOfStock'}
+            danger={lowStockCount > 0}
+            onPress={() => setAvailabilityFilter('outOfStock')}
+          />
+          <QuickFilter
+            label="Đã thay đổi"
+            count={pendingCount}
+            active={availabilityFilter === 'changed'}
+            onPress={() => setAvailabilityFilter('changed')}
+          />
+        </ScrollView>
+
+        <View style={styles.resultRow}>
+          <Text style={styles.resultText} numeric>{filteredProducts.length} sản phẩm phù hợp</Text>
+          {(searchQuery || activeCategory || availabilityFilter !== 'all') ? (
+            <Pressable onPress={() => {
+              setSearchQuery('');
+              setActiveCategory('');
+              setAvailabilityFilter('all');
+            }}>
+              <Text style={styles.clearAllText}>Xoá bộ lọc</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       {/* ─── Product List (matching MarketKiosksScreen card layout) ─── */}
@@ -491,136 +636,146 @@ export function UpdatePriceScreen() {
             const isPriceChanged = pending?.price !== undefined && pending.price !== product.currentPrice;
             const isQtyChanged = pending?.quantity !== undefined && pending.quantity !== product.availableQuantity;
             const isChanged = isPriceChanged || isQtyChanged;
+            const isEditing = editingProductId === product.productId;
+            const imageUrl = productMetadata.get(product.productId)?.imageUrl;
 
             return (
-              <View key={product.marketProductId} style={styles.productCard}>
-                {/* ─── Product Header (tappable) ─── */}
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.productHeader,
-                    pressed && styles.productHeaderPressed,
-                  ]}
-                  onPress={() => openDetail(product)}
-                >
+              <View key={product.marketProductId} style={[styles.productCard, isChanged && styles.productCardChanged]}>
+                <View style={styles.productHeader}>
+                  <View style={styles.listThumbnail}>
+                    <ProductThumbnail imageUrl={imageUrl} category={categoryName(product)} />
+                  </View>
                   <View style={styles.productTitleBlock}>
                     <Text style={styles.productName} numberOfLines={2}>
                       {product.productName}
                     </Text>
                     <View style={styles.productTags}>
-                      {product.category ? (
-                        <View style={styles.categoryTag}>
-                          <Text style={styles.categoryTagText}>{product.category}</Text>
-                        </View>
-                      ) : null}
+                      <View style={styles.categoryTag}>
+                        <Text style={styles.categoryTagText}>{categoryName(product)}</Text>
+                      </View>
                       <View style={styles.unitTag}>
                         <Text style={styles.unitTagText}>{product.unit}</Text>
                       </View>
                     </View>
                   </View>
-                  {outOfStock ? (
-                    <View style={styles.outOfStockBadge}>
-                      <Text style={styles.outOfStockText}>HẾT HÀNG</Text>
-                    </View>
-                  ) : (
-                    <Ionicons
-                      name="information-circle-outline"
-                      size={20}
-                      color={Colors.textMuted}
-                      style={{ marginLeft: 4, marginTop: 2 }}
-                    />
-                  )}
-                </Pressable>
-
-                {/* ─── Price Adjustment (inline, matching MarketKiosksScreen card style) ─── */}
-                <View style={styles.priceAdjustSection}>
-                  <View style={styles.priceAdjustHeader}>
-                    <Text style={styles.priceAdjustLabel}>Giá hiện tại</Text>
-                    <Text numeric style={[styles.priceAdjustCurrent, outOfStock && styles.priceOutOfStock]}>
-                      {outOfStock ? '—' : formatPrice(product.currentPrice)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.priceInputRow}>
-                    <TextInput
-                      numeric
-                      style={[
-                        styles.priceInput,
-                        isPriceChanged && styles.priceInputChanged,
-                        outOfStock && styles.priceInputDisabled,
-                      ]}
-                      value={displayPrice === 0 && !isChanged ? '' : String(displayPrice)}
-                      onChangeText={(text) => {
-                        const cleaned = text.replace(/[^0-9]/g, '');
-                        const num = cleaned === '' ? 0 : Number(cleaned);
-                        handlePriceChange(product.productId, num);
-                      }}
-                      keyboardType="numeric"
-                      placeholder="Nhập giá mới..."
-                      placeholderTextColor={Colors.textMuted}
-                      editable={!outOfStock}
-                    />
-                    <Text style={styles.priceInputCurrency}>đ</Text>
-                  </View>
-
-                  {isChanged && (
-                    <Pressable
-                      style={styles.resetBtn}
-                      onPress={() => {
-                        handlePriceChange(product.productId, product.currentPrice);
-                        handleQuantityChange(product.productId, product.availableQuantity);
-                      }}
-                    >
-                      <Ionicons name="refresh-outline" size={13} color={Colors.primaryText} style={{ marginRight: 4 }} />
-                      <Text style={styles.resetText}>Đặt lại</Text>
+                  <View style={styles.productHeaderActions}>
+                    {outOfStock ? (
+                      <View style={styles.outOfStockBadge}>
+                        <Text style={styles.outOfStockText}>HẾT HÀNG</Text>
+                      </View>
+                    ) : null}
+                    <Pressable accessibilityLabel="Xem lịch sử giá" hitSlop={8} onPress={() => openDetail(product)}>
+                      <Ionicons name="information-circle-outline" size={21} color={Colors.textMuted} />
                     </Pressable>
-                  )}
+                  </View>
                 </View>
 
-                {/* ─── Quantity Adjustment ─── */}
-                <View style={styles.qtyAdjustSection}>
-                  <View style={styles.priceAdjustHeader}>
-                    <Text style={styles.priceAdjustLabel}>Số lượng hiện tại</Text>
-                    <Text numeric style={[styles.priceAdjustCurrent, outOfStock && styles.priceOutOfStock]}>
-                      {outOfStock ? '—' : `${displayQuantity} ${product.unit}`}
+                <View style={styles.productSnapshot}>
+                  <View style={styles.snapshotItem}>
+                    <Text style={styles.snapshotLabel}>Giá bán</Text>
+                    <Text style={[styles.snapshotValue, isPriceChanged && styles.snapshotChanged]} numeric>
+                      {formatPrice(displayPrice)}
                     </Text>
                   </View>
-
-                  <View style={styles.priceInputRow}>
-                    <TextInput
-                      numeric
-                      style={[
-                        styles.priceInput,
-                        isQtyChanged && styles.priceInputChanged,
-                        outOfStock && styles.priceInputDisabled,
-                      ]}
-                      value={String(displayQuantity)}
-                      onChangeText={(text) => {
-                        const cleaned = text.replace(/[^0-9]/g, '');
-                        const num = cleaned === '' ? 0 : Number(cleaned);
-                        handleQuantityChange(product.productId, num);
-                      }}
-                      keyboardType="numeric"
-                      placeholder="Nhập số lượng..."
-                      placeholderTextColor={Colors.textMuted}
-                      editable={!outOfStock}
-                    />
-                    <Text style={styles.priceInputCurrency}>{product.unit}</Text>
-                  </View>
-                </View>
-
-                {/* ─── Product Footer (matching MarketKiosksScreen) ─── */}
-                <View style={styles.productFooter}>
-                  <View style={styles.stockSection}>
-                    <Ionicons
-                      name={outOfStock ? 'alert-circle' : 'cube-outline'}
-                      size={16}
-                      color={outOfStock ? Colors.danger : Colors.textMuted}
-                    />
-                    <Text style={[styles.stockText, outOfStock && styles.stockTextDanger]}>
-                      Kho: {product.availableQuantity} {product.unit}
+                  <View style={styles.snapshotDivider} />
+                  <View style={styles.snapshotItem}>
+                    <Text style={styles.snapshotLabel}>Tồn khả dụng</Text>
+                    <Text style={[styles.snapshotValue, outOfStock && styles.stockTextDanger, isQtyChanged && styles.snapshotChanged]} numeric>
+                      {displayQuantity} {product.unit}
                     </Text>
                   </View>
+                  <Pressable
+                    style={[styles.editToggle, isEditing && styles.editToggleActive]}
+                    onPress={() => setEditingProductId(isEditing ? null : product.productId)}
+                  >
+                    <Ionicons name={isEditing ? 'chevron-up' : 'create-outline'} size={16} color={Colors.primaryText} />
+                    <Text style={styles.editToggleText}>{isEditing ? 'Thu gọn' : 'Cập nhật'}</Text>
+                  </Pressable>
                 </View>
+
+                {isEditing ? (
+                  <View style={styles.editorPanel}>
+                    <View style={styles.editorInputs}>
+                      <View style={styles.editorField}>
+                        <Text style={styles.editorLabel}>Giá mới</Text>
+                        <View style={[styles.priceInputRow, isPriceChanged && styles.inputRowChanged]}>
+                          <TextInput
+                            numeric
+                            style={styles.priceInput}
+                            value={displayPrice === 0 ? '' : String(displayPrice)}
+                            onChangeText={(text) => {
+                              const cleaned = text.replace(/[^0-9]/g, '');
+                              handlePriceChange(product.productId, cleaned === '' ? 0 : Number(cleaned));
+                            }}
+                            keyboardType="number-pad"
+                            placeholder="0"
+                            placeholderTextColor={Colors.textMuted}
+                          />
+                          <Text style={styles.priceInputCurrency}>đ</Text>
+                        </View>
+                      </View>
+                      <View style={styles.editorField}>
+                        <Text style={styles.editorLabel}>Số lượng mới</Text>
+                        <View style={[styles.priceInputRow, isQtyChanged && styles.inputRowChanged]}>
+                          <TextInput
+                            numeric
+                            style={styles.priceInput}
+                            value={String(displayQuantity)}
+                            onChangeText={(text) => {
+                              const cleaned = text.replace(/[^0-9]/g, '');
+                              handleQuantityChange(product.productId, cleaned === '' ? 0 : Number(cleaned));
+                            }}
+                            keyboardType="number-pad"
+                            placeholder="0"
+                            placeholderTextColor={Colors.textMuted}
+                          />
+                          <Text style={styles.priceInputCurrency}>{product.unit}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.editorActions}>
+                      <Text style={styles.quickPriceLabel}>Điều chỉnh nhanh:</Text>
+                      {[-5, 5, 10].map((percentage) => (
+                        <Pressable
+                          key={percentage}
+                          style={styles.quickPriceButton}
+                          onPress={() => handlePriceChange(
+                            product.productId,
+                            adjustPrice(product.currentPrice, percentage),
+                          )}
+                        >
+                          <Text style={styles.quickPriceText}>{percentage > 0 ? '+' : ''}{percentage}%</Text>
+                        </Pressable>
+                      ))}
+                      {isChanged ? (
+                        <Pressable
+                          style={styles.resetBtn}
+                          onPress={() => {
+                            handlePriceChange(product.productId, product.currentPrice);
+                            handleQuantityChange(product.productId, product.availableQuantity);
+                          }}
+                        >
+                          <Ionicons name="refresh-outline" size={13} color={Colors.primaryText} />
+                          <Text style={styles.resetText}>Đặt lại</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    {outOfStock ? (
+                      <View style={styles.restockHint}>
+                        <Ionicons name="information-circle-outline" size={15} color={Colors.primaryText} />
+                        <Text style={styles.restockHintText}>Nhập số lượng lớn hơn 0 để mở bán lại sản phẩm.</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {isChanged ? (
+                  <View style={styles.changedNotice}>
+                    <Ionicons name="ellipse" size={8} color={Colors.primaryText} />
+                    <Text style={styles.changedNoticeText}>Thay đổi chưa được lưu</Text>
+                  </View>
+                ) : null}
               </View>
             );
           })
@@ -628,12 +783,16 @@ export function UpdatePriceScreen() {
           <View style={styles.emptyContainer}>
             <Ionicons name="basket-outline" size={48} color={Colors.textMuted} />
             <Text style={styles.emptyText}>
-              {searchQuery || activeCategory
+              {searchQuery || activeCategory || availabilityFilter !== 'all'
                 ? 'Không tìm thấy sản phẩm phù hợp'
                 : 'Chưa có sản phẩm nào tại chợ này'}
             </Text>
-            {(searchQuery || activeCategory) && (
-              <Pressable onPress={() => { setSearchQuery(''); setActiveCategory(''); }}>
+            {(searchQuery || activeCategory || availabilityFilter !== 'all') && (
+              <Pressable onPress={() => {
+                setSearchQuery('');
+                setActiveCategory('');
+                setAvailabilityFilter('all');
+              }}>
                 <Text style={styles.clearFilterText}>Xoá bộ lọc</Text>
               </Pressable>
             )}
@@ -724,6 +883,13 @@ export function UpdatePriceScreen() {
                   <View style={styles.modalSection}>
                     <Text style={styles.modalSectionTitle}>Thông tin sản phẩm</Text>
                     <View style={styles.modalInfoCard}>
+                      <View style={styles.modalImageRow}>
+                        <ProductThumbnail
+                          imageUrl={productMetadata.get(detailProduct.productId)?.imageUrl}
+                          category={categoryName(detailProduct)}
+                          size={104}
+                        />
+                      </View>
                       {/* Tags row */}
                       <View style={styles.modalTagsRow}>
                         {detailProduct.category ? (
@@ -843,9 +1009,171 @@ export function UpdatePriceScreen() {
   );
 }
 
+function QuickFilter({
+  label,
+  count,
+  active,
+  danger = false,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  danger?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      style={[styles.quickFilter, active && styles.quickFilterActive]}
+      onPress={onPress}
+    >
+      <Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{label}</Text>
+      <View style={[styles.quickFilterCount, danger && styles.quickFilterCountDanger]}>
+        <Text style={[styles.quickFilterCountText, danger && styles.quickFilterCountDangerText]} numeric>{count}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 // ─── Styles (matching MarketKiosksScreen) ─────────────────────────────────────
 
 const styles = StyleSheet.create({
+  categoryHeading: {
+    marginTop: 15,
+    marginBottom: 9,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  categoryHeadingTitle: { fontSize: 13, fontWeight: '800', color: Colors.textPrimary },
+  categoryHeadingSub: { fontSize: 9, color: Colors.textMuted, marginTop: 2 },
+  categoryToggle: { fontSize: 10, fontWeight: '800', color: Colors.primaryText },
+  rootCategoryList: { gap: 10, paddingTop: 11, paddingBottom: 3 },
+  rootCategory: {
+    width: 88,
+    minHeight: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 9,
+  },
+  rootCategoryActive: { backgroundColor: Colors.deepTeal, borderColor: Colors.deepTeal },
+  rootCategoryIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
+  },
+  rootCategoryIconActive: { backgroundColor: Colors.primary },
+  rootCategoryText: {
+    minHeight: 28,
+    marginTop: 7,
+    fontSize: 10,
+    lineHeight: 13,
+    textAlign: 'center',
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  rootCategoryTextActive: { color: Colors.white },
+  rootCategoryCount: { marginTop: 2, fontSize: 8, fontFamily: Fonts.monoBold, color: Colors.textMuted },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  categoryChoice: {
+    width: '48.8%',
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceContainerLow,
+    paddingHorizontal: 9,
+    gap: 6,
+  },
+  categoryChoiceActive: { borderColor: Colors.primary600, backgroundColor: Colors.primaryLight },
+  categoryChoiceText: { flex: 1, minWidth: 0, fontSize: 10, fontWeight: '700', color: Colors.textSecondary },
+  categoryChoiceTextActive: { color: Colors.primaryText },
+  categoryCount: { fontSize: 9, fontFamily: Fonts.monoBold, color: Colors.textMuted },
+  quickFilters: { gap: 8, paddingTop: 13, paddingBottom: 3 },
+  quickFilter: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingLeft: 11,
+    paddingRight: 6,
+    gap: 7,
+  },
+  quickFilterActive: { borderColor: Colors.primary600, backgroundColor: Colors.primaryLight },
+  quickFilterText: { fontSize: 10, fontWeight: '700', color: Colors.textSecondary },
+  quickFilterTextActive: { color: Colors.primaryText },
+  quickFilterCount: { minWidth: 23, height: 23, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surfaceContainerHigh },
+  quickFilterCountText: { fontSize: 8, fontFamily: Fonts.monoBold, color: Colors.textSecondary },
+  quickFilterCountDanger: { backgroundColor: Colors.dangerLight },
+  quickFilterCountDangerText: { color: Colors.danger },
+  resultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 11 },
+  resultText: { fontSize: 9, fontFamily: Fonts.monoMedium, color: Colors.textMuted },
+  clearAllText: { fontSize: 9, fontWeight: '800', color: Colors.primaryText },
+  productCardChanged: { borderColor: Colors.primary600, backgroundColor: '#FCFFFD' },
+  productHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  productImageWrap: {
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: Colors.primaryLight,
+  },
+  productImage: { width: '100%', height: '100%' },
+  listThumbnail: { marginRight: 10 },
+  modalImageRow: { alignItems: 'center', marginBottom: 13 },
+  productSnapshot: {
+    minHeight: 66,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerLow,
+    paddingHorizontal: 11,
+  },
+  snapshotItem: { flex: 1, minWidth: 0 },
+  snapshotLabel: { fontSize: 8, color: Colors.textMuted },
+  snapshotValue: { fontSize: 11, fontFamily: Fonts.monoBold, color: Colors.textPrimary, marginTop: 4 },
+  snapshotChanged: { color: Colors.primaryText },
+  snapshotDivider: { width: 1, height: 30, backgroundColor: Colors.border, marginHorizontal: 8 },
+  editToggle: {
+    minHeight: 35,
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primaryLight,
+  },
+  editToggleActive: { borderWidth: 1, borderColor: Colors.primary600 },
+  editToggleText: { fontSize: 9, fontWeight: '800', color: Colors.primaryText },
+  editorPanel: { marginTop: 10, borderRadius: 12, backgroundColor: Colors.surfaceContainerLow, padding: 11 },
+  editorInputs: { flexDirection: 'row', gap: 8 },
+  editorField: { flex: 1, minWidth: 0 },
+  editorLabel: { fontSize: 8, fontWeight: '700', color: Colors.textSecondary, marginBottom: 5 },
+  inputRowChanged: { borderColor: Colors.primary600, backgroundColor: Colors.primaryLight },
+  editorActions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  quickPriceLabel: { fontSize: 8, color: Colors.textMuted, marginRight: 2 },
+  quickPriceButton: { minHeight: 28, minWidth: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
+  quickPriceText: { fontSize: 9, fontFamily: Fonts.monoBold, color: Colors.primaryText },
+  restockHint: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 9, padding: 8, borderRadius: 8, backgroundColor: Colors.primaryLight },
+  restockHintText: { flex: 1, fontSize: 8, color: Colors.primaryText },
+  changedNotice: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 9 },
+  changedNoticeText: { fontSize: 8, fontWeight: '700', color: Colors.primaryText },
   safe: {
     flex: 1,
     backgroundColor: Colors.background,
