@@ -70,6 +70,11 @@ function formatServiceDate(value: string): string {
   }).format(new Date(year, month - 1, day));
 }
 
+function formatDateRange(fromDate: string, toDate: string): string {
+  if (!fromDate || !toDate) return '';
+  return `${formatServiceDate(fromDate)} - ${formatServiceDate(toDate)}`;
+}
+
 function formatNumber(value: number, maximumFractionDigits = 1): string {
   return new Intl.NumberFormat('vi-VN', { maximumFractionDigits }).format(value);
 }
@@ -220,8 +225,10 @@ export function MarketDispatchScreen() {
             )}
           >
             <View style={styles.summaryBand}>
-              <Text style={styles.eyebrow}>{formatServiceDate(plan?.serviceDate ?? '')}</Text>
-              <Text style={styles.summaryTitle}>Kế hoạch phân xe hôm nay</Text>
+              <Text style={styles.eyebrow}>
+                {formatDateRange(plan?.fromDate ?? '', plan?.toDate ?? '')}
+              </Text>
+              <Text style={styles.summaryTitle}>Kế hoạch phân xe trong 7 ngày</Text>
               <Text style={styles.summarySub}>
                 Các đơn đã tới Hub được tự động tổng hợp theo tuyến giao nhà hàng.
               </Text>
@@ -246,7 +253,7 @@ export function MarketDispatchScreen() {
                 <Text style={styles.sectionSub}>
                   {summary.waitingCount > 0
                     ? `${summary.waitingCount} tuyến đã duyệt đang chờ xe`
-                    : 'Các tuyến hôm nay đã được cập nhật'}
+                    : 'Các tuyến trong 7 ngày đã được cập nhật'}
                 </Text>
               </View>
               <Pressable accessibilityLabel="Tải lại kế hoạch phân xe" style={styles.refreshButton} onPress={refresh}>
@@ -260,8 +267,8 @@ export function MarketDispatchScreen() {
               <View style={styles.emptyCard}>
                 <EmptyState
                   icon={<Ionicons name="checkmark-done-circle-outline" size={56} color={Colors.primaryText} />}
-                  title="Chưa có tuyến giao hôm nay"
-                  subtitle="Khi kế hoạch giao được tạo cho ngày hôm nay, tuyến và số đơn tại Hub sẽ tự động xuất hiện ở đây."
+                  title="Chưa có tuyến giao trong 7 ngày"
+                  subtitle="Đơn chỉ xuất hiện khi BE đã tạo tuyến và đơn đã tới Hub. Đơn mới xác nhận tại Restaurant chưa phải là task của Hub."
                   actionLabel="Kiểm tra lại"
                   onAction={refresh}
                 />
@@ -323,6 +330,7 @@ function DispatchCard({
         </View>
         <View style={styles.routeCopy}>
           <Text numeric style={styles.routeCode}>{shortRouteCode(route.id)}</Text>
+          <Text style={styles.routeDate}>{formatServiceDate(route.serviceDate)}</Text>
           <Text numberOfLines={2} style={styles.destinations}>
             {destinationNames.length > 0 ? destinationNames.join(' · ') : 'Chưa có đơn tại Hub cho tuyến này'}
           </Text>
@@ -585,6 +593,7 @@ const styles = StyleSheet.create({
   routeIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   routeCopy: { flex: 1, minWidth: 0, paddingHorizontal: 9 },
   routeCode: { fontSize: 12, fontWeight: '800', fontFamily: Fonts.monoBold, color: Colors.textPrimary },
+  routeDate: { fontSize: 8, fontWeight: '700', color: Colors.primaryText, marginTop: 2 },
   destinations: { fontSize: 9, color: Colors.textMuted, lineHeight: 13, marginTop: 3 },
   statusBadge: { flexShrink: 0, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4 },
   statusText: { fontSize: 8, fontWeight: '800' },

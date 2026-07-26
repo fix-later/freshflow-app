@@ -57,7 +57,7 @@ export function HubDashboardScreen() {
   const pendingTasks = inboundTasks.filter((task) => task.status === 'PENDING');
   const receivedTasks = inboundTasks.filter((task) => task.status === 'ARRIVED_AT_HUB');
   const pendingWeight = pendingTasks.reduce((sum, task) => sum + task.totalQuantityKg, 0);
-  const todayOrderCount = dispatchPlan?.routes.reduce(
+  const weekOrderCount = dispatchPlan?.routes.reduce(
     (sum, item) => sum + item.manifest.stops.length,
     0,
   ) ?? 0;
@@ -141,13 +141,13 @@ export function HubDashboardScreen() {
                 <Ionicons name="car-sport-outline" size={22} color={Colors.primaryText} />
               </View>
               <View style={styles.dispatchOverviewCopy}>
-                <Text style={styles.dispatchOverviewTitle}>Đơn và phân xe hôm nay</Text>
+                <Text style={styles.dispatchOverviewTitle}>Đơn và phân xe trong 7 ngày</Text>
                 <Text style={styles.dispatchOverviewSub}>
                   {dispatchLoading && !dispatchPlan
                     ? 'Đang đồng bộ kế hoạch giao hàng...'
                     : dispatchError && !dispatchPlan
                       ? 'Chưa tải được kế hoạch · Chạm để thử lại'
-                      : `${todayOrderCount} đơn/điểm giao · ${routesWaitingForVehicle} tuyến chờ xe`}
+                      : `${weekOrderCount} đơn/điểm giao · ${routesWaitingForVehicle} tuyến chờ xe`}
                 </Text>
               </View>
               {routesWaitingForVehicle > 0 ? (

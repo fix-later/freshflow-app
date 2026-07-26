@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MarketAgentHomeScreen } from '../features/inventory/screens/MarketAgentHomeScreen';
 import { MarketKiosksScreen } from '../features/inventory/screens/MarketKiosksScreen';
+import { ProcurementTaskDetailScreen } from '../features/procurement/screens/ProcurementTaskDetailScreen';
 
 import { UpdatePriceScreen } from '../features/pricing/screens/UpdatePriceScreen';
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
@@ -43,6 +44,11 @@ function MarketAgentHomeNavigator() {
         options={({ route }) => ({
           title: route.params?.marketName || 'Danh sách Kiosk',
         })}
+      />
+      <HomeStack.Screen
+        name="ProcurementTaskDetail"
+        component={ProcurementTaskDetailScreen}
+        options={{ title: 'Chi tiết thu mua' }}
       />
     </HomeStack.Navigator>
   );

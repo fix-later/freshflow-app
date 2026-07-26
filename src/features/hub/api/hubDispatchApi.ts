@@ -79,7 +79,8 @@ export interface HubDispatchPlanItem {
 }
 
 export interface HubDispatchPlan {
-  serviceDate: string;
+  fromDate: string;
+  toDate: string;
   routes: HubDispatchPlanItem[];
   vehicles: HubVehicleDto[];
 }
@@ -125,11 +126,21 @@ async function getAllActiveVehicles(): Promise<HubVehicleDto[]> {
 }
 
 export const hubDispatchApi = {
-  async getPlan(serviceDate: string): Promise<HubDispatchPlan> {
-    const [routes, vehicles] = await Promise.all([
-      getAllRoutes(serviceDate),
+  async getPlan(serviceDates: string[]): Promise<HubDispatchPlan> {
+    if (serviceDates.length === 0) {
+      throw new Error('Cần ít nhất một ngày giao hàng để tải kế hoạch.');
+    }
+
+    const [routeGroups, vehicles] = await Promise.all([
+      Promise.all(serviceDates.map(getAllRoutes)),
       getAllActiveVehicles(),
     ]);
+    const routes = routeGroups
+      .flat()
+      .sort((left, right) => (
+        left.serviceDate.localeCompare(right.serviceDate)
+        || left.createdAt.localeCompare(right.createdAt)
+      ));
 
     const manifests = await Promise.all(
       routes.map(async (route) => {
@@ -141,7 +152,8 @@ export const hubDispatchApi = {
     );
 
     return {
-      serviceDate,
+      fromDate: serviceDates[0],
+      toDate: serviceDates[serviceDates.length - 1],
       routes: routes.map((route, index) => ({ route, manifest: manifests[index] })),
       vehicles: vehicles.sort((left, right) => left.capacityKg - right.capacityKg),
     };

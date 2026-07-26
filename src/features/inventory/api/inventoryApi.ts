@@ -1,4 +1,4 @@
-import { apiClient } from '../../../services/api/client';
+import { apiClient, getCursorPaged } from '../../../services/api/client';
 import type { MarketProductDto, CategoryDto } from '../../../types/api.types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -73,6 +73,23 @@ export const inventoryApi = {
       params: queryParams,
     });
     return data;
+  },
+
+  /** Loads every cursor page so category counts and filters are complete. */
+  async getAllMarketProducts(marketId: string): Promise<MarketProductDto[]> {
+    const products: MarketProductDto[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const page = await getCursorPaged<MarketProductDto>(
+        `/api/v1/markets/${marketId}/products`,
+        { params: { cursor, pageSize: 100 } },
+      );
+      products.push(...page.data);
+      cursor = page.meta.nextCursor ?? undefined;
+    } while (cursor);
+
+    return products;
   },
 
   /**

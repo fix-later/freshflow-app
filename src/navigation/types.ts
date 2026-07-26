@@ -59,6 +59,7 @@ export type RestaurantOrdersStackParamList = {
 export type MarketHomeStackParamList = {
   MarketAgentHomeMain: undefined;
   MarketKiosks: { marketId: string; marketName: string };
+  ProcurementTaskDetail: { batchId: string };
 };
 
 export type MarketAgentStackParamList = {

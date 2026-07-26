@@ -14,6 +14,7 @@ type HubDispatchState = {
 };
 
 const AUTO_REFRESH_INTERVAL_MS = 30_000;
+const DISPATCH_WINDOW_DAYS = 7;
 
 function getVietnamServiceDate(): string {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -26,12 +27,23 @@ function getVietnamServiceDate(): string {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
+function getDispatchServiceDates(): string[] {
+  const [year, month, day] = getVietnamServiceDate().split('-').map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day));
+
+  return Array.from({ length: DISPATCH_WINDOW_DAYS }, (_, offset) => {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + offset);
+    return date.toISOString().slice(0, 10);
+  });
+}
+
 function readErrorMessage(error: unknown): string {
   const serverMessage = (error as { response?: { data?: { message?: string } } })
     ?.response?.data?.message;
   if (serverMessage) return serverMessage;
   if (error instanceof Error && error.message) return error.message;
-  return 'Không thể tải kế hoạch phân xe hôm nay. Vui lòng thử lại.';
+  return 'Không thể tải kế hoạch phân xe trong 7 ngày. Vui lòng thử lại.';
 }
 
 export function useHubDispatch(): HubDispatchState {
@@ -45,7 +57,7 @@ export function useHubDispatch(): HubDispatchState {
     setError(null);
 
     try {
-      setPlan(await hubDispatchApi.getPlan(getVietnamServiceDate()));
+      setPlan(await hubDispatchApi.getPlan(getDispatchServiceDates()));
     } catch (loadError) {
       setError(readErrorMessage(loadError));
     } finally {
