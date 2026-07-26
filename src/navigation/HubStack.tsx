@@ -136,7 +136,7 @@ export function HubStack() {
       }}
     >
       <Stack.Screen name="HubTabs" component={HubTabs} options={{ headerShown: false }} />
-      <Stack.Screen name="MarketDispatch" component={MarketDispatchScreen} options={{ title: 'Phân công xe đi chợ' }} />
+      <Stack.Screen name="MarketDispatch" component={MarketDispatchScreen} options={{ title: 'Phân xe giao nhà hàng' }} />
       <Stack.Screen name="CheckIn" component={CheckInScreen} options={{ title: 'Kiểm đếm lô hàng' }} />
       <Stack.Screen name="QualityCheck" component={QualityCheckScreen} options={{ title: 'Kiểm tra chất lượng' }} />
       <Stack.Screen name="DriverHandoff" component={DriverHandoffScreen} options={{ title: 'Bàn giao tài xế' }} />
