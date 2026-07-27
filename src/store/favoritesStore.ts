@@ -1,23 +1,14 @@
 import { createContext, useContext } from 'react';
+import { type FavoriteItemDto } from '../features/orders/api/favoriteApi';
 
-export interface FavoriteItem {
-  id: string; // marketProductId or demo p1,p2...
-  productId: string;
-  name: string;
-  marketId: string;
-  marketName: string;
-  category: string;
-  price: number;
-  unit: string;
-  image: string;
-  availableQuantity: number;
-  currentQuantity: number;
-}
+export type FavoriteItem = FavoriteItemDto;
 
 export interface FavoritesStore {
   favorites: FavoriteItem[];
+  isLoading: boolean;
   toggleFavorite: (item: FavoriteItem) => void;
-  isFavorite: (id: string) => boolean;
+  isFavorite: (marketProductId: string) => boolean;
+  refresh: () => Promise<void>;
 }
 
 export const FavoritesContext = createContext<FavoritesStore | null>(null);

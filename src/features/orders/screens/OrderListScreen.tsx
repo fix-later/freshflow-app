@@ -326,17 +326,17 @@ export function OrderListScreen({
 
   const toggleProductFavorite = (product: MarketProductDto) => {
     toggleFavorite({
-      id: product.marketProductId,
+      marketProductId: product.marketProductId,
       productId: product.productId,
-      name: product.productName,
+      productName: product.productName,
+      imageUrl: resolveImage(product),
       marketId: product.marketId,
       marketName: selectedMarket?.name ?? '',
-      category: product.category ?? '',
-      price: product.currentPrice,
+      category: product.category,
       unit: product.unit,
-      image: resolveImage(product),
+      currentPrice: product.currentPrice,
       availableQuantity: product.availableQuantity,
-      currentQuantity: product.currentQuantity,
+      createdAt: new Date().toISOString(),
     });
   };
 

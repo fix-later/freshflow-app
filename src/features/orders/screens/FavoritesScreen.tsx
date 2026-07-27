@@ -1,8 +1,10 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Image,
   Pressable,
+  RefreshControl,
   StyleSheet,
   View,
 } from 'react-native';
@@ -21,35 +23,41 @@ function formatPrice(p: number) {
 export function FavoritesScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { favorites, toggleFavorite } = useFavoritesStore();
-  const { cart, addToCart, removeFromCart } = useCartStore();
+  const { favorites, isLoading, toggleFavorite, refresh } = useFavoritesStore();
+  const { cart, addToCart } = useCartStore();
 
-  const getCartQty = (id: string) => {
-    return cart.find((item) => item.id === id)?.qty ?? 0;
+  const getCartQty = (marketProductId: string) => {
+    return cart.find((item) => item.id === marketProductId)?.qty ?? 0;
   };
 
   const handleAddToCart = (item: typeof favorites[0]) => {
     addToCart({
-      id: item.id,
-      name: item.name,
+      id: item.marketProductId,
+      name: item.productName,
       market: item.marketName,
       unit: item.unit,
-      price: item.price,
-      image: item.image,
+      price: item.currentPrice,
+      image: item.imageUrl ?? '',
     });
   };
 
   const renderFavoriteItem = ({ item }: { item: typeof favorites[0] }) => {
-    const qty = getCartQty(item.id);
+    const qty = getCartQty(item.marketProductId);
     const outOfStock = item.availableQuantity <= 0;
 
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Image source={{ uri: item.image }} style={styles.cardImage} />
+          {item.imageUrl ? (
+            <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
+          ) : (
+            <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
+              <Ionicons name="image-outline" size={22} color={Colors.outline} />
+            </View>
+          )}
           <View style={styles.cardInfo}>
             <Text style={styles.marketText}>{item.marketName}</Text>
-            <Text style={styles.nameText} numberOfLines={2}>{item.name}</Text>
+            <Text style={styles.nameText} numberOfLines={2}>{item.productName}</Text>
             <View style={styles.tagsRow}>
               {!!item.category && (
                 <View style={styles.categoryTag}>
@@ -61,7 +69,7 @@ export function FavoritesScreen() {
               </View>
             </View>
           </View>
-          <Pressable 
+          <Pressable
             style={styles.heartBtn}
             onPress={() => toggleFavorite(item)}
           >
@@ -73,7 +81,7 @@ export function FavoritesScreen() {
           <View>
             <Text style={styles.priceLabel}>Giá hiện tại</Text>
             <Text style={[styles.priceText, outOfStock && styles.priceOutOfStock]}>
-              {outOfStock ? '—' : formatPrice(item.price)}
+              {outOfStock ? '—' : formatPrice(item.currentPrice)}
             </Text>
           </View>
 
@@ -108,7 +116,11 @@ export function FavoritesScreen() {
         <Text style={styles.headerSub}>Danh sách mặt hàng đã đánh dấu</Text>
       </View>
 
-      {favorites.length === 0 ? (
+      {isLoading && favorites.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : favorites.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconWrap}>
             <Ionicons name="heart-dislike-outline" size={56} color={Colors.outline} />
@@ -117,7 +129,7 @@ export function FavoritesScreen() {
           <Text style={styles.emptySub}>
             Hãy nhấn biểu tượng trái tim khi xem sản phẩm để lưu lại tại đây.
           </Text>
-          <Pressable 
+          <Pressable
             style={styles.shopBtn}
             onPress={() => navigation.navigate('RestaurantOrders')}
           >
@@ -127,10 +139,13 @@ export function FavoritesScreen() {
       ) : (
         <FlatList
           data={favorites}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.marketProductId}
           renderItem={renderFavoriteItem}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={isLoading} onRefresh={refresh} colors={[Colors.primary]} />
+          }
         />
       )}
     </SafeAreaView>
@@ -185,6 +200,10 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 12,
     backgroundColor: Colors.surfaceContainerHigh,
+  },
+  cardImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardInfo: {
     flex: 1,
