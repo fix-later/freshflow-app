@@ -26,6 +26,23 @@ export function FavoritesScreen() {
   const { favorites, isLoading, toggleFavorite, refresh } = useFavoritesStore();
   const { cart, addToCart } = useCartStore();
 
+  const openProductDetail = (item: typeof favorites[0]) => {
+    navigation.navigate('ProductDetail', {
+      product: {
+        marketProductId: item.marketProductId,
+        productId: item.productId,
+        productName: item.productName,
+        imageUrl: item.imageUrl || null,
+        marketId: item.marketId,
+        marketName: item.marketName,
+        category: item.category,
+        unit: item.unit,
+        currentPrice: item.currentPrice,
+        availableQuantity: item.availableQuantity,
+      },
+    });
+  };
+
   const getCartQty = (marketProductId: string) => {
     return cart.find((item) => item.id === marketProductId)?.qty ?? 0;
   };
@@ -46,7 +63,7 @@ export function FavoritesScreen() {
     const outOfStock = item.availableQuantity <= 0;
 
     return (
-      <View style={styles.card}>
+      <Pressable style={styles.card} onPress={() => openProductDetail(item)}>
         <View style={styles.cardHeader}>
           {item.imageUrl ? (
             <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
@@ -71,7 +88,10 @@ export function FavoritesScreen() {
           </View>
           <Pressable
             style={styles.heartBtn}
-            onPress={() => toggleFavorite(item)}
+            onPress={(e) => {
+              e.stopPropagation();
+              toggleFavorite(item);
+            }}
           >
             <Ionicons name="heart" size={24} color={Colors.error} />
           </Pressable>
@@ -98,13 +118,19 @@ export function FavoritesScreen() {
             </View>
 
             {!outOfStock && (
-              <Pressable style={styles.addBtn} onPress={() => handleAddToCart(item)}>
+              <Pressable
+                style={styles.addBtn}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleAddToCart(item);
+                }}
+              >
                 <Ionicons name="add" size={18} color={Colors.onPrimary} />
               </Pressable>
             )}
           </View>
         </View>
-      </View>
+      </Pressable>
     );
   };
 

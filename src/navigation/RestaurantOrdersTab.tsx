@@ -3,6 +3,7 @@ import {
   type NativeStackNavigationOptions,
 } from '@react-navigation/native-stack';
 import { OrderListScreen } from '../features/orders/screens/OrderListScreen';
+import { ProductDetailScreen } from '../features/orders/screens/ProductDetailScreen';
 import { CreateOrderScreen } from '../features/orders/screens/CreateOrderScreen';
 import { ConfirmOrderScreen } from '../features/orders/screens/ConfirmOrderScreen';
 import { OrderDetailScreen } from '../features/orders/screens/OrderDetailScreen';
@@ -40,6 +41,11 @@ export function RestaurantOrdersTab() {
         name="OrderList"
         component={OrderListScreen}
         options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ProductDetail"
+        component={ProductDetailScreen}
+        options={{ title: 'Chi tiết sản phẩm' }}
       />
       <Stack.Screen
         name="CreateOrder"

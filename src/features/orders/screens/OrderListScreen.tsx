@@ -25,7 +25,6 @@ import {
   type CategoryDto,
   type MarketDto,
   type MarketProductDto,
-  type PriceHistoryItemDto,
   type ProductDto,
 } from '../../../types/api.types';
 import { pricingApi } from '../../pricing/api/pricingApi';
@@ -151,10 +150,6 @@ export function OrderListScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [showMarketPicker, setShowMarketPicker] = useState(false);
   const [showCart, setShowCart] = useState(false);
-  const [detailProduct, setDetailProduct] = useState<MarketProductDto | null>(null);
-  const [detailQuantity, setDetailQuantity] = useState(1);
-  const [priceHistory, setPriceHistory] = useState<PriceHistoryItemDto[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -340,21 +335,24 @@ export function OrderListScreen({
     });
   };
 
-  const openProductDetail = async (product: MarketProductDto) => {
-    setDetailProduct(product);
-    setDetailQuantity(product.availableQuantity > 0 ? 1 : 0);
-    setPriceHistory([]);
-    setHistoryLoading(true);
-    try {
-      const history = await pricingApi.getPriceHistory(product.marketId, product.productId, {
-        pageSize: 5,
-      });
-      setPriceHistory(history.items);
-    } catch {
-      setPriceHistory([]);
-    } finally {
-      setHistoryLoading(false);
-    }
+  const openProductDetail = (product: MarketProductDto) => {
+    const img = resolveImage(product);
+    const desc = productMetadata.get(product.productId)?.description;
+    navigation.navigate('ProductDetail', {
+      product: {
+        marketProductId: product.marketProductId,
+        productId: product.productId,
+        productName: product.productName,
+        imageUrl: img || null,
+        marketId: product.marketId,
+        marketName: selectedMarket?.name ?? '',
+        category: product.category,
+        unit: product.unit,
+        currentPrice: product.currentPrice,
+        availableQuantity: product.availableQuantity,
+        description: desc || null,
+      },
+    });
   };
 
   const proceedToCheckout = () => {
@@ -867,135 +865,6 @@ export function OrderListScreen({
         </SafeAreaView>
       </Modal>
 
-      <Modal
-        visible={detailProduct !== null}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setDetailProduct(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDetailProduct(null)} />
-          {detailProduct ? (
-            <View style={[styles.sheet, styles.detailSheet]}>
-              <View style={styles.sheetHandle} />
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {productMetadata.get(detailProduct.productId)?.imageUrl ? (
-                  <Image
-                    source={{ uri: productMetadata.get(detailProduct.productId)?.imageUrl ?? '' }}
-                    style={styles.detailImage}
-                  />
-                ) : (
-                  <View style={styles.detailPlaceholder}>
-                    <EmptyProductImage categoryName={detailProduct.category ?? ''} size={132} />
-                  </View>
-                )}
-                <View style={styles.detailCategoryRow}>
-                  <Text style={styles.detailCategory}>
-                    {detailProduct.category || 'Chưa phân loại'}
-                  </Text>
-                  <Pressable onPress={() => toggleProductFavorite(detailProduct)}>
-                    <Ionicons
-                      name={isFavorite(detailProduct.marketProductId) ? 'heart' : 'heart-outline'}
-                      size={25}
-                      color={
-                        isFavorite(detailProduct.marketProductId)
-                          ? Colors.danger
-                          : Colors.deepTeal
-                      }
-                    />
-                  </Pressable>
-                </View>
-                <Text style={styles.detailName}>{detailProduct.productName}</Text>
-                <Text style={styles.detailDescription}>
-                  {productMetadata.get(detailProduct.productId)?.description ||
-                    'Sản phẩm được cung ứng theo giá và tồn kho hiện tại của chợ.'}
-                </Text>
-                <Text numeric style={styles.detailPrice}>
-                  {formatPrice(detailProduct.currentPrice)}
-                  <Text style={styles.detailUnit}>/{detailProduct.unit}</Text>
-                </Text>
-
-                <View style={styles.detailFacts}>
-                  <View style={styles.detailFact}>
-                    <Ionicons name="storefront-outline" size={18} color={Colors.primaryText} />
-                    <View>
-                      <Text style={styles.detailFactLabel}>Chợ cung ứng</Text>
-                      <Text style={styles.detailFactValue}>{selectedMarket?.name}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.detailFact}>
-                    <Ionicons name="layers-outline" size={18} color={Colors.primaryText} />
-                    <View>
-                      <Text style={styles.detailFactLabel}>Tồn khả dụng</Text>
-                      <Text style={styles.detailFactValue}>
-                        {detailProduct.availableQuantity} {detailProduct.unit}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.historyHeader}>
-                  <Text style={styles.historyTitle}>Giá gần đây</Text>
-                  <Text style={styles.historyHint}>5 cập nhật mới nhất</Text>
-                </View>
-                {historyLoading ? (
-                  <ActivityIndicator color={Colors.primaryText} />
-                ) : priceHistory.length > 0 ? (
-                  priceHistory.map((history) => (
-                    <View key={history.id} style={styles.historyRow}>
-                      <View>
-                        <Text numeric style={styles.historyPrice}>{formatPrice(history.price)}</Text>
-                        <Text style={styles.historyDate}>{formatDateTime(history.recordedAt)}</Text>
-                      </View>
-                      <Text numeric style={styles.historyQuantity}>{history.quantity} {detailProduct.unit}</Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.historyEmpty}>Chưa có lịch sử giá.</Text>
-                )}
-              </ScrollView>
-
-              <View style={styles.detailFooter}>
-                <View style={styles.detailQuantity}>
-                  <Pressable
-                    style={styles.detailQuantityButton}
-                    disabled={detailQuantity <= 1}
-                    onPress={() => setDetailQuantity((value) => Math.max(1, value - 1))}
-                  >
-                    <Ionicons name="remove" size={19} color={Colors.deepTeal} />
-                  </Pressable>
-                  <Text numeric style={styles.detailQuantityValue}>{detailQuantity}</Text>
-                  <Pressable
-                    style={styles.detailQuantityButton}
-                    disabled={detailQuantity >= detailProduct.availableQuantity}
-                    onPress={() =>
-                      setDetailQuantity((value) =>
-                        Math.min(detailProduct.availableQuantity, value + 1),
-                      )
-                    }
-                  >
-                    <Ionicons name="add" size={19} color={Colors.deepTeal} />
-                  </Pressable>
-                </View>
-                <Pressable
-                  style={[
-                    styles.detailAddButton,
-                    detailProduct.availableQuantity <= 0 && styles.addButtonDisabled,
-                  ]}
-                  disabled={detailProduct.availableQuantity <= 0}
-                  onPress={() => {
-                    addProduct(detailProduct, detailQuantity);
-                    setDetailProduct(null);
-                  }}
-                >
-                  <Ionicons name="bag-add-outline" size={20} color={Colors.onPrimary} />
-                  <Text style={styles.detailAddText}>Thêm vào giỏ</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -1526,102 +1395,4 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     fontSize: 15,
   },
-  detailSheet: { height: '88%', maxHeight: '88%' },
-  detailImage: { width: '100%', height: 220, borderRadius: 20, backgroundColor: Colors.primaryLight },
-  detailPlaceholder: {
-    height: 210,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  detailCategoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  detailCategory: {
-    fontSize: 11,
-    color: Colors.primaryText,
-    fontFamily: Fonts.semibold,
-    textTransform: 'uppercase',
-  },
-  detailName: {
-    marginTop: 5,
-    fontSize: 22,
-    lineHeight: 29,
-    color: Colors.deepTeal,
-    fontFamily: Fonts.bold,
-  },
-  detailDescription: {
-    marginTop: 8,
-    fontSize: 12,
-    lineHeight: 19,
-    color: Colors.textSecondary,
-  },
-  detailPrice: { marginTop: 12, fontSize: 23, color: Colors.primaryText, fontFamily: Fonts.bold },
-  detailUnit: { fontSize: 12, color: Colors.textMuted },
-  detailFacts: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  detailFact: {
-    flex: 1,
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 10,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  detailFactLabel: { fontSize: 9, color: Colors.textMuted },
-  detailFactValue: { marginTop: 2, fontSize: 11, color: Colors.textPrimary, fontFamily: Fonts.semibold },
-  historyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 20,
-    marginBottom: 9,
-  },
-  historyTitle: { fontSize: 14, color: Colors.deepTeal, fontFamily: Fonts.bold },
-  historyHint: { fontSize: 10, color: Colors.textMuted },
-  historyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  historyPrice: { fontSize: 13, color: Colors.deepTeal, fontFamily: Fonts.semibold },
-  historyDate: { marginTop: 2, fontSize: 9, color: Colors.textMuted },
-  historyQuantity: { fontSize: 11, color: Colors.textSecondary },
-  historyEmpty: { paddingVertical: 12, fontSize: 12, color: Colors.textMuted },
-  detailFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  detailQuantity: {
-    minHeight: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 15,
-    backgroundColor: Colors.primaryLight,
-  },
-  detailQuantityButton: { width: 42, height: 50, alignItems: 'center', justifyContent: 'center' },
-  detailQuantityValue: { minWidth: 30, textAlign: 'center', fontSize: 13, fontFamily: Fonts.bold },
-  detailAddButton: {
-    flex: 1,
-    minHeight: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    borderRadius: 15,
-    backgroundColor: Colors.primary,
-  },
-  detailAddText: { fontSize: 13, color: Colors.onPrimary, fontFamily: Fonts.bold },
 });

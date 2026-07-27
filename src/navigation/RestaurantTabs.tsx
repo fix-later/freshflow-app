@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RestaurantProfileTab } from './RestaurantProfileTab';
 import { RestaurantOrdersTab } from './RestaurantOrdersTab';
 import { RestaurantOrderManagementTab } from './RestaurantOrderManagementTab';
-import { FavoritesScreen } from '../features/orders/screens/FavoritesScreen';
+import { RestaurantFavoritesTab } from './RestaurantFavoritesTab';
 import { RestaurantAssistantScreen } from '../features/assistant/screens/RestaurantAssistantScreen';
 import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
@@ -144,8 +144,8 @@ export function RestaurantTabs() {
       />
       <Tab.Screen
         name="RestaurantFavorites"
-        component={FavoritesScreen}
-        options={{ title: 'Yêu thích' }}
+        component={RestaurantFavoritesTab}
+        options={{ headerShown: false }}
       />
       <Tab.Screen
         name="RestaurantAssistant"
