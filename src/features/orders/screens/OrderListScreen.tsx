@@ -743,125 +743,142 @@ export function OrderListScreen({
             </Pressable>
           </View>
 
-          <FlatList
-            data={cart}
-            keyExtractor={(item) => item.id}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.cartScreenList}
-            renderItem={({ item }) => {
-              const maxQuantity =
-                marketProducts.find((product) => product.marketProductId === item.id)
-                  ?.availableQuantity ?? Number.MAX_SAFE_INTEGER;
+          {isCartEmpty ? (
+            <View style={styles.emptyCartContainer}>
+              <View style={styles.emptyCartIconWrap}>
+                <Ionicons name="cart-outline" size={56} color={Colors.outline} />
+              </View>
+              <Text style={styles.emptyCartTitle}>Giỏ hàng của bạn đang trống</Text>
+              <Text style={styles.emptyCartSub}>
+                Hãy quay lại trang mua sắm và thêm những nông sản chất lượng vào giỏ nhé!
+              </Text>
+              <Pressable style={styles.emptyCartBtn} onPress={() => setShowCart(false)}>
+                <Text style={styles.emptyCartBtnText}>MUA SẮM NGAY</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <FlatList
+                data={cart}
+                keyExtractor={(item) => item.id}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.cartScreenList}
+                renderItem={({ item }) => {
+                  const maxQuantity =
+                    marketProducts.find((product) => product.marketProductId === item.id)
+                      ?.availableQuantity ?? Number.MAX_SAFE_INTEGER;
 
-              return (
-                <View style={styles.cartScreenItem}>
-                  <View style={styles.cartScreenItemRow}>
-                    <Image source={{ uri: item.image }} style={styles.cartScreenItemImg} />
-                    <View style={styles.cartScreenItemInfo}>
-                      <Text style={styles.cartScreenItemName}>{item.name}</Text>
-                      <Text style={styles.cartScreenItemMarket}>
-                        {item.market} • {item.unit}
-                      </Text>
-                      <Text numeric style={styles.cartScreenItemPrice}>
-                        {formatPrice(item.price * item.qty)}
-                      </Text>
+                  return (
+                    <View style={styles.cartScreenItem}>
+                      <View style={styles.cartScreenItemRow}>
+                        <Image source={{ uri: item.image }} style={styles.cartScreenItemImg} />
+                        <View style={styles.cartScreenItemInfo}>
+                          <Text style={styles.cartScreenItemName}>{item.name}</Text>
+                          <Text style={styles.cartScreenItemMarket}>
+                            {item.market} • {item.unit}
+                          </Text>
+                          <Text numeric style={styles.cartScreenItemPrice}>
+                            {formatPrice(item.price * item.qty)}
+                          </Text>
+                        </View>
+                        <View style={styles.cartScreenItemQty}>
+                          <Pressable
+                            style={styles.cartScreenQtyBtn}
+                            onPress={() => {
+                              if (item.qty <= 1) removeFromCart(item.id);
+                              else updateItemQty(item.id, item.qty - 1);
+                            }}
+                          >
+                            <MaterialIcons name="remove" size={16} color={Colors.primaryText} />
+                          </Pressable>
+                          <Text numeric style={styles.cartScreenQtyText}>{item.qty}</Text>
+                          <Pressable
+                            style={styles.cartScreenQtyBtn}
+                            disabled={item.qty >= maxQuantity}
+                            onPress={() => updateItemQty(item.id, Math.min(maxQuantity, item.qty + 1))}
+                          >
+                            <MaterialIcons name="add" size={16} color={Colors.primaryText} />
+                          </Pressable>
+                        </View>
+                      </View>
+                      <TextInput
+                        style={styles.cartScreenItemNote}
+                        placeholder="Ghi chú sản phẩm (tùy chọn)..."
+                        placeholderTextColor={Colors.outline}
+                        value={item.note ?? ''}
+                        onChangeText={(text) => updateItemNote(item.id, text)}
+                        maxLength={200}
+                      />
                     </View>
-                    <View style={styles.cartScreenItemQty}>
-                      <Pressable
-                        style={styles.cartScreenQtyBtn}
-                        onPress={() => {
-                          if (item.qty <= 1) removeFromCart(item.id);
-                          else updateItemQty(item.id, item.qty - 1);
-                        }}
-                      >
-                        <MaterialIcons name="remove" size={16} color={Colors.primaryText} />
-                      </Pressable>
-                      <Text numeric style={styles.cartScreenQtyText}>{item.qty}</Text>
-                      <Pressable
-                        style={styles.cartScreenQtyBtn}
-                        disabled={item.qty >= maxQuantity}
-                        onPress={() => updateItemQty(item.id, Math.min(maxQuantity, item.qty + 1))}
-                      >
-                        <MaterialIcons name="add" size={16} color={Colors.primaryText} />
+                  );
+                }}
+                ListHeaderComponent={
+                  <View style={styles.cartScreenVoucherSection}>
+                    <View style={styles.cartScreenVoucherRow}>
+                      <MaterialIcons name="discount" size={18} color={Colors.outline} />
+                      <TextInput
+                        style={styles.cartScreenVoucherInput}
+                        placeholder="Nhập mã giảm giá"
+                        placeholderTextColor={Colors.outline}
+                      />
+                      <Pressable style={styles.cartScreenVoucherBtn}>
+                        <Text style={styles.cartScreenVoucherBtnText}>Áp dụng</Text>
                       </Pressable>
                     </View>
                   </View>
-                  <TextInput
-                    style={styles.cartScreenItemNote}
-                    placeholder="Ghi chú sản phẩm (tùy chọn)..."
-                    placeholderTextColor={Colors.outline}
-                    value={item.note ?? ''}
-                    onChangeText={(text) => updateItemNote(item.id, text)}
-                    maxLength={200}
-                  />
-                </View>
-              );
-            }}
-            ListHeaderComponent={
-              <View style={styles.cartScreenVoucherSection}>
-                <View style={styles.cartScreenVoucherRow}>
-                  <MaterialIcons name="discount" size={18} color={Colors.outline} />
-                  <TextInput
-                    style={styles.cartScreenVoucherInput}
-                    placeholder="Nhập mã giảm giá"
-                    placeholderTextColor={Colors.outline}
-                  />
-                  <Pressable style={styles.cartScreenVoucherBtn}>
-                    <Text style={styles.cartScreenVoucherBtnText}>Áp dụng</Text>
-                  </Pressable>
-                </View>
-              </View>
-            }
-            ListFooterComponent={
-              <View style={styles.cartScreenSummary}>
-                <View style={styles.cartScreenSummaryRow}>
-                  <Text style={styles.cartScreenSummaryLabel}>Tạm tính</Text>
-                  <Text numeric style={styles.cartScreenSummaryValue}>
-                    {formatPrice(cartTotal)}
-                  </Text>
-                </View>
-                <View style={styles.cartScreenSummaryRow}>
-                  <Text style={styles.cartScreenSummaryLabel}>Phí vận chuyển</Text>
-                  <Text style={styles.cartScreenSummaryValue}>Sẽ xác nhận sau</Text>
-                </View>
-                <View style={styles.cartScreenSummaryRow}>
-                  <Text style={styles.cartScreenSummaryLabel}>Giảm giá</Text>
-                  <Text
-                    numeric
-                    style={[styles.cartScreenSummaryValue, { color: Colors.error }]}
-                  >
-                    – 0đ
-                  </Text>
-                </View>
-                <View style={styles.cartScreenSummaryDivider} />
-                <View style={styles.cartScreenSummaryRow}>
-                  <Text numeric style={styles.cartScreenSummaryTotal}>Tổng cộng</Text>
-                  <Text numeric style={styles.cartScreenSummaryTotalValue}>
-                    {formatPrice(cartTotal)}
-                  </Text>
-                </View>
-              </View>
-            }
-          />
+                }
+                ListFooterComponent={
+                  <View style={styles.cartScreenSummary}>
+                    <View style={styles.cartScreenSummaryRow}>
+                      <Text style={styles.cartScreenSummaryLabel}>Tạm tính</Text>
+                      <Text numeric style={styles.cartScreenSummaryValue}>
+                        {formatPrice(cartTotal)}
+                      </Text>
+                    </View>
+                    <View style={styles.cartScreenSummaryRow}>
+                      <Text style={styles.cartScreenSummaryLabel}>Phí vận chuyển</Text>
+                      <Text style={styles.cartScreenSummaryValue}>Sẽ xác nhận sau</Text>
+                    </View>
+                    <View style={styles.cartScreenSummaryRow}>
+                      <Text style={styles.cartScreenSummaryLabel}>Giảm giá</Text>
+                      <Text
+                        numeric
+                        style={[styles.cartScreenSummaryValue, { color: Colors.error }]}
+                      >
+                        – 0đ
+                      </Text>
+                    </View>
+                    <View style={styles.cartScreenSummaryDivider} />
+                    <View style={styles.cartScreenSummaryRow}>
+                      <Text numeric style={styles.cartScreenSummaryTotal}>Tổng cộng</Text>
+                      <Text numeric style={styles.cartScreenSummaryTotalValue}>
+                        {formatPrice(cartTotal)}
+                      </Text>
+                    </View>
+                  </View>
+                }
+              />
 
-          <View style={styles.cartScreenCheckoutBar}>
-            <View>
-              <Text style={styles.cartScreenCheckoutLabel}>Tạm tính</Text>
-              <Text numeric style={styles.cartScreenCheckoutTotal}>{formatPrice(cartTotal)}</Text>
-            </View>
-            <Pressable
-              style={[
-                styles.cartScreenCheckoutBtn,
-                isCartEmpty && styles.cartScreenCheckoutBtnDisabled,
-              ]}
-              disabled={isCartEmpty}
-              onPress={proceedToCheckout}
-            >
-              <Text style={styles.cartScreenCheckoutBtnText}>
-                {isCartEmpty ? 'Thêm sản phẩm trước' : 'Tiến hành thanh toán'}
-              </Text>
-            </Pressable>
-          </View>
+              <View style={styles.cartScreenCheckoutBar}>
+                <View>
+                  <Text style={styles.cartScreenCheckoutLabel}>Tạm tính</Text>
+                  <Text numeric style={styles.cartScreenCheckoutTotal}>{formatPrice(cartTotal)}</Text>
+                </View>
+                <Pressable
+                  style={[
+                    styles.cartScreenCheckoutBtn,
+                    isCartEmpty && styles.cartScreenCheckoutBtnDisabled,
+                  ]}
+                  disabled={isCartEmpty}
+                  onPress={proceedToCheckout}
+                >
+                  <Text style={styles.cartScreenCheckoutBtnText}>
+                    {isCartEmpty ? 'Thêm sản phẩm trước' : 'Tiến hành thanh toán'}
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          )}
         </SafeAreaView>
       </Modal>
 
@@ -1394,5 +1411,51 @@ const styles = StyleSheet.create({
     color: Colors.onPrimary,
     fontFamily: Fonts.bold,
     fontSize: 15,
+  },
+  emptyCartContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  emptyCartIconWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: Colors.surfaceContainerLow,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyCartTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.bold,
+    color: Colors.textPrimary,
+  },
+  emptyCartSub: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+    maxWidth: 280,
+  },
+  emptyCartBtn: {
+    marginTop: 24,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  emptyCartBtnText: {
+    color: Colors.onPrimary,
+    fontFamily: Fonts.bold,
+    fontSize: 14,
   },
 });
