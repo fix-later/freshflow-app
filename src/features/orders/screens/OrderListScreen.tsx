@@ -155,6 +155,7 @@ export function OrderListScreen({
   const [productsLoading, setProductsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => {
     if (route?.params?.openCart) {
@@ -738,9 +739,13 @@ export function OrderListScreen({
               <MaterialIcons name="arrow-back" size={24} color={Colors.onSurface} />
             </Pressable>
             <Text style={styles.cartScreenTitle}>Giỏ hàng ({cartCount})</Text>
-            <Pressable onPress={clearCart}>
-              <Text style={styles.cartScreenClear}>Xoá tất cả</Text>
-            </Pressable>
+            {!isCartEmpty ? (
+              <Pressable onPress={() => setShowClearConfirm(true)}>
+                <Text style={styles.cartScreenClear}>Xoá tất cả</Text>
+              </Pressable>
+            ) : (
+              <View style={{ width: 60 }} />
+            )}
           </View>
 
           {isCartEmpty ? (
@@ -880,6 +885,52 @@ export function OrderListScreen({
             </>
           )}
         </SafeAreaView>
+
+        {/* ── Custom Clear-cart Confirm Modal ── */}
+        <Modal
+          visible={showClearConfirm}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowClearConfirm(false)}
+        >
+          <Pressable
+            style={styles.confirmOverlay}
+            onPress={() => setShowClearConfirm(false)}
+          >
+            <Pressable style={styles.confirmCard} onPress={() => {}}>
+              {/* Icon */}
+              <View style={styles.confirmIconWrap}>
+                <Ionicons name="trash-bin" size={30} color={Colors.error} />
+              </View>
+
+              {/* Text */}
+              <Text style={styles.confirmTitle}>Xoá giỏ hàng?</Text>
+              <Text style={styles.confirmBody}>
+                Tất cả sản phẩm trong giỏ sế bị xoá.{`\n`}Thao tác này không thể hoàn tác.
+              </Text>
+
+              {/* Actions */}
+              <View style={styles.confirmActions}>
+                <Pressable
+                  style={styles.confirmCancel}
+                  onPress={() => setShowClearConfirm(false)}
+                >
+                  <Text style={styles.confirmCancelText}>Huỷ</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.confirmDelete}
+                  onPress={() => {
+                    setShowClearConfirm(false);
+                    clearCart();
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={16} color={Colors.onPrimary} />
+                  <Text style={styles.confirmDeleteText}>Xoá tất cả</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </Modal>
 
     </SafeAreaView>
@@ -1457,5 +1508,88 @@ const styles = StyleSheet.create({
     color: Colors.onPrimary,
     fontFamily: Fonts.bold,
     fontSize: 14,
+  },
+  /* ── Confirm clear-cart modal ── */
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  confirmCard: {
+    width: '100%',
+    backgroundColor: Colors.surface,
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  confirmIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFF1F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.bold,
+    color: Colors.textPrimary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  confirmBody: {
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  confirmCancel: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.outlineVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCancelText: {
+    fontSize: 15,
+    fontFamily: Fonts.semibold,
+    color: Colors.textSecondary,
+  },
+  confirmDelete: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#E05050',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    shadowColor: '#E05050',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  confirmDeleteText: {
+    fontSize: 15,
+    fontFamily: Fonts.bold,
+    color: Colors.onPrimary,
   },
 });
