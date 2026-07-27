@@ -77,6 +77,7 @@ export type HubTabParamList = {
 
 export type HubStackParamList = {
   HubTabs: NavigatorScreenParams<HubTabParamList> | undefined;
+  HubProcurementWeek: undefined;
   MarketDispatch: undefined;
   CheckIn: { batchId: string; assignedTask?: HubInboundTask };
   QualityCheck: { batchId: string };

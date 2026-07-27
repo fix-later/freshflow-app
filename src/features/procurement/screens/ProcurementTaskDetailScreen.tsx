@@ -162,6 +162,36 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
     }
   };
 
+  const handoverToHub = () => {
+    if (!task || task.status !== 'Purchasing') return;
+
+    Alert.alert(
+      'Bàn giao cho Hub?',
+      'Sau khi xác nhận, lô thu mua sẽ được chuyển sang Hub đã được hệ thống chỉ định.',
+      [
+        { text: 'Để sau', style: 'cancel' },
+        {
+          text: 'Xác nhận bàn giao',
+          onPress: async () => {
+            setSubmitting(true);
+            try {
+              const updated = await marketProcurementApi.handover(task.id);
+              setTask(updated);
+              Alert.alert(
+                'Đã bàn giao',
+                'Task nhận hàng đã được gửi tới các Hub Staff được phân công tại Hub đích.',
+              );
+            } catch (handoverError) {
+              Alert.alert('Không thể bàn giao', readError(handoverError));
+            } finally {
+              setSubmitting(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   if (loading && !task) return <Loading fullScreen label="Đang tải chi tiết thu mua..." />;
   if (error && !task) return <ErrorView fullScreen message={error} onRetry={() => void load()} />;
   if (!task) return null;
@@ -288,20 +318,32 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
         </View>
 
         {canEdit ? (
-          <Pressable
-            disabled={submitting}
-            style={({ pressed }) => [styles.confirmButton, (pressed || submitting) && styles.buttonPressed]}
-            onPress={() => void confirmPurchase()}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color={Colors.onPrimary} />
-            ) : (
-              <Ionicons name="checkmark-done-outline" size={20} color={Colors.onPrimary} />
-            )}
-            <Text style={styles.confirmButtonText}>
-              {task.status === 'Purchasing' ? 'Cập nhật kết quả thu mua' : 'Xác nhận đã thu mua'}
-            </Text>
-          </Pressable>
+          <View style={styles.actionGroup}>
+            <Pressable
+              disabled={submitting}
+              style={({ pressed }) => [styles.confirmButton, (pressed || submitting) && styles.buttonPressed]}
+              onPress={() => void confirmPurchase()}
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color={Colors.onPrimary} />
+              ) : (
+                <Ionicons name="checkmark-done-outline" size={20} color={Colors.onPrimary} />
+              )}
+              <Text style={styles.confirmButtonText}>
+                {task.status === 'Purchasing' ? 'Cập nhật kết quả thu mua' : 'Xác nhận đã thu mua'}
+              </Text>
+            </Pressable>
+            {task.status === 'Purchasing' ? (
+              <Pressable
+                disabled={submitting}
+                style={({ pressed }) => [styles.handoverButton, (pressed || submitting) && styles.buttonPressed]}
+                onPress={handoverToHub}
+              >
+                <Ionicons name="business-outline" size={20} color={Colors.primaryText} />
+                <Text style={styles.handoverButtonText}>Bàn giao lô cho Hub</Text>
+              </Pressable>
+            ) : null}
+          </View>
         ) : (
           <View style={styles.readOnlyNotice}>
             <Ionicons name="lock-closed-outline" size={18} color={Colors.textMuted} />
@@ -376,7 +418,10 @@ const styles = StyleSheet.create({
   orderCopy: { flex: 1, paddingHorizontal: 9 },
   orderCode: { color: Colors.textPrimary, fontSize: 10, fontFamily: Fonts.monoBold },
   orderStatus: { color: Colors.textMuted, fontSize: 8, marginTop: 3 },
+  actionGroup: { gap: 9 },
   confirmButton: { minHeight: 50, borderRadius: 13, backgroundColor: Colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  handoverButton: { minHeight: 50, borderRadius: 13, borderWidth: 1, borderColor: Colors.primary600, backgroundColor: Colors.primaryLight, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  handoverButtonText: { color: Colors.primaryText, fontSize: 12, fontWeight: '800' },
   buttonPressed: { opacity: 0.72 },
   confirmButtonText: { color: Colors.onPrimary, fontSize: 12, fontWeight: '800' },
   readOnlyNotice: { minHeight: 50, borderRadius: 12, backgroundColor: Colors.surfaceContainerHigh, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 14 },

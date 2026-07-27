@@ -8,7 +8,7 @@ import type { HubStackParamList } from '../../../navigation/types';
 import { EmptyState, ErrorView, Loading, Text } from '../../../components/ui';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
-import type { HubInboundTask } from '../api/hubApi';
+import { isInboundReceived, type HubInboundTask } from '../api/hubApi';
 import { useHubWork } from '../hooks/useHubWork';
 
 type Navigation = NativeStackNavigationProp<HubStackParamList>;
@@ -31,6 +31,11 @@ function shortId(value: string | null): string {
   return value.replaceAll('-', '').slice(0, 8).toUpperCase();
 }
 
+function shortBatchCode(value: string | null): string {
+  if (!value) return 'Chưa gắn';
+  return `LO-${shortId(value)}`;
+}
+
 function formatDateTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Chưa cập nhật';
@@ -49,13 +54,13 @@ function formatWeight(value: number): string {
 export function InboundQueueScreen() {
   const navigation = useNavigation<Navigation>();
   const [filter, setFilter] = useState<TaskFilter>('pending');
-  const { assignedHubs, inboundTasks, loading, refreshing, error, refresh } = useHubWork();
+  const { assignedHubs, inboundTasks, warnings, loading, refreshing, error, refresh } = useHubWork();
   const pendingTasks = useMemo(
-    () => inboundTasks.filter((task) => task.status === 'PENDING'),
+    () => inboundTasks.filter((task) => !isInboundReceived(task.status)),
     [inboundTasks],
   );
   const receivedTasks = useMemo(
-    () => inboundTasks.filter((task) => task.status === 'ARRIVED_AT_HUB'),
+    () => inboundTasks.filter((task) => isInboundReceived(task.status)),
     [inboundTasks],
   );
   const visibleTasks = filter === 'pending' ? pendingTasks : receivedTasks;
@@ -98,6 +103,13 @@ export function InboundQueueScreen() {
           </Pressable>
         </View>
 
+        {warnings.length > 0 ? (
+          <View style={styles.warningCard}>
+            <Ionicons name="warning-outline" size={18} color={Colors.warning} />
+            <Text style={styles.warningText}>{warnings.join('\n')}</Text>
+          </View>
+        ) : null}
+
         {loading ? (
           <Loading fullScreen label="Đang tải task nhận hàng..." />
         ) : error ? (
@@ -130,7 +142,7 @@ export function InboundQueueScreen() {
                 icon={<Ionicons name="checkmark-done-circle-outline" size={58} color={Colors.primaryText} />}
                 title={filter === 'pending' ? 'Không có lô hàng đang chờ' : 'Chưa có lô hàng đã nhận'}
                 subtitle={filter === 'pending'
-                  ? 'Task mới từ các Hub được phân công sẽ xuất hiện tại đây.'
+                  ? `API pending-inbound đang trả về 0 task cho: ${assignedHubs.map((hub) => `${hub.name} (${shortId(hub.hubId)})`).join(', ')}.`
                   : 'Lô hàng sẽ chuyển sang đây sau khi bạn xác nhận nhận hàng.'}
               />
             ) : (
@@ -146,7 +158,7 @@ export function InboundQueueScreen() {
 }
 
 function TaskCard({ task, onPress }: { task: HubInboundTask; onPress: () => void }) {
-  const received = task.status === 'ARRIVED_AT_HUB';
+  const received = isInboundReceived(task.status);
 
   return (
     <Pressable style={styles.card} onPress={onPress}>
@@ -164,9 +176,19 @@ function TaskCard({ task, onPress }: { task: HubInboundTask; onPress: () => void
       </View>
 
       <View style={styles.infoGrid}>
-        <Info icon="time-outline" label="Thời gian dự kiến" value={formatDateTime(task.arrivedAt)} numeric />
+        <Info
+          icon="time-outline"
+          label={task.deliveryScheduleId ? 'MA bàn giao lúc' : 'Thời gian dự kiến'}
+          value={formatDateTime(task.arrivedAt)}
+          numeric
+        />
         <Info icon="scale-outline" label="Khối lượng" value={formatWeight(task.totalQuantityKg)} numeric />
-        <Info icon="navigate-outline" label="Tuyến giao" value={shortId(task.deliveryRouteId)} numeric />
+        <Info
+          icon={task.deliveryScheduleId ? 'cube-outline' : 'navigate-outline'}
+          label={task.deliveryScheduleId ? 'Lô từ MA' : 'Tuyến giao'}
+          value={task.deliveryScheduleId ? shortBatchCode(task.deliveryScheduleId) : shortId(task.deliveryRouteId)}
+          numeric
+        />
         <Info icon="storefront-outline" label="Nguồn hàng" value={shortId(task.sourceMarketId)} numeric />
       </View>
 
@@ -229,6 +251,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  warningCard: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.warning,
+    backgroundColor: Colors.warningLight,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  warningText: { flex: 1, fontSize: 9, lineHeight: 14, color: Colors.textSecondary },
   filterChip: {
     height: 36,
     paddingHorizontal: 14,

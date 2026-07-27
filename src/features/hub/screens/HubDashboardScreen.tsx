@@ -9,8 +9,9 @@ import { useAuth } from '../../auth';
 import { EmptyState, ErrorView, Loading, Text } from '../../../components/ui';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
-import type { HubInboundTask } from '../api/hubApi';
+import { isInboundReceived, type HubInboundTask } from '../api/hubApi';
 import { useHubDispatch } from '../hooks/useHubDispatch';
+import { useHubProcurementWeek } from '../hooks/useHubProcurementWeek';
 import { useHubWork } from '../hooks/useHubWork';
 
 type Navigation = NativeStackNavigationProp<HubStackParamList>;
@@ -46,17 +47,25 @@ export function HubDashboardScreen() {
   const navigation = useNavigation<Navigation>();
   const { user } = useAuth();
   const { assignedHubs, inboundTasks, loading, refreshing, error, refresh } = useHubWork();
+  const procurementWeek = useHubProcurementWeek(assignedHubs);
   const {
     plan: dispatchPlan,
     loading: dispatchLoading,
     refreshing: dispatchRefreshing,
     error: dispatchError,
     refresh: refreshDispatch,
-  } = useHubDispatch();
+  } = useHubDispatch(assignedHubs);
   const displayName = user?.name?.trim() || 'Nhân viên Hub';
-  const pendingTasks = inboundTasks.filter((task) => task.status === 'PENDING');
-  const receivedTasks = inboundTasks.filter((task) => task.status === 'ARRIVED_AT_HUB');
+  const pendingTasks = inboundTasks.filter((task) => !isInboundReceived(task.status));
+  const receivedTasks = inboundTasks.filter((task) => isInboundReceived(task.status));
   const pendingWeight = pendingTasks.reduce((sum, task) => sum + task.totalQuantityKg, 0);
+  const procurementBatches = procurementWeek.plans.flatMap((plan) => plan.batches);
+  const procurementOrderCount = new Set(
+    procurementBatches.flatMap((batch) => batch.orderIds),
+  ).size;
+  const procurementWaitingCount = procurementBatches.filter(
+    (batch) => batch.status !== 'HandedOff' && batch.status !== 'Cancelled',
+  ).length;
   const weekOrderCount = dispatchPlan?.routes.reduce(
     (sum, item) => sum + item.manifest.stops.length,
     0,
@@ -75,8 +84,8 @@ export function HubDashboardScreen() {
   };
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([refresh(), refreshDispatch()]);
-  }, [refresh, refreshDispatch]);
+    await Promise.all([refresh(), refreshDispatch(), procurementWeek.refresh()]);
+  }, [refresh, refreshDispatch, procurementWeek.refresh]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -86,7 +95,7 @@ export function HubDashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={(
           <RefreshControl
-            refreshing={refreshing || dispatchRefreshing}
+            refreshing={refreshing || dispatchRefreshing || procurementWeek.refreshing}
             onRefresh={refreshAll}
             colors={[Colors.primaryText]}
             tintColor={Colors.primary}
@@ -135,6 +144,31 @@ export function HubDashboardScreen() {
               <Metric icon="file-tray-full-outline" value={`${pendingTasks.length}`} label="Lô chờ nhận" tone="amber" />
               <Metric icon="scale-outline" value={formatWeight(pendingWeight)} label="Kg chờ nhận" tone="green" />
             </View>
+
+            <Pressable
+              style={styles.procurementOverview}
+              onPress={() => navigation.navigate('HubProcurementWeek')}
+            >
+              <View style={styles.dispatchOverviewIcon}>
+                <Ionicons name="calendar-outline" size={22} color={Colors.primaryText} />
+              </View>
+              <View style={styles.dispatchOverviewCopy}>
+                <Text style={styles.dispatchOverviewTitle}>Hàng dự kiến về Hub trong 7 ngày</Text>
+                <Text style={styles.dispatchOverviewSub}>
+                  {procurementWeek.loading && procurementWeek.plans.length === 0
+                    ? 'Đang đồng bộ kế hoạch thu mua...'
+                    : procurementWeek.error && procurementWeek.plans.length === 0
+                      ? 'Chưa tải được kế hoạch · Chạm để xem lại'
+                      : `${procurementOrderCount} đơn · ${procurementBatches.length} lô thu mua`}
+                </Text>
+              </View>
+              {procurementWaitingCount > 0 ? (
+                <View style={styles.dispatchCountBadge}>
+                  <Text numeric style={styles.dispatchCountText}>{procurementWaitingCount}</Text>
+                </View>
+              ) : null}
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            </Pressable>
 
             <Pressable style={styles.dispatchOverview} onPress={() => navigation.navigate('MarketDispatch')}>
               <View style={styles.dispatchOverviewIcon}>
@@ -268,7 +302,7 @@ export function HubDashboardScreen() {
 }
 
 function TaskCard({ task, onPress }: { task: HubInboundTask; onPress: () => void }) {
-  const received = task.status === 'ARRIVED_AT_HUB';
+  const received = isInboundReceived(task.status);
 
   return (
     <Pressable style={styles.taskCard} onPress={onPress}>
@@ -394,6 +428,19 @@ const styles = StyleSheet.create({
   },
   metricLabel: { fontSize: 9, color: Colors.textMuted, marginTop: 2 },
   dispatchOverview: {
+    minHeight: 72,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.primary600,
+    backgroundColor: Colors.primaryLight,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...CARD_SHADOW,
+  },
+  procurementOverview: {
     minHeight: 72,
     marginHorizontal: 16,
     marginTop: 12,

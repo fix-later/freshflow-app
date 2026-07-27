@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../../../store/authStore';
 import { ScreenContainer } from '../../../components/layout/ScreenContainer';
 import { Card } from '../../../components/ui/Card';
@@ -100,9 +100,9 @@ export function MarketAgentHomeScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useFocusEffect(useCallback(() => {
+    void fetchData();
+  }, [fetchData]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

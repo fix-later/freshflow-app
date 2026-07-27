@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HubDashboardScreen } from '../features/hub/screens/HubDashboardScreen';
 import { MarketDispatchScreen } from '../features/hub/screens/MarketDispatchScreen';
+import { HubProcurementWeekScreen } from '../features/hub/screens/HubProcurementWeekScreen';
 import { CheckInScreen } from '../features/hub/screens/CheckInScreen';
 import { InboundQueueScreen } from '../features/hub/screens/InboundQueueScreen';
 import { QualityCheckScreen } from '../features/hub/screens/QualityCheckScreen';
@@ -136,6 +137,7 @@ export function HubStack() {
       }}
     >
       <Stack.Screen name="HubTabs" component={HubTabs} options={{ headerShown: false }} />
+      <Stack.Screen name="HubProcurementWeek" component={HubProcurementWeekScreen} options={{ title: 'Kế hoạch hàng về Hub' }} />
       <Stack.Screen name="MarketDispatch" component={MarketDispatchScreen} options={{ title: 'Phân xe giao nhà hàng' }} />
       <Stack.Screen name="CheckIn" component={CheckInScreen} options={{ title: 'Kiểm đếm lô hàng' }} />
       <Stack.Screen name="QualityCheck" component={QualityCheckScreen} options={{ title: 'Kiểm tra chất lượng' }} />

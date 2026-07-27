@@ -58,6 +58,12 @@ export interface LoadingStopDto {
   stopOrder: number;
   restaurantId: string;
   restaurantName: string;
+  orders?: LoadingOrderDto[];
+  lines: LoadingLineDto[];
+}
+
+export interface LoadingOrderDto {
+  orderId: string;
   lines: LoadingLineDto[];
 }
 
@@ -126,17 +132,30 @@ async function getAllActiveVehicles(): Promise<HubVehicleDto[]> {
 }
 
 export const hubDispatchApi = {
-  async getPlan(serviceDates: string[]): Promise<HubDispatchPlan> {
+  async getPlan(serviceDates: string[], marketIds: string[]): Promise<HubDispatchPlan> {
     if (serviceDates.length === 0) {
       throw new Error('Cần ít nhất một ngày giao hàng để tải kế hoạch.');
+    }
+
+    if (marketIds.length === 0) {
+      return {
+        fromDate: serviceDates[0],
+        toDate: serviceDates[serviceDates.length - 1],
+        routes: [],
+        vehicles: [],
+      };
     }
 
     const [routeGroups, vehicles] = await Promise.all([
       Promise.all(serviceDates.map(getAllRoutes)),
       getAllActiveVehicles(),
     ]);
+    const assignedMarketIds = new Set(marketIds);
     const routes = routeGroups
       .flat()
+      .filter((route) => route.stops.some(
+        (stop) => stop.entityType === 'market' && assignedMarketIds.has(stop.entityId),
+      ))
       .sort((left, right) => (
         left.serviceDate.localeCompare(right.serviceDate)
         || left.createdAt.localeCompare(right.createdAt)

@@ -22,6 +22,7 @@ import {
   type LoadingManifestDto,
 } from '../api/hubDispatchApi';
 import { useHubDispatch } from '../hooks/useHubDispatch';
+import { useHubWork } from '../hooks/useHubWork';
 
 type VehicleChoice = {
   vehicle: HubVehicleDto;
@@ -95,6 +96,10 @@ export function estimateManifestLoadKg(manifest: LoadingManifestDto): number {
   ), 0);
 }
 
+function countManifestOrders(manifest: LoadingManifestDto): number {
+  return manifest.stops.reduce((sum, stop) => sum + (stop.orders?.length ?? 0), 0);
+}
+
 function getErrorMessage(error: unknown, fallback: string): string {
   const message = (error as { response?: { data?: { message?: string } } })
     ?.response?.data?.message;
@@ -102,7 +107,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function MarketDispatchScreen() {
-  const { plan, loading, refreshing, error, refresh } = useHubDispatch();
+  const { assignedHubs } = useHubWork();
+  const { plan, loading, refreshing, error, refresh } = useHubDispatch(assignedHubs);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [vehicleChoices, setVehicleChoices] = useState<VehicleChoice[]>([]);
   const [checkingVehicles, setCheckingVehicles] = useState(false);
@@ -122,7 +128,7 @@ export function MarketDispatchScreen() {
 
   const summary = useMemo(() => ({
     routeCount: routes.length,
-    orderCount: routes.reduce((sum, item) => sum + item.manifest.stops.length, 0),
+    orderCount: routes.reduce((sum, item) => sum + countManifestOrders(item.manifest), 0),
     waitingCount: routes.filter(({ route }) => route.status === 'reviewed' && !route.vehicleId).length,
     availableVehicleCount: vehicles.filter((vehicle) => vehicle.isAvailable).length,
   }), [routes, vehicles]);
@@ -341,7 +347,7 @@ function DispatchCard({
       </View>
 
       <View style={styles.demandRow}>
-        <Demand icon="receipt-outline" value={`${manifest.stops.length}`} label="đơn/điểm giao" />
+        <Demand icon="receipt-outline" value={`${countManifestOrders(manifest)}`} label="đơn hàng" />
         <Demand
           icon="scale-outline"
           value={estimatedLoadKg > 0 ? `${formatNumber(estimatedLoadKg)} kg` : 'Chưa có'}

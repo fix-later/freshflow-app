@@ -7,7 +7,7 @@ import type { HubStackParamList } from '../../../navigation/types';
 import { Text } from '../../../components/ui/Text';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
-import { hubApi, type HubInboundTask } from '../api/hubApi';
+import { hubApi, isInboundReceived, type HubInboundTask } from '../api/hubApi';
 
 type Navigation = NativeStackNavigationProp<HubStackParamList, 'CheckIn'>;
 
@@ -18,6 +18,16 @@ type Props = {
 
 function shortCode(value: string): string {
   return `IN-${value.replaceAll('-', '').slice(0, 8).toUpperCase()}`;
+}
+
+function shortBatchCode(value: string | null): string {
+  if (!value) return 'Không có mã lô';
+  return `LO-${value.replaceAll('-', '').slice(0, 8).toUpperCase()}`;
+}
+
+function shortMarketCode(value: string | null): string {
+  if (!value) return 'Chưa xác định';
+  return `CHỢ-${value.replaceAll('-', '').slice(0, 8).toUpperCase()}`;
 }
 
 function shortProductCode(value: string | null, fallback: number): string {
@@ -53,7 +63,7 @@ function getErrorMessage(error: unknown): string {
 
 export function AssignedInboundTaskScreen({ task, navigation }: Props) {
   const [submitting, setSubmitting] = useState(false);
-  const [received, setReceived] = useState(task.status === 'ARRIVED_AT_HUB');
+  const [received, setReceived] = useState(isInboundReceived(task.status));
 
   const confirmInbound = async () => {
     setSubmitting(true);
@@ -62,8 +72,11 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
       setReceived(true);
       Alert.alert(
         'Đã xác nhận nhận hàng',
-        'Lô hàng đã được ghi nhận tại Hub và tồn kho đã được cập nhật.',
-        [{ text: 'Quay lại danh sách', onPress: () => navigation.goBack() }],
+        'Lô hàng đã được ghi nhận tại Hub. Bạn có thể chuyển sang phân loại theo từng nhà hàng và từng đơn.',
+        [
+          { text: 'Danh sách lô', onPress: () => navigation.goBack() },
+          { text: 'Phân loại đơn', onPress: () => navigation.navigate('HubTabs', { screen: 'Sorting' }) },
+        ],
       );
     } catch (error) {
       Alert.alert('Không thể nhận lô hàng', getErrorMessage(error));
@@ -109,9 +122,23 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
             </View>
 
             <View style={styles.taskInfo}>
-              <Info label="Thời gian dự kiến" value={formatDateTime(task.arrivedAt)} />
+              <Info
+                label={task.deliveryScheduleId ? 'MA bàn giao lúc' : 'Thời gian dự kiến'}
+                value={formatDateTime(task.arrivedAt)}
+              />
               <Info label="Khối lượng" value={formatWeight(task.totalQuantityKg)} numeric />
               <Info label="Số mặt hàng" value={`${task.items.length}`} numeric />
+            </View>
+          </View>
+
+          <View style={styles.sourceCard}>
+            <View style={styles.sourceIcon}>
+              <Ionicons name="swap-horizontal-outline" size={20} color={Colors.secondary} />
+            </View>
+            <View style={styles.sourceCopy}>
+              <Text style={styles.sourceLabel}>Lô bàn giao từ Market Agent</Text>
+              <Text numeric style={styles.sourceBatch}>{shortBatchCode(task.deliveryScheduleId)}</Text>
+              <Text numeric style={styles.sourceMarket}>Nguồn: {shortMarketCode(task.sourceMarketId)}</Text>
             </View>
           </View>
 
@@ -140,7 +167,9 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                   <Text numeric style={styles.productIndexText}>{index + 1}</Text>
                 </View>
                 <View style={styles.productCopy}>
-                  <Text style={styles.productName}>{shortProductCode(item.productId, index + 1)}</Text>
+                  <Text style={styles.productName}>
+                    {item.productName || shortProductCode(item.productId, index + 1)}
+                  </Text>
                   <Text numeric numberOfLines={1} style={styles.marketProductCode}>
                     Mã nguồn: {item.marketProductId}
                   </Text>
@@ -166,9 +195,12 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
             <Text numeric style={styles.footerValue}>{formatWeight(task.totalQuantityKg)}</Text>
           </View>
           {received ? (
-            <Pressable style={styles.doneButton} onPress={() => navigation.goBack()}>
-              <Ionicons name="checkmark-circle-outline" size={19} color={Colors.primaryText} />
-              <Text style={styles.doneButtonText}>Đã xác nhận · Quay lại</Text>
+            <Pressable
+              style={styles.doneButton}
+              onPress={() => navigation.navigate('HubTabs', { screen: 'Sorting' })}
+            >
+              <Ionicons name="layers-outline" size={19} color={Colors.primaryText} />
+              <Text style={styles.doneButtonText}>Chuyển sang phân loại đơn</Text>
             </Pressable>
           ) : (
             <Pressable
@@ -250,6 +282,28 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
+  sourceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    padding: 12,
+  },
+  sourceIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: Colors.surfaceContainerLow,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sourceCopy: { flex: 1, paddingLeft: 10 },
+  sourceLabel: { fontSize: 9, color: Colors.textMuted },
+  sourceBatch: { fontSize: 12, fontFamily: Fonts.monoBold, color: Colors.textPrimary, marginTop: 2 },
+  sourceMarket: { fontSize: 8, fontFamily: Fonts.monoRegular, color: Colors.textSecondary, marginTop: 3 },
   infoItem: { flex: 1, minWidth: 0, paddingHorizontal: 4 },
   infoLabel: { fontSize: 9, color: Colors.textMuted },
   infoValue: { fontSize: 10, fontWeight: '600', color: Colors.textPrimary, marginTop: 3 },

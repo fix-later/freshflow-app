@@ -2,6 +2,7 @@ import { apiClient, getCursorPaged } from '../../../services/api/client';
 
 export interface AssignedHubDto {
   hubId: string;
+  marketId: string | null;
   name: string;
   address: string | null;
   latitude: number | null;
@@ -19,6 +20,8 @@ export interface HubInboundItemDto {
   marketProductId: string;
   productId: string | null;
   quantityKg: number;
+  /** Current BE may omit this field; screens must keep an id-based fallback. */
+  productName?: string | null;
 }
 
 export interface HubInboundDto {
@@ -46,6 +49,50 @@ export interface HubInboundTask extends HubInboundDto {
 export interface HubWorkDto {
   assignedHubs: AssignedHubDto[];
   inboundTasks: HubInboundTask[];
+  warnings: string[];
+}
+
+export function normalizeInboundStatus(status: string | null | undefined): string {
+  return (status ?? '').trim().toUpperCase();
+}
+
+export function isInboundReceived(status: string | null | undefined): boolean {
+  return normalizeInboundStatus(status) === 'ARRIVED_AT_HUB';
+}
+
+export type HubProcurementStatus =
+  | 'Built'
+  | 'Manifested'
+  | 'Purchasing'
+  | 'HandedOff'
+  | 'Cancelled';
+
+export interface HubProcurementItemDto {
+  marketProductId: string;
+  productName: string;
+  targetQuantity: number;
+  actualQuantity: number | null;
+  actualUnitPrice: number | null;
+  purchasedAt: string | null;
+}
+
+export interface HubProcurementBatchDto {
+  batchId: string;
+  marketId: string;
+  status: HubProcurementStatus;
+  handedOffAt: string | null;
+  orderIds: string[];
+  items: HubProcurementItemDto[];
+}
+
+export interface HubProcurementPlanDto {
+  hubId: string;
+  date: string;
+  batches: HubProcurementBatchDto[];
+}
+
+export interface HubProcurementDayPlan extends HubProcurementPlanDto {
+  hub: AssignedHubDto;
 }
 
 const PENDING_PAGE_SIZE = 200;
@@ -87,18 +134,61 @@ export const hubApi = {
   /** Aggregate the authenticated staff member's work across every assigned hub. */
   async getMyWork(): Promise<HubWorkDto> {
     const assignedHubs = await this.getAssignedHubs();
-    const pages = await Promise.all(
+    const results = await Promise.allSettled(
       assignedHubs.map(async (hub) => {
         const tasks = await getAllPendingInbound(hub.hubId);
         return tasks.map((task): HubInboundTask => ({ ...task, hub }));
       }),
     );
 
+    const pages = results
+      .filter((result): result is PromiseFulfilledResult<HubInboundTask[]> => result.status === 'fulfilled')
+      .map((result) => result.value);
+    const failedHubs = results.flatMap((result, index) => (
+      result.status === 'rejected' ? [assignedHubs[index]] : []
+    ));
+
+    if (failedHubs.length > 0 && pages.length === 0) {
+      throw new Error(`Không tải được task của ${failedHubs.map((hub) => hub.name).join(', ')}.`);
+    }
+
     const inboundTasks = pages
       .flat()
       .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
 
-    return { assignedHubs, inboundTasks };
+    return {
+      assignedHubs,
+      inboundTasks,
+      warnings: failedHubs.map((hub) => `Không tải được task của ${hub.name} (${hub.hubId}).`),
+    };
+  },
+
+  /** Procurement expected at one assigned hub on one business date. */
+  async getProcurementPlan(hubId: string, date: string): Promise<HubProcurementPlanDto> {
+    const { data } = await apiClient.get<HubProcurementPlanDto>(
+      `/api/v1/hubs/${hubId}/procurement-plan`,
+      { params: { date } },
+    );
+    return data;
+  },
+
+  /** Aggregate daily procurement plans without mixing them with physical inbound tasks. */
+  async getProcurementWeek(
+    assignedHubs: AssignedHubDto[],
+    dates: string[],
+  ): Promise<HubProcurementDayPlan[]> {
+    const plans = await Promise.all(
+      assignedHubs.flatMap((hub) => (
+        dates.map(async (date): Promise<HubProcurementDayPlan> => ({
+          ...await this.getProcurementPlan(hub.hubId, date),
+          hub,
+        }))
+      )),
+    );
+
+    return plans.sort((left, right) => (
+      left.date.localeCompare(right.date) || left.hub.name.localeCompare(right.hub.name)
+    ));
   },
 
   /** Confirm an expected inbound delivery using the BE scan contract (code = inbound id). */

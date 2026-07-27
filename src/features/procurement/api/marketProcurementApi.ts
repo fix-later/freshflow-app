@@ -119,4 +119,12 @@ export const marketProcurementApi = {
     );
     return data;
   },
+
+  /** Complete the agent-to-hub handover. The Hub is resolved by BE; no request body is sent. */
+  async handover(batchId: string): Promise<MarketProcurementTaskDto> {
+    const { data } = await apiClient.patch<MarketProcurementTaskDto>(
+      `/api/v1/procurement/tasks/${batchId}/handover`,
+    );
+    return data;
+  },
 };
