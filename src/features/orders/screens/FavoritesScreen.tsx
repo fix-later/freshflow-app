@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -12,7 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
-import { Text } from '../../../components/ui/Text';
+import { Text, TextInput } from '../../../components/ui/Text';
 import { useFavoritesStore } from '../../../store/favoritesStore';
 import { useCartStore } from '../../../store/cartStore';
 
@@ -25,6 +25,20 @@ export function FavoritesScreen() {
   const navigation = useNavigation<any>();
   const { favorites, isLoading, toggleFavorite, refresh } = useFavoritesStore();
   const { cart, addToCart } = useCartStore();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchActive, setIsSearchActive] = useState(false);
+
+  const filteredFavorites = useMemo(() => {
+    const q = searchQuery.trim().toLocaleLowerCase('vi-VN');
+    if (!q) return favorites;
+    return favorites.filter(
+      (item) =>
+        item.productName.toLocaleLowerCase('vi-VN').includes(q) ||
+        item.marketName.toLocaleLowerCase('vi-VN').includes(q) ||
+        (item.category?.toLocaleLowerCase('vi-VN').includes(q) ?? false),
+    );
+  }, [favorites, searchQuery]);
 
   const openProductDetail = (item: typeof favorites[0]) => {
     navigation.navigate('ProductDetail', {
@@ -135,12 +149,62 @@ export function FavoritesScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Sản phẩm yêu thích</Text>
-        <Text style={styles.headerSub}>Danh sách mặt hàng đã đánh dấu</Text>
-      </View>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      {/* Summary bar — becomes a search field when the search icon is tapped */}
+      {favorites.length > 0 && (
+        <View style={styles.topBar}>
+          <View style={styles.summaryBar}>
+            {isSearchActive ? (
+              <>
+                <View style={styles.searchInputWrap}>
+                  <Ionicons name="search-outline" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+                  <TextInput
+                    autoFocus
+                    style={styles.searchInput}
+                    placeholder="Tìm trong yêu thích..."
+                    placeholderTextColor={Colors.textMuted}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    returnKeyType="search"
+                  />
+                  {searchQuery.length > 0 && (
+                    <Pressable onPress={() => setSearchQuery('')} style={styles.searchClear}>
+                      <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+                    </Pressable>
+                  )}
+                </View>
+                <Pressable
+                  style={styles.cancelSearchBtn}
+                  onPress={() => {
+                    setIsSearchActive(false);
+                    setSearchQuery('');
+                  }}
+                >
+                  <Text style={styles.cancelSearchText}>Huỷ</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <View style={styles.summaryLeft}>
+                  <View style={styles.summaryIconWrap}>
+                    <Ionicons name="heart" size={14} color={Colors.error} />
+                  </View>
+                  <Text style={styles.summaryText}>
+                    {favorites.length} sản phẩm đã lưu
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.searchToggleBtn}
+                  onPress={() => setIsSearchActive(true)}
+                  accessibilityLabel="Tìm trong yêu thích"
+                >
+                  <Ionicons name="search-outline" size={20} color={Colors.textSecondary} />
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
+      )}
 
       {isLoading && favorites.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -162,9 +226,19 @@ export function FavoritesScreen() {
             <Text style={styles.shopBtnText}>MUA SẮM NGAY</Text>
           </Pressable>
         </View>
+      ) : filteredFavorites.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconWrap}>
+            <Ionicons name="search-outline" size={48} color={Colors.outline} />
+          </View>
+          <Text style={styles.emptyTitle}>Không tìm thấy</Text>
+          <Text style={styles.emptySub}>
+            Không có sản phẩm yêu thích nào khớp với “{searchQuery}”.
+          </Text>
+        </View>
       ) : (
         <FlatList
-          data={favorites}
+          data={filteredFavorites}
           keyExtractor={(item) => item.marketProductId}
           renderItem={renderFavoriteItem}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 40 }]}
@@ -183,23 +257,77 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
+  topBar: {
     backgroundColor: Colors.surface,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.outlineVariant,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
+  summaryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  summaryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  summaryIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.error + '15',
+  },
+  summaryText: {
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.textPrimary,
   },
-  headerSub: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    marginTop: 3,
+  searchToggleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  searchInputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    paddingHorizontal: 10,
+    height: 40,
+  },
+  searchIcon: {
+    marginRight: 6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.textPrimary,
+    paddingVertical: 0,
+  },
+  searchClear: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  cancelSearchBtn: {
+    paddingHorizontal: 2,
+    paddingVertical: 8,
+  },
+  cancelSearchText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primaryText,
   },
   listContent: {
     padding: 16,

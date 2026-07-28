@@ -906,7 +906,7 @@ export function OrderListScreen({
               {/* Text */}
               <Text style={styles.confirmTitle}>Xoá giỏ hàng?</Text>
               <Text style={styles.confirmBody}>
-                Tất cả sản phẩm trong giỏ sế bị xoá.{`\n`}Thao tác này không thể hoàn tác.
+                Tất cả sản phẩm trong giỏ sẽ bị xoá.{`\n`}Thao tác này không thể hoàn tác.
               </Text>
 
               {/* Actions */}

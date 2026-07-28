@@ -31,7 +31,7 @@ export function RestaurantFavoritesTab() {
       <Stack.Screen
         name="Favorites"
         component={FavoritesScreen}
-        options={{ headerShown: true }}
+        options={{ title: 'Yêu thích' }}
       />
       <Stack.Screen
         name="ProductDetail"
