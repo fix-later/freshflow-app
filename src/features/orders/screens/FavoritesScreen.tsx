@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Image,
   Pressable,
+  RefreshControl,
   StyleSheet,
   View,
 } from 'react-native';
@@ -10,9 +12,11 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
-import { Text } from '../../../components/ui/Text';
+import { Fonts } from '../../../constants/fonts';
+import { Text, TextInput } from '../../../components/ui/Text';
 import { useFavoritesStore } from '../../../store/favoritesStore';
 import { useCartStore } from '../../../store/cartStore';
+import { CartModal } from '../components/CartModal';
 
 function formatPrice(p: number) {
   return p.toLocaleString("vi-VN") + "đ";
@@ -21,35 +25,101 @@ function formatPrice(p: number) {
 export function FavoritesScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { favorites, toggleFavorite } = useFavoritesStore();
-  const { cart, addToCart, removeFromCart } = useCartStore();
+  const { favorites, isLoading, toggleFavorite, refresh } = useFavoritesStore();
+  const { cart, cartCount, addToCart } = useCartStore();
 
-  const getCartQty = (id: string) => {
-    return cart.find((item) => item.id === id)?.qty ?? 0;
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [showCart, setShowCart] = useState(false);
+
+  const filteredFavorites = useMemo(() => {
+    const q = searchQuery.trim().toLocaleLowerCase('vi-VN');
+    if (!q) return favorites;
+    return favorites.filter(
+      (item) =>
+        item.productName.toLocaleLowerCase('vi-VN').includes(q) ||
+        item.marketName.toLocaleLowerCase('vi-VN').includes(q) ||
+        (item.category?.toLocaleLowerCase('vi-VN').includes(q) ?? false),
+    );
+  }, [favorites, searchQuery]);
+
+  const stockByMarketProductId = useMemo(
+    () => Object.fromEntries(favorites.map((item) => [item.marketProductId, item.availableQuantity])),
+    [favorites],
+  );
+
+  const openProductDetail = (item: typeof favorites[0]) => {
+    navigation.navigate('ProductDetail', {
+      product: {
+        marketProductId: item.marketProductId,
+        productId: item.productId,
+        productName: item.productName,
+        imageUrl: item.imageUrl || null,
+        marketId: item.marketId,
+        marketName: item.marketName,
+        category: item.category,
+        unit: item.unit,
+        currentPrice: item.currentPrice,
+        availableQuantity: item.availableQuantity,
+      },
+    });
+  };
+
+  const getCartQty = (marketProductId: string) => {
+    return cart.find((item) => item.id === marketProductId)?.qty ?? 0;
   };
 
   const handleAddToCart = (item: typeof favorites[0]) => {
     addToCart({
-      id: item.id,
-      name: item.name,
+      id: item.marketProductId,
+      name: item.productName,
       market: item.marketName,
       unit: item.unit,
-      price: item.price,
-      image: item.image,
+      price: item.currentPrice,
+      image: item.imageUrl ?? '',
+    });
+  };
+
+  // Checkout is a multi-step flow (CreateOrder → ConfirmOrder) that only exists
+  // in the Orders tab's stack, so this is the one action that still hands off
+  // tabs — viewing/editing the cart itself stays local via `showCart` above.
+  const handleCheckout = () => {
+    if (cart.length === 0) return;
+    setShowCart(false);
+    navigation.navigate('RestaurantOrders', {
+      screen: 'CreateOrder',
+      params: {
+        items: cart.map((item) => ({
+          marketProductId: item.id,
+          productName: item.name,
+          marketName: item.market,
+          unit: item.unit,
+          quantity: item.qty,
+          unitPrice: item.price,
+          image: item.image,
+          note: item.note,
+        })),
+      },
     });
   };
 
   const renderFavoriteItem = ({ item }: { item: typeof favorites[0] }) => {
-    const qty = getCartQty(item.id);
+    const qty = getCartQty(item.marketProductId);
     const outOfStock = item.availableQuantity <= 0;
 
     return (
-      <View style={styles.card}>
+      <Pressable style={styles.card} onPress={() => openProductDetail(item)}>
         <View style={styles.cardHeader}>
-          <Image source={{ uri: item.image }} style={styles.cardImage} />
+          {item.imageUrl ? (
+            <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
+          ) : (
+            <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
+              <Ionicons name="image-outline" size={22} color={Colors.outline} />
+            </View>
+          )}
           <View style={styles.cardInfo}>
             <Text style={styles.marketText}>{item.marketName}</Text>
-            <Text style={styles.nameText} numberOfLines={2}>{item.name}</Text>
+            <Text style={styles.nameText} numberOfLines={2}>{item.productName}</Text>
             <View style={styles.tagsRow}>
               {!!item.category && (
                 <View style={styles.categoryTag}>
@@ -61,9 +131,12 @@ export function FavoritesScreen() {
               </View>
             </View>
           </View>
-          <Pressable 
+          <Pressable
             style={styles.heartBtn}
-            onPress={() => toggleFavorite(item)}
+            onPress={(e) => {
+              e.stopPropagation();
+              toggleFavorite(item);
+            }}
           >
             <Ionicons name="heart" size={24} color={Colors.error} />
           </Pressable>
@@ -73,7 +146,7 @@ export function FavoritesScreen() {
           <View>
             <Text style={styles.priceLabel}>Giá hiện tại</Text>
             <Text style={[styles.priceText, outOfStock && styles.priceOutOfStock]}>
-              {outOfStock ? '—' : formatPrice(item.price)}
+              {outOfStock ? '—' : formatPrice(item.currentPrice)}
             </Text>
           </View>
 
@@ -90,25 +163,85 @@ export function FavoritesScreen() {
             </View>
 
             {!outOfStock && (
-              <Pressable style={styles.addBtn} onPress={() => handleAddToCart(item)}>
+              <Pressable
+                style={styles.addBtn}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleAddToCart(item);
+                }}
+              >
                 <Ionicons name="add" size={18} color={Colors.onPrimary} />
               </Pressable>
             )}
           </View>
         </View>
-      </View>
+      </Pressable>
     );
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Sản phẩm yêu thích</Text>
-        <Text style={styles.headerSub}>Danh sách mặt hàng đã đánh dấu</Text>
-      </View>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      {/* Summary bar — becomes a search field when the search icon is tapped */}
+      {favorites.length > 0 && (
+        <View style={styles.topBar}>
+          <View style={styles.summaryBar}>
+            {isSearchActive ? (
+              <>
+                <View style={styles.searchInputWrap}>
+                  <Ionicons name="search-outline" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+                  <TextInput
+                    autoFocus
+                    style={styles.searchInput}
+                    placeholder="Tìm trong yêu thích..."
+                    placeholderTextColor={Colors.textMuted}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    returnKeyType="search"
+                  />
+                  {searchQuery.length > 0 && (
+                    <Pressable onPress={() => setSearchQuery('')} style={styles.searchClear}>
+                      <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+                    </Pressable>
+                  )}
+                </View>
+                <Pressable
+                  style={styles.cancelSearchBtn}
+                  onPress={() => {
+                    setIsSearchActive(false);
+                    setSearchQuery('');
+                  }}
+                >
+                  <Text style={styles.cancelSearchText}>Huỷ</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <View style={styles.summaryLeft}>
+                  <View style={styles.summaryIconWrap}>
+                    <Ionicons name="heart" size={14} color={Colors.error} />
+                  </View>
+                  <Text style={styles.summaryText}>
+                    {favorites.length} sản phẩm đã lưu
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.searchToggleBtn}
+                  onPress={() => setIsSearchActive(true)}
+                  accessibilityLabel="Tìm trong yêu thích"
+                >
+                  <Ionicons name="search-outline" size={20} color={Colors.textSecondary} />
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
+      )}
 
-      {favorites.length === 0 ? (
+      {isLoading && favorites.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : favorites.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconWrap}>
             <Ionicons name="heart-dislike-outline" size={56} color={Colors.outline} />
@@ -117,22 +250,51 @@ export function FavoritesScreen() {
           <Text style={styles.emptySub}>
             Hãy nhấn biểu tượng trái tim khi xem sản phẩm để lưu lại tại đây.
           </Text>
-          <Pressable 
+          <Pressable
             style={styles.shopBtn}
             onPress={() => navigation.navigate('RestaurantOrders')}
           >
             <Text style={styles.shopBtnText}>MUA SẮM NGAY</Text>
           </Pressable>
         </View>
+      ) : filteredFavorites.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconWrap}>
+            <Ionicons name="search-outline" size={48} color={Colors.outline} />
+          </View>
+          <Text style={styles.emptyTitle}>Không tìm thấy</Text>
+          <Text style={styles.emptySub}>
+            Không có sản phẩm yêu thích nào khớp với “{searchQuery}”.
+          </Text>
+        </View>
       ) : (
         <FlatList
-          data={favorites}
-          keyExtractor={(item) => item.id}
+          data={filteredFavorites}
+          keyExtractor={(item) => item.marketProductId}
           renderItem={renderFavoriteItem}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={isLoading} onRefresh={refresh} colors={[Colors.primary]} />
+          }
         />
       )}
+
+      {cartCount > 0 && !showCart ? (
+        <Pressable style={styles.cartFab} onPress={() => setShowCart(true)}>
+          <Ionicons name="cart-outline" size={24} color={Colors.onPrimary} />
+          <View style={styles.cartFabBadge}>
+            <Text numeric style={styles.cartFabBadgeText}>{cartCount}</Text>
+          </View>
+        </Pressable>
+      ) : null}
+
+      <CartModal
+        visible={showCart}
+        onClose={() => setShowCart(false)}
+        onCheckout={handleCheckout}
+        stockByMarketProductId={stockByMarketProductId}
+      />
     </SafeAreaView>
   );
 }
@@ -142,23 +304,77 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
+  topBar: {
     backgroundColor: Colors.surface,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.outlineVariant,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
+  summaryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  summaryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  summaryIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.error + '15',
+  },
+  summaryText: {
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.textPrimary,
   },
-  headerSub: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    marginTop: 3,
+  searchToggleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  searchInputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    paddingHorizontal: 10,
+    height: 40,
+  },
+  searchIcon: {
+    marginRight: 6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.textPrimary,
+    paddingVertical: 0,
+  },
+  searchClear: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  cancelSearchBtn: {
+    paddingHorizontal: 2,
+    paddingVertical: 8,
+  },
+  cancelSearchText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primaryText,
   },
   listContent: {
     padding: 16,
@@ -185,6 +401,10 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 12,
     backgroundColor: Colors.surfaceContainerHigh,
+  },
+  cardImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardInfo: {
     flex: 1,
@@ -346,5 +566,40 @@ const styles = StyleSheet.create({
     color: Colors.onPrimary,
     fontSize: 14,
     fontWeight: '800',
+  },
+  cartFab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  cartFabBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    borderWidth: 2.5,
+    borderColor: Colors.background,
+  },
+  cartFabBadgeText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontFamily: Fonts.bold,
   },
 });

@@ -10,10 +10,10 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo } from '../../../components/ui/BrandLogo';
 import { Text, TextInput } from '../../../components/ui/Text';
 import { Colors } from '../../../constants/colors';
@@ -25,11 +25,11 @@ import {
   type CategoryDto,
   type MarketDto,
   type MarketProductDto,
-  type PriceHistoryItemDto,
   type ProductDto,
 } from '../../../types/api.types';
 import { pricingApi } from '../../pricing/api/pricingApi';
 import { notificationApi } from '../../notifications/api/notificationApi';
+import { CartModal } from '../components/CartModal';
 
 type OrdersNav = NativeStackNavigationProp<RestaurantOrdersStackParamList>;
 
@@ -44,16 +44,6 @@ const FALLBACK_IMAGES = [
 
 function formatPrice(value: number) {
   return `${value.toLocaleString('vi-VN')}đ`;
-}
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 function fallbackImage(index: number) {
@@ -121,24 +111,9 @@ function EmptyProductImage({
   );
 }
 
-export function OrderListScreen({
-  route,
-}: {
-  route?: { params?: { openCart?: boolean } };
-}) {
+export function OrderListScreen() {
   const navigation = useNavigation<OrdersNav>();
-  const insets = useSafeAreaInsets();
-  const {
-    cart,
-    cartCount,
-    cartTotal,
-    addToCart,
-    removeFromCart,
-    updateItemQty,
-    updateItemNote,
-    clearCart,
-  } = useCartStore();
-  const isCartEmpty = cart.length === 0;
+  const { cart, cartCount, addToCart, removeFromCart, updateItemQty } = useCartStore();
   const { toggleFavorite, isFavorite } = useFavoritesStore();
 
   const [markets, setMarkets] = useState<MarketDto[]>([]);
@@ -151,22 +126,11 @@ export function OrderListScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [showMarketPicker, setShowMarketPicker] = useState(false);
   const [showCart, setShowCart] = useState(false);
-  const [detailProduct, setDetailProduct] = useState<MarketProductDto | null>(null);
-  const [detailQuantity, setDetailQuantity] = useState(1);
-  const [priceHistory, setPriceHistory] = useState<PriceHistoryItemDto[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
-
-  useEffect(() => {
-    if (route?.params?.openCart) {
-      setShowCart(true);
-      navigation.setParams({ openCart: undefined });
-    }
-  }, [navigation, route?.params?.openCart]);
 
   const loadInitialData = useCallback(async () => {
     try {
@@ -228,6 +192,10 @@ export function OrderListScreen({
   const productMetadata = useMemo(
     () => new Map(catalogProducts.map((product) => [product.id, product])),
     [catalogProducts],
+  );
+  const stockByMarketProductId = useMemo(
+    () => Object.fromEntries(marketProducts.map((product) => [product.marketProductId, product.availableQuantity])),
+    [marketProducts],
   );
   const categoryById = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
@@ -326,35 +294,38 @@ export function OrderListScreen({
 
   const toggleProductFavorite = (product: MarketProductDto) => {
     toggleFavorite({
-      id: product.marketProductId,
+      marketProductId: product.marketProductId,
       productId: product.productId,
-      name: product.productName,
+      productName: product.productName,
+      imageUrl: resolveImage(product),
       marketId: product.marketId,
       marketName: selectedMarket?.name ?? '',
-      category: product.category ?? '',
-      price: product.currentPrice,
+      category: product.category,
       unit: product.unit,
-      image: resolveImage(product),
+      currentPrice: product.currentPrice,
       availableQuantity: product.availableQuantity,
-      currentQuantity: product.currentQuantity,
+      createdAt: new Date().toISOString(),
     });
   };
 
-  const openProductDetail = async (product: MarketProductDto) => {
-    setDetailProduct(product);
-    setDetailQuantity(product.availableQuantity > 0 ? 1 : 0);
-    setPriceHistory([]);
-    setHistoryLoading(true);
-    try {
-      const history = await pricingApi.getPriceHistory(product.marketId, product.productId, {
-        pageSize: 5,
-      });
-      setPriceHistory(history.items);
-    } catch {
-      setPriceHistory([]);
-    } finally {
-      setHistoryLoading(false);
-    }
+  const openProductDetail = (product: MarketProductDto) => {
+    const img = resolveImage(product);
+    const desc = productMetadata.get(product.productId)?.description;
+    navigation.navigate('ProductDetail', {
+      product: {
+        marketProductId: product.marketProductId,
+        productId: product.productId,
+        productName: product.productName,
+        imageUrl: img || null,
+        marketId: product.marketId,
+        marketName: selectedMarket?.name ?? '',
+        category: product.category,
+        unit: product.unit,
+        currentPrice: product.currentPrice,
+        availableQuantity: product.availableQuantity,
+        description: desc || null,
+      },
+    });
   };
 
   const proceedToCheckout = () => {
@@ -729,273 +700,12 @@ export function OrderListScreen({
         </View>
       </Modal>
 
-      <Modal
+      <CartModal
         visible={showCart}
-        animationType="slide"
-        onRequestClose={() => setShowCart(false)}
-      >
-        <SafeAreaView style={styles.cartScreen} edges={['bottom']}>
-          <View style={[styles.cartScreenHeader, { paddingTop: insets.top + 10 }]}>
-            <Pressable onPress={() => setShowCart(false)} style={styles.cartScreenClose}>
-              <MaterialIcons name="arrow-back" size={24} color={Colors.onSurface} />
-            </Pressable>
-            <Text style={styles.cartScreenTitle}>Giỏ hàng ({cartCount})</Text>
-            <Pressable onPress={clearCart}>
-              <Text style={styles.cartScreenClear}>Xoá tất cả</Text>
-            </Pressable>
-          </View>
-
-          <FlatList
-            data={cart}
-            keyExtractor={(item) => item.id}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.cartScreenList}
-            renderItem={({ item }) => {
-              const maxQuantity =
-                marketProducts.find((product) => product.marketProductId === item.id)
-                  ?.availableQuantity ?? Number.MAX_SAFE_INTEGER;
-
-              return (
-                <View style={styles.cartScreenItem}>
-                  <View style={styles.cartScreenItemRow}>
-                    <Image source={{ uri: item.image }} style={styles.cartScreenItemImg} />
-                    <View style={styles.cartScreenItemInfo}>
-                      <Text style={styles.cartScreenItemName}>{item.name}</Text>
-                      <Text style={styles.cartScreenItemMarket}>
-                        {item.market} • {item.unit}
-                      </Text>
-                      <Text numeric style={styles.cartScreenItemPrice}>
-                        {formatPrice(item.price * item.qty)}
-                      </Text>
-                    </View>
-                    <View style={styles.cartScreenItemQty}>
-                      <Pressable
-                        style={styles.cartScreenQtyBtn}
-                        onPress={() => {
-                          if (item.qty <= 1) removeFromCart(item.id);
-                          else updateItemQty(item.id, item.qty - 1);
-                        }}
-                      >
-                        <MaterialIcons name="remove" size={16} color={Colors.primaryText} />
-                      </Pressable>
-                      <Text numeric style={styles.cartScreenQtyText}>{item.qty}</Text>
-                      <Pressable
-                        style={styles.cartScreenQtyBtn}
-                        disabled={item.qty >= maxQuantity}
-                        onPress={() => updateItemQty(item.id, Math.min(maxQuantity, item.qty + 1))}
-                      >
-                        <MaterialIcons name="add" size={16} color={Colors.primaryText} />
-                      </Pressable>
-                    </View>
-                  </View>
-                  <TextInput
-                    style={styles.cartScreenItemNote}
-                    placeholder="Ghi chú sản phẩm (tùy chọn)..."
-                    placeholderTextColor={Colors.outline}
-                    value={item.note ?? ''}
-                    onChangeText={(text) => updateItemNote(item.id, text)}
-                    maxLength={200}
-                  />
-                </View>
-              );
-            }}
-            ListHeaderComponent={
-              <View style={styles.cartScreenVoucherSection}>
-                <View style={styles.cartScreenVoucherRow}>
-                  <MaterialIcons name="discount" size={18} color={Colors.outline} />
-                  <TextInput
-                    style={styles.cartScreenVoucherInput}
-                    placeholder="Nhập mã giảm giá"
-                    placeholderTextColor={Colors.outline}
-                  />
-                  <Pressable style={styles.cartScreenVoucherBtn}>
-                    <Text style={styles.cartScreenVoucherBtnText}>Áp dụng</Text>
-                  </Pressable>
-                </View>
-              </View>
-            }
-            ListFooterComponent={
-              <View style={styles.cartScreenSummary}>
-                <View style={styles.cartScreenSummaryRow}>
-                  <Text style={styles.cartScreenSummaryLabel}>Tạm tính</Text>
-                  <Text numeric style={styles.cartScreenSummaryValue}>
-                    {formatPrice(cartTotal)}
-                  </Text>
-                </View>
-                <View style={styles.cartScreenSummaryRow}>
-                  <Text style={styles.cartScreenSummaryLabel}>Phí vận chuyển</Text>
-                  <Text style={styles.cartScreenSummaryValue}>Sẽ xác nhận sau</Text>
-                </View>
-                <View style={styles.cartScreenSummaryRow}>
-                  <Text style={styles.cartScreenSummaryLabel}>Giảm giá</Text>
-                  <Text
-                    numeric
-                    style={[styles.cartScreenSummaryValue, { color: Colors.error }]}
-                  >
-                    – 0đ
-                  </Text>
-                </View>
-                <View style={styles.cartScreenSummaryDivider} />
-                <View style={styles.cartScreenSummaryRow}>
-                  <Text numeric style={styles.cartScreenSummaryTotal}>Tổng cộng</Text>
-                  <Text numeric style={styles.cartScreenSummaryTotalValue}>
-                    {formatPrice(cartTotal)}
-                  </Text>
-                </View>
-              </View>
-            }
-          />
-
-          <View style={styles.cartScreenCheckoutBar}>
-            <View>
-              <Text style={styles.cartScreenCheckoutLabel}>Tạm tính</Text>
-              <Text numeric style={styles.cartScreenCheckoutTotal}>{formatPrice(cartTotal)}</Text>
-            </View>
-            <Pressable
-              style={[
-                styles.cartScreenCheckoutBtn,
-                isCartEmpty && styles.cartScreenCheckoutBtnDisabled,
-              ]}
-              disabled={isCartEmpty}
-              onPress={proceedToCheckout}
-            >
-              <Text style={styles.cartScreenCheckoutBtnText}>
-                {isCartEmpty ? 'Thêm sản phẩm trước' : 'Tiến hành thanh toán'}
-              </Text>
-            </Pressable>
-          </View>
-        </SafeAreaView>
-      </Modal>
-
-      <Modal
-        visible={detailProduct !== null}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setDetailProduct(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDetailProduct(null)} />
-          {detailProduct ? (
-            <View style={[styles.sheet, styles.detailSheet]}>
-              <View style={styles.sheetHandle} />
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {productMetadata.get(detailProduct.productId)?.imageUrl ? (
-                  <Image
-                    source={{ uri: productMetadata.get(detailProduct.productId)?.imageUrl ?? '' }}
-                    style={styles.detailImage}
-                  />
-                ) : (
-                  <View style={styles.detailPlaceholder}>
-                    <EmptyProductImage categoryName={detailProduct.category ?? ''} size={132} />
-                  </View>
-                )}
-                <View style={styles.detailCategoryRow}>
-                  <Text style={styles.detailCategory}>
-                    {detailProduct.category || 'Chưa phân loại'}
-                  </Text>
-                  <Pressable onPress={() => toggleProductFavorite(detailProduct)}>
-                    <Ionicons
-                      name={isFavorite(detailProduct.marketProductId) ? 'heart' : 'heart-outline'}
-                      size={25}
-                      color={
-                        isFavorite(detailProduct.marketProductId)
-                          ? Colors.danger
-                          : Colors.deepTeal
-                      }
-                    />
-                  </Pressable>
-                </View>
-                <Text style={styles.detailName}>{detailProduct.productName}</Text>
-                <Text style={styles.detailDescription}>
-                  {productMetadata.get(detailProduct.productId)?.description ||
-                    'Sản phẩm được cung ứng theo giá và tồn kho hiện tại của chợ.'}
-                </Text>
-                <Text numeric style={styles.detailPrice}>
-                  {formatPrice(detailProduct.currentPrice)}
-                  <Text style={styles.detailUnit}>/{detailProduct.unit}</Text>
-                </Text>
-
-                <View style={styles.detailFacts}>
-                  <View style={styles.detailFact}>
-                    <Ionicons name="storefront-outline" size={18} color={Colors.primaryText} />
-                    <View>
-                      <Text style={styles.detailFactLabel}>Chợ cung ứng</Text>
-                      <Text style={styles.detailFactValue}>{selectedMarket?.name}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.detailFact}>
-                    <Ionicons name="layers-outline" size={18} color={Colors.primaryText} />
-                    <View>
-                      <Text style={styles.detailFactLabel}>Tồn khả dụng</Text>
-                      <Text style={styles.detailFactValue}>
-                        {detailProduct.availableQuantity} {detailProduct.unit}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.historyHeader}>
-                  <Text style={styles.historyTitle}>Giá gần đây</Text>
-                  <Text style={styles.historyHint}>5 cập nhật mới nhất</Text>
-                </View>
-                {historyLoading ? (
-                  <ActivityIndicator color={Colors.primaryText} />
-                ) : priceHistory.length > 0 ? (
-                  priceHistory.map((history) => (
-                    <View key={history.id} style={styles.historyRow}>
-                      <View>
-                        <Text numeric style={styles.historyPrice}>{formatPrice(history.price)}</Text>
-                        <Text style={styles.historyDate}>{formatDateTime(history.recordedAt)}</Text>
-                      </View>
-                      <Text numeric style={styles.historyQuantity}>{history.quantity} {detailProduct.unit}</Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.historyEmpty}>Chưa có lịch sử giá.</Text>
-                )}
-              </ScrollView>
-
-              <View style={styles.detailFooter}>
-                <View style={styles.detailQuantity}>
-                  <Pressable
-                    style={styles.detailQuantityButton}
-                    disabled={detailQuantity <= 1}
-                    onPress={() => setDetailQuantity((value) => Math.max(1, value - 1))}
-                  >
-                    <Ionicons name="remove" size={19} color={Colors.deepTeal} />
-                  </Pressable>
-                  <Text numeric style={styles.detailQuantityValue}>{detailQuantity}</Text>
-                  <Pressable
-                    style={styles.detailQuantityButton}
-                    disabled={detailQuantity >= detailProduct.availableQuantity}
-                    onPress={() =>
-                      setDetailQuantity((value) =>
-                        Math.min(detailProduct.availableQuantity, value + 1),
-                      )
-                    }
-                  >
-                    <Ionicons name="add" size={19} color={Colors.deepTeal} />
-                  </Pressable>
-                </View>
-                <Pressable
-                  style={[
-                    styles.detailAddButton,
-                    detailProduct.availableQuantity <= 0 && styles.addButtonDisabled,
-                  ]}
-                  disabled={detailProduct.availableQuantity <= 0}
-                  onPress={() => {
-                    addProduct(detailProduct, detailQuantity);
-                    setDetailProduct(null);
-                  }}
-                >
-                  <Ionicons name="bag-add-outline" size={20} color={Colors.onPrimary} />
-                  <Text style={styles.detailAddText}>Thêm vào giỏ</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-        </View>
-      </Modal>
+        onClose={() => setShowCart(false)}
+        onCheckout={proceedToCheckout}
+        stockByMarketProductId={stockByMarketProductId}
+      />
     </SafeAreaView>
   );
 }
@@ -1349,279 +1059,4 @@ const styles = StyleSheet.create({
   marketOptionText: { flex: 1 },
   marketOptionName: { fontSize: 14, color: Colors.deepTeal, fontFamily: Fonts.semibold },
   marketOptionAddress: { marginTop: 3, fontSize: 11, color: Colors.textMuted },
-  cartScreen: { flex: 1, backgroundColor: Colors.background },
-  cartScreenHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.outlineVariant,
-  },
-  cartScreenClose: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  cartScreenTitle: { fontSize: 18, fontFamily: Fonts.bold, color: Colors.onSurface },
-  cartScreenClear: { fontSize: 14, fontFamily: Fonts.medium, color: Colors.error },
-  cartScreenList: { paddingBottom: 180 },
-  cartScreenItem: {
-    flexDirection: 'column',
-    backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.outlineVariant,
-    gap: 10,
-  },
-  cartScreenItemRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  cartScreenItemNote: {
-    fontSize: 12,
-    color: Colors.onSurface,
-    borderWidth: 1,
-    borderColor: Colors.outlineVariant,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: Colors.surfaceContainerLowest,
-  },
-  cartScreenItemImg: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  cartScreenItemInfo: { flex: 1, gap: 2 },
-  cartScreenItemName: { fontSize: 14, fontFamily: Fonts.semibold, color: Colors.onSurface },
-  cartScreenItemMarket: { fontSize: 12, fontFamily: Fonts.regular, color: Colors.outline },
-  cartScreenItemPrice: {
-    fontSize: 15,
-    fontFamily: Fonts.monoSemibold,
-    color: Colors.onSurface,
-    marginTop: 4,
-  },
-  cartScreenItemQty: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cartScreenQtyBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  cartScreenQtyText: {
-    fontSize: 15,
-    fontFamily: Fonts.bold,
-    color: Colors.onSurface,
-    minWidth: 24,
-    textAlign: 'center',
-  },
-  cartScreenVoucherSection: {
-    backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.outlineVariant,
-  },
-  cartScreenVoucherRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  cartScreenVoucherInput: {
-    flex: 1,
-    height: 40,
-    backgroundColor: Colors.surfaceContainerHigh,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    fontFamily: Fonts.regular,
-    color: Colors.onSurface,
-  },
-  cartScreenVoucherBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  cartScreenVoucherBtnText: {
-    color: Colors.onPrimary,
-    fontFamily: Fonts.bold,
-    fontSize: 13,
-  },
-  cartScreenSummary: {
-    backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.outlineVariant,
-    gap: 12,
-  },
-  cartScreenSummaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  cartScreenSummaryLabel: { fontSize: 14, fontFamily: Fonts.regular, color: Colors.outline },
-  cartScreenSummaryValue: {
-    fontSize: 14,
-    fontFamily: Fonts.semibold,
-    color: Colors.onSurface,
-  },
-  cartScreenSummaryDivider: {
-    height: 1,
-    backgroundColor: Colors.outlineVariant,
-    marginVertical: 4,
-  },
-  cartScreenSummaryTotal: {
-    fontSize: 16,
-    fontFamily: Fonts.monoSemibold,
-    color: Colors.onSurface,
-  },
-  cartScreenSummaryTotalValue: {
-    fontSize: 18,
-    fontFamily: Fonts.monoSemibold,
-    color: Colors.primaryText,
-  },
-  cartScreenCheckoutBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingBottom: 32,
-    borderTopWidth: 1,
-    borderTopColor: Colors.outlineVariant,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  cartScreenCheckoutLabel: { fontSize: 12, fontFamily: Fonts.medium, color: Colors.outline },
-  cartScreenCheckoutTotal: {
-    fontSize: 20,
-    fontFamily: Fonts.monoSemibold,
-    color: Colors.onSurface,
-  },
-  cartScreenCheckoutBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 14,
-  },
-  cartScreenCheckoutBtnDisabled: { backgroundColor: Colors.surfaceVariant },
-  cartScreenCheckoutBtnText: {
-    color: Colors.onPrimary,
-    fontFamily: Fonts.bold,
-    fontSize: 15,
-  },
-  detailSheet: { height: '88%', maxHeight: '88%' },
-  detailImage: { width: '100%', height: 220, borderRadius: 20, backgroundColor: Colors.primaryLight },
-  detailPlaceholder: {
-    height: 210,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  detailCategoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  detailCategory: {
-    fontSize: 11,
-    color: Colors.primaryText,
-    fontFamily: Fonts.semibold,
-    textTransform: 'uppercase',
-  },
-  detailName: {
-    marginTop: 5,
-    fontSize: 22,
-    lineHeight: 29,
-    color: Colors.deepTeal,
-    fontFamily: Fonts.bold,
-  },
-  detailDescription: {
-    marginTop: 8,
-    fontSize: 12,
-    lineHeight: 19,
-    color: Colors.textSecondary,
-  },
-  detailPrice: { marginTop: 12, fontSize: 23, color: Colors.primaryText, fontFamily: Fonts.bold },
-  detailUnit: { fontSize: 12, color: Colors.textMuted },
-  detailFacts: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  detailFact: {
-    flex: 1,
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 10,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  detailFactLabel: { fontSize: 9, color: Colors.textMuted },
-  detailFactValue: { marginTop: 2, fontSize: 11, color: Colors.textPrimary, fontFamily: Fonts.semibold },
-  historyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 20,
-    marginBottom: 9,
-  },
-  historyTitle: { fontSize: 14, color: Colors.deepTeal, fontFamily: Fonts.bold },
-  historyHint: { fontSize: 10, color: Colors.textMuted },
-  historyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  historyPrice: { fontSize: 13, color: Colors.deepTeal, fontFamily: Fonts.semibold },
-  historyDate: { marginTop: 2, fontSize: 9, color: Colors.textMuted },
-  historyQuantity: { fontSize: 11, color: Colors.textSecondary },
-  historyEmpty: { paddingVertical: 12, fontSize: 12, color: Colors.textMuted },
-  detailFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  detailQuantity: {
-    minHeight: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 15,
-    backgroundColor: Colors.primaryLight,
-  },
-  detailQuantityButton: { width: 42, height: 50, alignItems: 'center', justifyContent: 'center' },
-  detailQuantityValue: { minWidth: 30, textAlign: 'center', fontSize: 13, fontFamily: Fonts.bold },
-  detailAddButton: {
-    flex: 1,
-    minHeight: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    borderRadius: 15,
-    backgroundColor: Colors.primary,
-  },
-  detailAddText: { fontSize: 13, color: Colors.onPrimary, fontFamily: Fonts.bold },
 });

@@ -61,11 +61,13 @@ function OrderRuleBanner() {
 function SuccessView({
   orderId,
   scheduledFor,
-  onDone,
+  onViewOrder,
+  onGoHome,
 }: {
   orderId: string;
   scheduledFor: string | null;
-  onDone: () => void;
+  onViewOrder: () => void;
+  onGoHome: () => void;
 }) {
   return (
     <View style={styles.successWrap}>
@@ -78,8 +80,11 @@ function SuccessView({
         Đơn đã được xác nhận
         {scheduledFor ? ` và dự kiến giao ${new Date(scheduledFor).toLocaleString('vi-VN')}.` : '.'}
       </Text>
-      <Pressable style={styles.successBtn} onPress={onDone}>
-        <Text style={styles.successBtnText}>Về trang chủ</Text>
+      <Pressable style={styles.successBtn} onPress={onViewOrder}>
+        <Text style={styles.successBtnText}>Xem đơn hàng</Text>
+      </Pressable>
+      <Pressable style={styles.homeBtn} onPress={onGoHome}>
+        <Text style={styles.homeBtnText}>Về trang chủ</Text>
       </Pressable>
     </View>
   );
@@ -218,7 +223,8 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         <SuccessView
           orderId={placedOrderId}
           scheduledFor={placedScheduledFor}
-          onDone={() => openOrderManagement(placedOrderId)}
+          onViewOrder={() => openOrderManagement(placedOrderId)}
+          onGoHome={() => navigation.popToTop()}
         />
       </SafeAreaView>
     );
@@ -450,6 +456,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 32,
     paddingVertical: 14,
+    minWidth: 220,
+    alignItems: 'center',
+    marginBottom: 12,
   },
   successBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  homeBtn: {
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 13,
+    minWidth: 220,
+    alignItems: 'center',
+  },
+  homeBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 15 },
 });

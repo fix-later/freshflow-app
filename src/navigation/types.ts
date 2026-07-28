@@ -11,10 +11,29 @@ export type AuthStackParamList = {
 
 export type RestaurantTabParamList = {
   RestaurantOrders: NavigatorScreenParams<RestaurantOrdersStackParamList> | undefined;
-  RestaurantFavorites: undefined;
+  RestaurantFavorites: NavigatorScreenParams<RestaurantFavoritesStackParamList> | undefined;
   RestaurantAssistant: undefined;
   RestaurantTracking: NavigatorScreenParams<RestaurantOrdersStackParamList> | undefined;
   RestaurantProfile: undefined;
+};
+
+export type RestaurantFavoritesStackParamList = {
+  Favorites: undefined;
+  ProductDetail: {
+    product: {
+      marketProductId: string;
+      productId: string;
+      productName: string;
+      imageUrl: string | null;
+      marketId: string;
+      marketName: string;
+      category: string | null;
+      unit: string;
+      currentPrice: number;
+      availableQuantity: number;
+      description?: string | null;
+    };
+  };
 };
 
 export type RestaurantProfileStackParamList = {
@@ -39,7 +58,7 @@ export type CreateOrderItem = {
 export type RestaurantOrdersStackParamList = {
   TrackOrders: undefined;
   Notifications: undefined;
-  OrderList: { openCart?: boolean } | undefined;
+  OrderList: undefined;
   CreateOrder: { items: CreateOrderItem[] };
   ConfirmOrder: {
     items: CreateOrderItem[];
@@ -54,6 +73,21 @@ export type RestaurantOrdersStackParamList = {
   CreateRecurringOrder: { scheduledOrderId?: string } | undefined;
   ManageRecurringOrders: undefined;
   ScheduledOrderInstances: { scheduledOrderId: string };
+  ProductDetail: {
+    product: {
+      marketProductId: string;
+      productId: string;
+      productName: string;
+      imageUrl: string | null;
+      marketId: string;
+      marketName: string;
+      category: string | null;
+      unit: string;
+      currentPrice: number;
+      availableQuantity: number;
+      description?: string | null;
+    };
+  };
 };
 
 export type MarketHomeStackParamList = {
