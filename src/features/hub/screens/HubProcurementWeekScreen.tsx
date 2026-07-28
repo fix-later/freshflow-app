@@ -1,14 +1,13 @@
-import { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, ErrorView, Loading, Text } from '../../../components/ui';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
-import type {
-  HubProcurementItemDto,
-  HubProcurementStatus,
-} from '../api/hubApi';
+import type { HubStackParamList } from '../../../navigation/types';
+import type { HubProcurementStatus } from '../api/hubApi';
 import { useHubProcurementWeek } from '../hooks/useHubProcurementWeek';
 import { useHubWork } from '../hooks/useHubWork';
 
@@ -44,20 +43,6 @@ function shortCode(value: string): string {
   return `LO-${value.replaceAll('-', '').slice(0, 8).toUpperCase()}`;
 }
 
-function formatQuantity(value: number | null): string {
-  if (value === null) return 'Chưa cập nhật';
-  return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value);
-}
-
-function itemQuantity(item: HubProcurementItemDto): number {
-  return item.actualQuantity ?? item.targetQuantity;
-}
-
-function formatItemQuantity(item: HubProcurementItemDto): string {
-  const unit = item.unit?.trim() || 'đơn vị';
-  return `${formatQuantity(itemQuantity(item))} ${unit}`;
-}
-
 function formatDateTime(value: string | null): string {
   if (!value) return 'Chưa cập nhật';
   return new Intl.DateTimeFormat('vi-VN', {
@@ -70,9 +55,9 @@ function formatDateTime(value: string | null): string {
 }
 
 export function HubProcurementWeekScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<HubStackParamList>>();
   const hubWork = useHubWork();
   const week = useHubProcurementWeek(hubWork.assignedHubs);
-  const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
   const today = getVietnamDate();
   const plansWithWork = week.plans.filter((plan) => (
     plan.date === today && plan.batches.length > 0
@@ -148,9 +133,6 @@ export function HubProcurementWeekScreen() {
 
                 {plan.batches.map((batch) => {
                   const status = STATUS[batch.status] ?? STATUS.Built;
-                  const detailedOrderIds = new Set(batch.orders?.map((order) => order.orderId) ?? []);
-                  const missingOrderIds = batch.orderIds.filter((orderId) => !detailedOrderIds.has(orderId));
-                  const expanded = expandedBatchId === batch.batchId;
                   return (
                     <View key={batch.batchId} style={styles.batchCard}>
                       <View style={styles.batchHeader}>
@@ -181,89 +163,20 @@ export function HubProcurementWeekScreen() {
                       </View>
 
                       <Pressable
-                        style={[styles.detailButton, expanded && styles.detailButtonExpanded]}
-                        onPress={() => setExpandedBatchId(expanded ? null : batch.batchId)}
+                        style={styles.detailButton}
+                        onPress={() => navigation.navigate('HubBatchOrders', {
+                          hubId: plan.hubId,
+                          hubName: plan.hub.name,
+                          date: plan.date,
+                          batchId: batch.batchId,
+                        })}
                       >
                         <Ionicons name="receipt-outline" size={17} color={Colors.primaryText} />
                         <Text style={styles.detailButtonText}>
-                          {expanded ? 'Ẩn chi tiết đơn hàng' : `Xem chi tiết ${batch.orderIds.length} đơn hàng`}
+                          Xem danh sách {batch.orderIds.length} đơn hàng
                         </Text>
-                        <Ionicons
-                          name={expanded ? 'chevron-up' : 'chevron-down'}
-                          size={17}
-                          color={Colors.primaryText}
-                        />
+                        <Ionicons name="arrow-forward" size={17} color={Colors.primaryText} />
                       </Pressable>
-
-                      {expanded ? (
-                        <View style={styles.expandedContent}>
-                          <View style={styles.detailSection}>
-                            <Text style={styles.detailTitle}>Tổng hợp mặt hàng trong lô</Text>
-                            {batch.items.length === 0 ? (
-                              <Text style={styles.emptyDetail}>Chưa có chi tiết mặt hàng</Text>
-                            ) : batch.items.map((item, index) => (
-                              <View
-                                key={item.marketProductId}
-                                style={[styles.itemRow, index > 0 && styles.itemRowBorder]}
-                              >
-                                <View style={styles.itemHeader}>
-                                  <Text style={styles.itemName}>{item.productName || 'Mặt hàng chưa đặt tên'}</Text>
-                                  <View style={styles.quantityBadge}>
-                                    <Text numeric style={styles.quantityText}>{formatItemQuantity(item)}</Text>
-                                  </View>
-                                </View>
-                                <Text numeric style={styles.itemCode}>{shortCode(item.marketProductId)}</Text>
-                              </View>
-                            ))}
-                          </View>
-
-                          <View style={styles.detailSection}>
-                            <Text style={styles.detailTitle}>Đơn hàng trong lô</Text>
-                            {batch.orders?.map((order) => (
-                              <View key={order.orderId} style={styles.orderCard}>
-                                <View style={styles.orderHeader}>
-                                  <View style={styles.orderCopy}>
-                                    <Text style={styles.restaurantName}>{order.restaurantName}</Text>
-                                    <Text numeric style={styles.orderCode}>{shortCode(order.orderId).replace('LO-', 'DH-')}</Text>
-                                  </View>
-                                  {order.deliveryOrder !== null ? (
-                                    <View style={styles.deliveryBadge}>
-                                      <Text numeric style={styles.deliveryText}>Giao #{order.deliveryOrder}</Text>
-                                    </View>
-                                  ) : null}
-                                </View>
-                                {order.items.map((item) => (
-                                  <View key={item.orderItemId} style={styles.orderItemRow}>
-                                    <Text style={styles.orderItemName}>{item.productName}</Text>
-                                    <Text numeric style={styles.orderItemQuantity}>
-                                      {formatQuantity(item.quantity)} {item.unit?.trim() || 'đơn vị'}
-                                    </Text>
-                                  </View>
-                                ))}
-                              </View>
-                            ))}
-                            {batch.orderIds.length === 0 ? (
-                              <Text style={styles.emptyDetail}>Chưa có đơn hàng liên kết</Text>
-                            ) : missingOrderIds.length > 0 ? (
-                              <>
-                                <View style={styles.orderList}>
-                                  {missingOrderIds.map((orderId) => (
-                                    <View key={orderId} style={styles.orderChip}>
-                                      <Text numeric style={styles.orderCode}>{shortCode(orderId).replace('LO-', 'DH-')}</Text>
-                                    </View>
-                                  ))}
-                                </View>
-                                <View style={styles.apiNotice}>
-                                  <Ionicons name="information-circle-outline" size={17} color={Colors.warning} />
-                                  <Text style={styles.apiNoticeText}>
-                                    Còn {missingOrderIds.length}/{batch.orderIds.length} đơn chưa có chi tiết từ API mới. Có thể đơn chưa ở trạng thái AtHub/Batched hoặc BE chưa trả đủ dữ liệu.
-                                  </Text>
-                                </View>
-                              </>
-                            ) : null}
-                          </View>
-                        </View>
-                      ) : null}
                     </View>
                   );
                 })}
@@ -337,16 +250,6 @@ const styles = StyleSheet.create({
     marginTop: 3,
     textAlign: 'center',
   },
-  detailSection: { marginTop: 13 },
-  detailTitle: { fontSize: 10, fontWeight: '800', color: Colors.textPrimary, marginBottom: 6 },
-  emptyDetail: { fontSize: 9, color: Colors.textMuted, fontStyle: 'italic' },
-  itemRow: { paddingVertical: 8 },
-  itemRowBorder: { borderTopWidth: 1, borderTopColor: Colors.border },
-  itemHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  itemName: { flex: 1, fontSize: 11, fontWeight: '700', color: Colors.textPrimary },
-  itemCode: { fontSize: 7, fontFamily: Fonts.monoMedium, color: Colors.textMuted, marginTop: 4 },
-  quantityBadge: { borderRadius: 8, backgroundColor: Colors.primaryLight, paddingHorizontal: 8, paddingVertical: 5 },
-  quantityText: { fontSize: 9, fontFamily: Fonts.monoBold, color: Colors.primaryText },
   detailButton: {
     minHeight: 43,
     marginTop: 13,
@@ -359,28 +262,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  detailButtonExpanded: { backgroundColor: Colors.surfaceContainerLow },
   detailButtonText: { flex: 1, fontSize: 10, fontWeight: '800', color: Colors.primaryText },
-  expandedContent: { marginTop: 2 },
-  orderList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  orderChip: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceContainerLow,
-    paddingHorizontal: 7,
-    paddingVertical: 5,
-  },
-  orderCode: { fontSize: 8, fontFamily: Fonts.monoMedium, color: Colors.textSecondary },
-  apiNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 9, padding: 9, borderRadius: 9, backgroundColor: Colors.warningLight },
-  apiNoticeText: { flex: 1, fontSize: 8, lineHeight: 12, color: Colors.textSecondary },
-  orderCard: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: 10, marginBottom: 7, backgroundColor: Colors.surfaceContainerLow },
-  orderHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 7 },
-  orderCopy: { flex: 1, minWidth: 0 },
-  restaurantName: { fontSize: 10, fontWeight: '800', color: Colors.textPrimary },
-  deliveryBadge: { borderRadius: 7, backgroundColor: Colors.primaryLight, paddingHorizontal: 7, paddingVertical: 4 },
-  deliveryText: { fontSize: 8, fontFamily: Fonts.monoBold, color: Colors.primaryText },
-  orderItemRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTopWidth: 1, borderTopColor: Colors.border },
-  orderItemName: { flex: 1, fontSize: 9, color: Colors.textPrimary },
-  orderItemQuantity: { fontSize: 8, fontFamily: Fonts.monoMedium, color: Colors.primaryText },
 });

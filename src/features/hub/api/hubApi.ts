@@ -287,6 +287,43 @@ export const hubApi = {
     return data;
   },
 
+  /** One batch with restaurant/order lines, used by the dedicated batch-order screen. */
+  async getProcurementBatchDetail(
+    hubId: string,
+    date: string,
+    batchId: string,
+  ): Promise<HubProcurementBatchDto | null> {
+    const plan = await this.getProcurementPlan(hubId, date);
+    const batch = plan.batches.find((item) => item.batchId === batchId);
+    if (!batch) return null;
+
+    const catalog = await getHubProductCatalog([batch.marketId]);
+    let orderDetails = new Map<string, HubProcurementOrderDto>();
+    try {
+      const details = enrichRestaurantOrders(
+        await getOrdersByRestaurant(hubId, date, true),
+        catalog,
+      );
+      orderDetails = new Map(mapProcurementOrders(details));
+    } catch {
+      // Keep the batch/order identifiers usable even when the optional detail API is unavailable.
+    }
+
+    return {
+      ...batch,
+      items: batch.items.map((item) => ({
+        ...item,
+        unit: item.unit
+          ?? catalog.byMarketProductId.get(item.marketProductId)?.unit
+          ?? null,
+      })),
+      orders: batch.orderIds.flatMap((orderId) => {
+        const order = orderDetails.get(orderId);
+        return order ? [order] : [];
+      }),
+    };
+  },
+
   /** Orders staged at one Hub, grouped by restaurant without requiring a route. */
   getOrdersByRestaurant(
     hubId: string,
