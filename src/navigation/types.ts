@@ -58,7 +58,7 @@ export type CreateOrderItem = {
 export type RestaurantOrdersStackParamList = {
   TrackOrders: undefined;
   Notifications: undefined;
-  OrderList: { openCart?: boolean } | undefined;
+  OrderList: undefined;
   CreateOrder: { items: CreateOrderItem[] };
   ConfirmOrder: {
     items: CreateOrderItem[];

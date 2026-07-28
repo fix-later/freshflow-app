@@ -12,9 +12,11 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import { Text, TextInput } from '../../../components/ui/Text';
 import { useFavoritesStore } from '../../../store/favoritesStore';
 import { useCartStore } from '../../../store/cartStore';
+import { CartModal } from '../components/CartModal';
 
 function formatPrice(p: number) {
   return p.toLocaleString("vi-VN") + "đ";
@@ -24,10 +26,11 @@ export function FavoritesScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { favorites, isLoading, toggleFavorite, refresh } = useFavoritesStore();
-  const { cart, addToCart } = useCartStore();
+  const { cart, cartCount, addToCart } = useCartStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchActive, setIsSearchActive] = useState(false);
+  const [showCart, setShowCart] = useState(false);
 
   const filteredFavorites = useMemo(() => {
     const q = searchQuery.trim().toLocaleLowerCase('vi-VN');
@@ -39,6 +42,11 @@ export function FavoritesScreen() {
         (item.category?.toLocaleLowerCase('vi-VN').includes(q) ?? false),
     );
   }, [favorites, searchQuery]);
+
+  const stockByMarketProductId = useMemo(
+    () => Object.fromEntries(favorites.map((item) => [item.marketProductId, item.availableQuantity])),
+    [favorites],
+  );
 
   const openProductDetail = (item: typeof favorites[0]) => {
     navigation.navigate('ProductDetail', {
@@ -69,6 +77,29 @@ export function FavoritesScreen() {
       unit: item.unit,
       price: item.currentPrice,
       image: item.imageUrl ?? '',
+    });
+  };
+
+  // Checkout is a multi-step flow (CreateOrder → ConfirmOrder) that only exists
+  // in the Orders tab's stack, so this is the one action that still hands off
+  // tabs — viewing/editing the cart itself stays local via `showCart` above.
+  const handleCheckout = () => {
+    if (cart.length === 0) return;
+    setShowCart(false);
+    navigation.navigate('RestaurantOrders', {
+      screen: 'CreateOrder',
+      params: {
+        items: cart.map((item) => ({
+          marketProductId: item.id,
+          productName: item.name,
+          marketName: item.market,
+          unit: item.unit,
+          quantity: item.qty,
+          unitPrice: item.price,
+          image: item.image,
+          note: item.note,
+        })),
+      },
     });
   };
 
@@ -248,6 +279,22 @@ export function FavoritesScreen() {
           }
         />
       )}
+
+      {cartCount > 0 && !showCart ? (
+        <Pressable style={styles.cartFab} onPress={() => setShowCart(true)}>
+          <Ionicons name="cart-outline" size={24} color={Colors.onPrimary} />
+          <View style={styles.cartFabBadge}>
+            <Text numeric style={styles.cartFabBadgeText}>{cartCount}</Text>
+          </View>
+        </Pressable>
+      ) : null}
+
+      <CartModal
+        visible={showCart}
+        onClose={() => setShowCart(false)}
+        onCheckout={handleCheckout}
+        stockByMarketProductId={stockByMarketProductId}
+      />
     </SafeAreaView>
   );
 }
@@ -519,5 +566,40 @@ const styles = StyleSheet.create({
     color: Colors.onPrimary,
     fontSize: 14,
     fontWeight: '800',
+  },
+  cartFab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  cartFabBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    borderWidth: 2.5,
+    borderColor: Colors.background,
+  },
+  cartFabBadgeText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontFamily: Fonts.bold,
   },
 });
