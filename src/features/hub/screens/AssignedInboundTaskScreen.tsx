@@ -72,7 +72,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
       setReceived(true);
       Alert.alert(
         'Đã xác nhận nhận hàng',
-        'Lô hàng đã được ghi nhận tại Hub. Bạn có thể chuyển sang phân loại theo từng nhà hàng và từng đơn.',
+        'Lô hàng đã được ghi nhận tại Hub. Đơn chỉ xuất hiện ở màn phân loại khi order đã ở trạng thái AtHub và có route chứa đúng nhà hàng.',
         [
           { text: 'Danh sách lô', onPress: () => navigation.goBack() },
           { text: 'Phân loại đơn', onPress: () => navigation.navigate('HubTabs', { screen: 'Sorting' }) },

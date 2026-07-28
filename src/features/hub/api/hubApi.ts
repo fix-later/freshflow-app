@@ -1,4 +1,5 @@
 import { apiClient, getCursorPaged } from '../../../services/api/client';
+import { getHubProductCatalog } from './hubCatalogApi';
 
 export interface AssignedHubDto {
   hubId: string;
@@ -74,6 +75,24 @@ export interface HubProcurementItemDto {
   actualQuantity: number | null;
   actualUnitPrice: number | null;
   purchasedAt: string | null;
+  /** Enriched by the App from GET /markets/{marketId}/products. */
+  unit?: string | null;
+}
+
+export interface HubProcurementOrderItemDto {
+  orderItemId: string;
+  marketProductId: string;
+  productName: string;
+  quantity: number;
+  unit: string | null;
+}
+
+export interface HubProcurementOrderDto {
+  orderId: string;
+  restaurantId: string;
+  restaurantName: string;
+  deliveryOrder: number | null;
+  items: HubProcurementOrderItemDto[];
 }
 
 export interface HubProcurementBatchDto {
@@ -83,6 +102,8 @@ export interface HubProcurementBatchDto {
   handedOffAt: string | null;
   orderIds: string[];
   items: HubProcurementItemDto[];
+  /** Forward-compatible contract; current BE does not return this field yet. */
+  orders?: HubProcurementOrderDto[];
 }
 
 export interface HubProcurementPlanDto {
@@ -186,7 +207,23 @@ export const hubApi = {
       )),
     );
 
-    return plans.sort((left, right) => (
+    const catalog = await getHubProductCatalog(
+      plans.flatMap((plan) => plan.batches.map((batch) => batch.marketId)),
+    );
+    const enrichedPlans = plans.map((plan): HubProcurementDayPlan => ({
+      ...plan,
+      batches: plan.batches.map((batch) => ({
+        ...batch,
+        items: batch.items.map((item) => ({
+          ...item,
+          unit: item.unit
+            ?? catalog.byMarketProductId.get(item.marketProductId)?.unit
+            ?? null,
+        })),
+      })),
+    }));
+
+    return enrichedPlans.sort((left, right) => (
       left.date.localeCompare(right.date) || left.hub.name.localeCompare(right.hub.name)
     ));
   },

@@ -10,12 +10,16 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, ErrorView, Loading, Text } from '../../../components/ui';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
+import type { HubStackParamList } from '../../../navigation/types';
 import {
   hubDispatchApi,
+  type EligibleDriverDto,
   type HubDispatchPlanItem,
   type HubDispatchRouteStatus,
   type HubVehicleDto,
@@ -30,6 +34,8 @@ type VehicleChoice = {
   fitsLoad: boolean;
   reasons: string[];
 };
+
+type Navigation = NativeStackNavigationProp<HubStackParamList>;
 
 const STATUS: Record<HubDispatchRouteStatus, {
   label: string;
@@ -57,6 +63,9 @@ const REASON_LABEL: Record<string, string> = {
   VEHICLE_UNAVAILABLE: 'Xe đang không sẵn sàng',
   VEHICLE_DOUBLE_BOOKED: 'Xe đã được xếp cho tuyến khác hôm nay',
   VEHICLE_CAPACITY_EXCEEDED: 'Tuyến vượt giới hạn vận hành của xe',
+  DRIVER_NOT_FOUND: 'Không tìm thấy tài xế',
+  DRIVER_NOT_DRIVER_ROLE: 'Tài khoản không có vai trò tài xế',
+  DRIVER_INACTIVE: 'Tài xế đã ngừng hoạt động',
   CHECK_FAILED: 'Không kiểm tra được trạng thái xe',
 };
 
@@ -84,20 +93,32 @@ function shortRouteCode(value: string): string {
   return `RT-${value.replaceAll('-', '').slice(0, 8).toUpperCase()}`;
 }
 
-/** Mirrors BE packing semantics without adding box tare, which is not exposed by the manifest. */
-export function estimateManifestLoadKg(manifest: LoadingManifestDto): number {
-  return manifest.stops.reduce((routeTotal, stop) => (
-    routeTotal + stop.lines.reduce((stopTotal, line) => {
-      if (line.capacityKg && line.capacityKg > 0) {
-        return stopTotal + Math.ceil(line.quantity / line.capacityKg) * line.capacityKg;
+type ManifestLoadEstimate = {
+  totalLoadKg: number;
+  missingPackingLines: number;
+};
+
+/** Mirrors BE ShipmentEstimator semantics; tare is not exposed by loading-manifest. */
+export function estimateManifestLoad(manifest: LoadingManifestDto): ManifestLoadEstimate {
+  return manifest.stops.reduce<ManifestLoadEstimate>((routeTotal, stop) => (
+    stop.lines.reduce<ManifestLoadEstimate>((stopTotal, line) => {
+      if (!line.capacityKg || line.capacityKg <= 0) {
+        return {
+          ...stopTotal,
+          missingPackingLines: stopTotal.missingPackingLines + 1,
+        };
       }
-      return stopTotal + line.quantity;
-    }, 0)
-  ), 0);
+      return {
+        ...stopTotal,
+        totalLoadKg: stopTotal.totalLoadKg
+          + Math.ceil(line.quantity / line.capacityKg) * line.capacityKg,
+      };
+    }, routeTotal)
+  ), { totalLoadKg: 0, missingPackingLines: 0 });
 }
 
 function countManifestOrders(manifest: LoadingManifestDto): number {
-  return manifest.stops.reduce((sum, stop) => sum + (stop.orders?.length ?? 0), 0);
+  return new Set(manifest.stops.flatMap((stop) => stop.lines.map((line) => line.orderId))).size;
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -107,21 +128,24 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function MarketDispatchScreen() {
+  const navigation = useNavigation<Navigation>();
   const { assignedHubs } = useHubWork();
   const { plan, loading, refreshing, error, refresh } = useHubDispatch(assignedHubs);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [vehicleChoices, setVehicleChoices] = useState<VehicleChoice[]>([]);
   const [checkingVehicles, setCheckingVehicles] = useState(false);
   const [assigningVehicleId, setAssigningVehicleId] = useState<string | null>(null);
+  const [selectedVehicleChoice, setSelectedVehicleChoice] = useState<VehicleChoice | null>(null);
+  const [eligibleDrivers, setEligibleDrivers] = useState<EligibleDriverDto[]>([]);
 
-  const routes = plan?.routes ?? [];
+  const routes = (plan?.routes ?? []).filter((item) => item.manifest.stops.length > 0);
   const vehicles = plan?.vehicles ?? [];
   const vehicleById = useMemo(
     () => new Map(vehicles.map((vehicle) => [vehicle.id, vehicle])),
     [vehicles],
   );
   const selectedPlan = routes.find(({ route }) => route.id === selectedRouteId) ?? null;
-  const selectedLoadKg = selectedPlan ? estimateManifestLoadKg(selectedPlan.manifest) : 0;
+  const selectedLoadKg = selectedPlan ? estimateManifestLoad(selectedPlan.manifest).totalLoadKg : 0;
   const suggestedVehicleId = vehicleChoices.find((choice) => (
     choice.eligible && choice.fitsLoad && choice.vehicle.isAvailable
   ))?.vehicle.id ?? null;
@@ -134,13 +158,30 @@ export function MarketDispatchScreen() {
   }), [routes, vehicles]);
 
   const openVehiclePicker = async (item: HubDispatchPlanItem) => {
+    const routeMarketIds = new Set(item.route.stops.filter((stop) => stop.entityType === 'market').map((stop) => stop.entityId));
+    const hubId = assignedHubs.find((hub) => hub.marketId && routeMarketIds.has(hub.marketId))?.hubId ?? null;
+    if (!hubId) {
+      Alert.alert('Không xác định được Hub', 'Tuyến không khớp với Hub được gán cho tài khoản này.');
+      return;
+    }
     setSelectedRouteId(item.route.id);
+    setSelectedVehicleChoice(null);
     setVehicleChoices([]);
+    setEligibleDrivers([]);
     setCheckingVehicles(true);
-    const loadKg = estimateManifestLoadKg(item.manifest);
+    const load = estimateManifestLoad(item.manifest);
+    if (load.missingPackingLines > 0) {
+      Alert.alert(
+        'Chưa đủ dữ liệu tải trọng',
+        `${load.missingPackingLines} dòng hàng chưa có capacityKg trong loading-manifest. App chưa thể chọn xe an toàn theo kg.`,
+      );
+      return;
+    }
+    const loadKg = load.totalLoadKg;
 
     try {
-      const choices = await Promise.all(vehicles.map(async (vehicle): Promise<VehicleChoice> => {
+      const [choices, drivers] = await Promise.all([
+        Promise.all(vehicles.map(async (vehicle): Promise<VehicleChoice> => {
         if (!vehicle.isAvailable) {
           return {
             vehicle,
@@ -166,24 +207,33 @@ export function MarketDispatchScreen() {
             reasons: ['CHECK_FAILED'],
           };
         }
-      }));
+        })),
+        hubDispatchApi.getEligibleDrivers(hubId),
+      ]);
 
       setVehicleChoices(choices.sort((left, right) => {
         const leftScore = Number(left.eligible && left.fitsLoad && left.vehicle.isAvailable);
         const rightScore = Number(right.eligible && right.fitsLoad && right.vehicle.isAvailable);
         return rightScore - leftScore || left.vehicle.capacityKg - right.vehicle.capacityKg;
       }));
+      setEligibleDrivers(drivers);
+    } catch (loadError) {
+      Alert.alert('Không thể tải dữ liệu điều phối', getErrorMessage(loadError, 'Vui lòng thử lại.'));
     } finally {
       setCheckingVehicles(false);
     }
   };
 
-  const assignVehicle = async (choice: VehicleChoice) => {
+  const assignVehicle = async (choice: VehicleChoice, driver: EligibleDriverDto) => {
     if (!selectedRouteId || !choice.eligible || !choice.fitsLoad) return;
     setAssigningVehicleId(choice.vehicle.id);
 
     try {
-      const latestEligibility = await hubDispatchApi.checkVehicle(selectedRouteId, choice.vehicle.id);
+      const latestEligibility = await hubDispatchApi.checkVehicle(
+        selectedRouteId,
+        choice.vehicle.id,
+        driver.userId,
+      );
       if (!latestEligibility.isEligible) {
         Alert.alert(
           'Xe không còn phù hợp',
@@ -193,8 +243,9 @@ export function MarketDispatchScreen() {
         return;
       }
 
-      await hubDispatchApi.assignVehicle(selectedRouteId, choice.vehicle.id);
+      await hubDispatchApi.assignVehicle(selectedRouteId, choice.vehicle.id, driver.userId);
       setSelectedRouteId(null);
+      setSelectedVehicleChoice(null);
       await refresh();
       Alert.alert(
         'Phân xe thành công',
@@ -268,6 +319,11 @@ export function MarketDispatchScreen() {
             </View>
 
             {error ? <View style={styles.inlineError}><Text style={styles.inlineErrorText}>{error}</Text></View> : null}
+            {plan?.warnings?.map((warning) => (
+              <View key={warning} style={styles.inlineError}>
+                <Text style={styles.inlineErrorText}>{warning}</Text>
+              </View>
+            ))}
 
             {routes.length === 0 ? (
               <View style={styles.emptyCard}>
@@ -287,6 +343,11 @@ export function MarketDispatchScreen() {
                     item={item}
                     vehicle={item.route.vehicleId ? vehicleById.get(item.route.vehicleId) : undefined}
                     onAssign={() => void openVehiclePicker(item)}
+                    onHandoff={() => {
+                      const routeMarketIds = new Set(item.route.stops.filter((stop) => stop.entityType === 'market').map((stop) => stop.entityId));
+                      const hubId = assignedHubs.find((hub) => hub.marketId && routeMarketIds.has(hub.marketId))?.hubId;
+                      if (hubId) navigation.navigate('DriverHandoff', { routeId: item.route.id, hubId });
+                    }}
                   />
                 ))}
               </View>
@@ -296,7 +357,7 @@ export function MarketDispatchScreen() {
       </View>
 
       <VehiclePicker
-        visible={Boolean(selectedRouteId)}
+        visible={Boolean(selectedRouteId) && !selectedVehicleChoice}
         routeCode={selectedRouteId ? shortRouteCode(selectedRouteId) : ''}
         loadKg={selectedLoadKg}
         choices={vehicleChoices}
@@ -304,7 +365,14 @@ export function MarketDispatchScreen() {
         checking={checkingVehicles}
         assigningVehicleId={assigningVehicleId}
         onClose={() => !assigningVehicleId && setSelectedRouteId(null)}
-        onSelect={(choice) => void assignVehicle(choice)}
+        onSelect={setSelectedVehicleChoice}
+      />
+      <DriverPicker
+        visible={Boolean(selectedRouteId && selectedVehicleChoice)}
+        drivers={eligibleDrivers}
+        assigning={Boolean(assigningVehicleId)}
+        onBack={() => !assigningVehicleId && setSelectedVehicleChoice(null)}
+        onSelect={(driver) => selectedVehicleChoice && void assignVehicle(selectedVehicleChoice, driver)}
       />
     </SafeAreaView>
   );
@@ -314,14 +382,16 @@ function DispatchCard({
   item,
   vehicle,
   onAssign,
+  onHandoff,
 }: {
   item: HubDispatchPlanItem;
   vehicle?: HubVehicleDto;
   onAssign: () => void;
+  onHandoff: () => void;
 }) {
   const { route, manifest } = item;
   const status = STATUS[route.status] ?? STATUS.planned;
-  const estimatedLoadKg = estimateManifestLoadKg(manifest);
+  const load = estimateManifestLoad(manifest);
   const restaurantStops = route.stops.filter((stop) => stop.entityType === 'restaurant');
   const destinationNames = manifest.stops.length > 0
     ? manifest.stops.map((stop) => stop.restaurantName)
@@ -350,7 +420,9 @@ function DispatchCard({
         <Demand icon="receipt-outline" value={`${countManifestOrders(manifest)}`} label="đơn hàng" />
         <Demand
           icon="scale-outline"
-          value={estimatedLoadKg > 0 ? `${formatNumber(estimatedLoadKg)} kg` : 'Chưa có'}
+          value={load.missingPackingLines > 0
+            ? 'Thiếu quy cách'
+            : load.totalLoadKg > 0 ? `${formatNumber(load.totalLoadKg)} kg` : 'Chưa có'}
           label="tải ước tính"
         />
         <Demand
@@ -397,6 +469,12 @@ function DispatchCard({
           <Text numeric style={styles.durationText}>~{route.estimatedDurationMinutes} phút</Text>
         ) : null}
       </View>
+      {route.vehicleId && route.driverUserId && route.status === 'assigned' ? (
+        <Pressable style={styles.assignButton} onPress={onHandoff}>
+          <Text style={styles.assignButtonText}>Bàn giao cho tài xế</Text>
+          <Ionicons name="arrow-forward" size={15} color={Colors.primaryText} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -496,6 +574,65 @@ function VehiclePicker({
               })}
             </ScrollView>
           )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function DriverPicker({
+  visible,
+  drivers,
+  assigning,
+  onBack,
+  onSelect,
+}: {
+  visible: boolean;
+  drivers: EligibleDriverDto[];
+  assigning: boolean;
+  onBack: () => void;
+  onSelect: (driver: EligibleDriverDto) => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onBack}>
+      <View style={styles.modalRoot}>
+        <Pressable style={styles.modalBackdrop} onPress={onBack} />
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <View style={styles.modalHeader}>
+            <View style={styles.modalTitleCopy}>
+              <Text style={styles.modalTitle}>Chọn tài xế</Text>
+              <Text style={styles.modalSub}>Tài xế sẽ được gán cùng phương tiện cho tuyến</Text>
+            </View>
+            <Pressable disabled={assigning} style={styles.closeButton} onPress={onBack}>
+              <Ionicons name="arrow-back" size={21} color={Colors.textPrimary} />
+            </Pressable>
+          </View>
+          <ScrollView style={styles.optionList} contentContainerStyle={styles.optionListContent}>
+            {drivers.length === 0 ? (
+              <EmptyState
+                icon={<Ionicons name="person-outline" size={52} color={Colors.textMuted} />}
+                title="Không có tài xế đủ điều kiện"
+                subtitle="BE chưa trả tài xế active có role driver."
+              />
+            ) : drivers.map((driver) => (
+              <Pressable
+                key={driver.userId}
+                disabled={assigning}
+                style={styles.optionRow}
+                onPress={() => onSelect(driver)}
+              >
+                <View style={styles.optionIcon}>
+                  <Ionicons name="person-outline" size={20} color={Colors.primaryText} />
+                </View>
+                <View style={styles.optionCopy}>
+                  <Text style={styles.optionTitle}>Tài xế {driver.userId.replaceAll('-', '').slice(0, 8).toUpperCase()}</Text>
+                  <Text numeric style={styles.optionMeta}>{driver.userId}</Text>
+                </View>
+                {assigning ? <ActivityIndicator size="small" color={Colors.primary} /> : <Ionicons name="chevron-forward" size={20} color={Colors.outline} />}
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
       </View>
     </Modal>

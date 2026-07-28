@@ -51,10 +51,28 @@ function formatWeight(value: number): string {
   return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(value)} kg`;
 }
 
+function formatSyncTime(value: Date | null): string {
+  if (!value) return 'Chưa đồng bộ';
+  return `Đồng bộ lúc ${new Intl.DateTimeFormat('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(value)}`;
+}
+
 export function InboundQueueScreen() {
   const navigation = useNavigation<Navigation>();
   const [filter, setFilter] = useState<TaskFilter>('pending');
-  const { assignedHubs, inboundTasks, warnings, loading, refreshing, error, refresh } = useHubWork();
+  const {
+    assignedHubs,
+    inboundTasks,
+    warnings,
+    lastSyncedAt,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useHubWork();
   const pendingTasks = useMemo(
     () => inboundTasks.filter((task) => !isInboundReceived(task.status)),
     [inboundTasks],
@@ -79,6 +97,7 @@ export function InboundQueueScreen() {
           <Text style={styles.subtitle}>
             {visibleTasks.length} lô · {formatWeight(visibleWeight)} {filter === 'pending' ? 'đang chờ nhận' : 'đã đến Hub'}
           </Text>
+          <Text numeric style={styles.syncTime}>{formatSyncTime(lastSyncedAt)}</Text>
         </View>
 
         <View style={styles.filterRow}>
@@ -244,6 +263,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: 'rgba(255,255,255,0.72)', fontSize: 10, fontWeight: '800' },
   title: { color: Colors.white, fontSize: 20, fontWeight: '800', marginTop: 5 },
   subtitle: { color: 'rgba(255,255,255,0.72)', fontSize: 11, marginTop: 4 },
+  syncTime: { color: 'rgba(255,255,255,0.58)', fontSize: 8, fontFamily: Fonts.monoRegular, marginTop: 5 },
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',

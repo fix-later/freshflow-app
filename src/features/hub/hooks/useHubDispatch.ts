@@ -47,7 +47,7 @@ function readErrorMessage(error: unknown): string {
   return 'Không thể tải kế hoạch phân xe trong 7 ngày. Vui lòng thử lại.';
 }
 
-export function useHubDispatch(assignedHubs: AssignedHubDto[]): HubDispatchState {
+export function useHubDispatch(assignedHubs: AssignedHubDto[], allDates = false): HubDispatchState {
   const [plan, setPlan] = useState<HubDispatchPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -63,14 +63,16 @@ export function useHubDispatch(assignedHubs: AssignedHubDto[]): HubDispatchState
     setError(null);
 
     try {
-      setPlan(await hubDispatchApi.getPlan(getDispatchServiceDates(), assignedMarketIds));
+      setPlan(allDates
+        ? await hubDispatchApi.getSortingPlan(assignedMarketIds)
+        : await hubDispatchApi.getPlan(getDispatchServiceDates(), assignedMarketIds));
     } catch (loadError) {
       setError(readErrorMessage(loadError));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [marketKey]);
+  }, [marketKey, allDates]);
 
   useFocusEffect(
     useCallback(() => {

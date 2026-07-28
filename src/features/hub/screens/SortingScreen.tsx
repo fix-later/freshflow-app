@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -8,7 +8,13 @@ import { EmptyState, ErrorView, Loading, Text } from '../../../components/ui';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import type { HubStackParamList } from '../../../navigation/types';
-import type { LoadingOrderDto, LoadingStopDto } from '../api/hubDispatchApi';
+import {
+  hubDispatchApi,
+  type HubDispatchRouteDto,
+  type HubSortingProgressDto,
+  type LoadingOrderDto,
+  type LoadingStopDto,
+} from '../api/hubDispatchApi';
 import { useHubDispatch } from '../hooks/useHubDispatch';
 import { useHubWork } from '../hooks/useHubWork';
 
@@ -18,49 +24,107 @@ function shortCode(prefix: string, value: string): string {
   return `${prefix}-${value.replaceAll('-', '').slice(0, 8).toUpperCase()}`;
 }
 
-function getOrders(stop: LoadingStopDto): LoadingOrderDto[] {
-  if (stop.orders && stop.orders.length > 0) return stop.orders;
-  if (stop.lines.length === 0) return [];
-  return [{ orderId: `legacy-${stop.restaurantId}`, lines: stop.lines }];
+function formatQuantity(value: number): string {
+  return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value);
 }
 
-function lineId(routeId: string, restaurantId: string, orderId: string, index: number): string {
-  return `${routeId}:${restaurantId}:${orderId}:${index}`;
+function getOrders(stop: LoadingStopDto): LoadingOrderDto[] {
+  const grouped = new Map<string, LoadingOrderDto>();
+  stop.lines.forEach((line) => {
+    const order = grouped.get(line.orderId) ?? { orderId: line.orderId, lines: [] };
+    order.lines.push(line);
+    grouped.set(line.orderId, order);
+  });
+  return [...grouped.values()];
+}
+
+function resolveHubId(route: HubDispatchRouteDto, hubs: { hubId: string; marketId: string | null }[]): string | null {
+  const marketIds = new Set(
+    route.stops.filter((stop) => stop.entityType === 'market').map((stop) => stop.entityId),
+  );
+  return hubs.find((hub) => hub.marketId && marketIds.has(hub.marketId))?.hubId ?? null;
 }
 
 export function SortingScreen() {
   const navigation = useNavigation<Navigation>();
   const hubWork = useHubWork();
-  const dispatch = useHubDispatch(hubWork.assignedHubs);
-  const [checkedItems, setCheckedItems] = useState(new Set<string>());
+  const dispatch = useHubDispatch(hubWork.assignedHubs, true);
+  const [sortingByItemId, setSortingByItemId] = useState<Record<string, HubSortingProgressDto>>({});
+  const [savingItems, setSavingItems] = useState(new Set<string>());
+  const [progressError, setProgressError] = useState<string | null>(null);
   const [expandedRestaurant, setExpandedRestaurant] = useState<string | null>(null);
 
-  const routes = dispatch.plan?.routes.filter((item) => item.manifest.stops.length > 0) ?? [];
-  const allLineIds = useMemo(() => routes.flatMap(({ route, manifest }) => (
+  const candidateRoutes = dispatch.plan?.routes ?? [];
+  const routes = candidateRoutes.filter((item) => item.manifest.stops.length > 0);
+  const allLineIds = useMemo(() => [...new Set(routes.flatMap(({ manifest }) => (
     manifest.stops.flatMap((stop) => getOrders(stop).flatMap((order) => (
-      order.lines.map((_, index) => lineId(route.id, stop.restaurantId, order.orderId, index))
+      order.lines.map((line) => line.orderItemId)
     )))
-  )), [routes]);
+  )))], [routes]);
   const validLineIds = new Set(allLineIds);
-  const checkedCount = [...checkedItems].filter((id) => validLineIds.has(id)).length;
+  const checkedCount = Object.values(sortingByItemId).filter((item) => (
+    validLineIds.has(item.orderItemId) && item.status.toUpperCase() === 'SORTED'
+  )).length;
   const restaurantCount = routes.reduce((sum, item) => sum + item.manifest.stops.length, 0);
   const orderCount = routes.reduce((sum, item) => (
     sum + item.manifest.stops.reduce((stopSum, stop) => stopSum + getOrders(stop).length, 0)
   ), 0);
   const progress = allLineIds.length === 0 ? 0 : Math.round((checkedCount / allLineIds.length) * 100);
+  const sortingComplete = allLineIds.length > 0 && checkedCount === allLineIds.length;
 
   const refresh = async () => {
     await hubWork.refresh();
     await dispatch.refresh();
   };
 
-  const toggleItem = (id: string) => {
-    setCheckedItems((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  useEffect(() => {
+    let active = true;
+    const loadProgress = async () => {
+      if (routes.length === 0) {
+        if (active) setSortingByItemId({});
+        return;
+      }
+      const results = await Promise.allSettled(routes.map(async ({ route }) => {
+        const hubId = resolveHubId(route, hubWork.assignedHubs);
+        if (!hubId) throw new Error(`Không xác định được Hub của ${shortCode('TUYẾN', route.id)}.`);
+        return hubDispatchApi.getSortingProgress(hubId, route.id);
+      }));
+      if (!active) return;
+      const next: Record<string, HubSortingProgressDto> = {};
+      results.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          result.value.forEach((item) => { next[item.orderItemId] = item; });
+        }
+      });
+      setSortingByItemId(next);
+      const failed = results.filter((result) => result.status === 'rejected').length;
+      setProgressError(failed > 0 ? `Không tải được tiến độ của ${failed}/${results.length} tuyến.` : null);
+    };
+    void loadProgress();
+    return () => { active = false; };
+  }, [dispatch.plan, hubWork.assignedHubs]);
+
+  const markSorted = async (route: HubDispatchRouteDto, orderItemId: string, quantity: number) => {
+    if (sortingByItemId[orderItemId]?.status.toUpperCase() === 'SORTED' || savingItems.has(orderItemId)) return;
+    const hubId = resolveHubId(route, hubWork.assignedHubs);
+    if (!hubId) {
+      Alert.alert('Không xác định được Hub', 'Tuyến không có điểm Market khớp với Hub được gán cho tài khoản này.');
+      return;
+    }
+    setSavingItems((current) => new Set(current).add(orderItemId));
+    try {
+      const saved = await hubDispatchApi.markLineSorted(hubId, route.id, orderItemId, quantity);
+      setSortingByItemId((current) => ({ ...current, [orderItemId]: saved }));
+    } catch (error) {
+      const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      Alert.alert('Không thể lưu phân loại', message ?? 'Vui lòng kiểm tra lại dòng hàng và thử lại.');
+    } finally {
+      setSavingItems((current) => {
+        const next = new Set(current);
+        next.delete(orderItemId);
+        return next;
+      });
+    }
   };
 
   if ((hubWork.loading || dispatch.loading) && !dispatch.plan) {
@@ -89,12 +153,18 @@ export function SortingScreen() {
         </View>
 
         {dispatch.error ? <ErrorView message={dispatch.error} onRetry={refresh} /> : null}
+        {dispatch.plan?.warnings?.map((warning) => (
+          <ErrorView key={warning} message={warning} onRetry={refresh} />
+        ))}
+        {progressError ? <ErrorView message={progressError} onRetry={refresh} /> : null}
 
         {!dispatch.error && routes.length === 0 ? (
           <EmptyState
             icon={<Ionicons name="layers-outline" size={56} color={Colors.textMuted} />}
-            title="Chưa có đơn tại Hub để phân loại"
-            subtitle="Đơn ở trạng thái AtHub và thuộc tuyến của Hub sẽ tự động xuất hiện tại đây."
+            title={candidateRoutes.length === 0 ? 'Chưa có tuyến giao cho Hub' : 'Có tuyến nhưng chưa có đơn AtHub'}
+            subtitle={candidateRoutes.length === 0
+              ? 'App đã kiểm tra toàn bộ ngày nhưng không tìm thấy route có điểm Market khớp với Hub được gán.'
+              : `Đã tìm thấy ${candidateRoutes.length} tuyến, nhưng loading-manifest không có đơn trạng thái AtHub cho các nhà hàng trên tuyến.`}
             actionLabel="Tải lại"
             onAction={refresh}
           />
@@ -106,11 +176,13 @@ export function SortingScreen() {
           >
             <View style={styles.instructionStrip}>
               <Ionicons name="scan-outline" size={18} color={Colors.primaryText} />
-              <Text style={styles.instructionText}>Mở từng nhà hàng, đối chiếu từng đơn rồi đánh dấu từng mặt hàng đã đặt đúng khu vực.</Text>
+              <Text style={styles.instructionText}>Danh sách xếp theo thứ tự giao. Mở từng nhà hàng, đối chiếu từng đơn rồi đánh dấu mặt hàng đã đặt đúng khu vực.</Text>
             </View>
 
-            {routes.map(({ route, manifest }) => (
-              <View key={route.id} style={styles.routeSection}>
+            {routes.map(({ route, manifest }) => {
+              const deliveryStops = [...manifest.stops].sort((left, right) => left.stopOrder - right.stopOrder);
+              return (
+                <View key={route.id} style={styles.routeSection}>
                 <View style={styles.routeHeader}>
                   <View>
                     <Text numeric style={styles.routeCode}>{shortCode('TUYẾN', route.id)}</Text>
@@ -119,21 +191,21 @@ export function SortingScreen() {
                   <View style={styles.routeStatus}><Text style={styles.routeStatusText}>{route.status}</Text></View>
                 </View>
 
-                {manifest.stops.map((stop) => {
+                {deliveryStops.map((stop) => {
                   const restaurantKey = `${route.id}:${stop.restaurantId}`;
                   const expanded = expandedRestaurant === restaurantKey;
                   const orders = getOrders(stop);
-                  const stopLineIds = orders.flatMap((order) => order.lines.map((_, index) => (
-                    lineId(route.id, stop.restaurantId, order.orderId, index)
-                  )));
-                  const stopChecked = stopLineIds.filter((id) => checkedItems.has(id)).length;
+                  const stopLineIds = orders.flatMap((order) => (
+                    order.lines.map((line) => line.orderItemId)
+                  ));
+                  const stopChecked = stopLineIds.filter((id) => sortingByItemId[id]?.status.toUpperCase() === 'SORTED').length;
                   const complete = stopLineIds.length > 0 && stopChecked === stopLineIds.length;
 
                   return (
                     <View key={restaurantKey} style={[styles.groupCard, complete && styles.groupCardComplete]}>
                       <Pressable style={styles.groupHeader} onPress={() => setExpandedRestaurant(expanded ? null : restaurantKey)}>
                         <View style={[styles.slotBadge, complete && styles.slotBadgeComplete]}>
-                          <Text numeric style={[styles.slotText, complete && styles.slotTextComplete]}>Đ{stop.stopOrder}</Text>
+                          <Text numeric style={[styles.slotText, complete && styles.slotTextComplete]}>#{stop.stopOrder}</Text>
                         </View>
                         <View style={styles.groupCopy}>
                           <Text style={styles.restaurantName}>{stop.restaurantName}</Text>
@@ -148,28 +220,28 @@ export function SortingScreen() {
                       {expanded ? (
                         <View style={styles.ordersList}>
                           {orders.map((order, orderIndex) => {
-                            const legacy = order.orderId.startsWith('legacy-');
                             return (
                               <View key={order.orderId} style={styles.orderCard}>
                                 <View style={styles.orderHeader}>
                                   <Text numeric style={styles.orderCode}>
-                                    {legacy ? 'TỔNG HỢP NHÀ HÀNG' : shortCode('ĐH', order.orderId)}
+                                    {shortCode('ĐH', order.orderId)}
                                   </Text>
                                   <Text numeric style={styles.orderIndex}>Đơn {orderIndex + 1}/{orders.length}</Text>
                                 </View>
-                                {legacy ? <Text style={styles.legacyHint}>BE hiện chưa trả orderId; đang hiển thị tổng hợp.</Text> : null}
-                                {order.lines.map((line, index) => {
-                                  const id = lineId(route.id, stop.restaurantId, order.orderId, index);
-                                  const checked = checkedItems.has(id);
+                                {order.lines.map((line) => {
+                                  const id = line.orderItemId;
+                                  const checked = sortingByItemId[id]?.status.toUpperCase() === 'SORTED';
+                                  const saving = savingItems.has(id);
                                   return (
-                                    <Pressable key={id} style={styles.itemRow} onPress={() => toggleItem(id)}>
+                                    <Pressable key={id} disabled={checked || saving} style={styles.itemRow} onPress={() => void markSorted(route, id, line.quantity)}>
                                       <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-                                        {checked ? <Ionicons name="checkmark" size={15} color={Colors.onPrimary} /> : null}
+                                        {saving ? <ActivityIndicator size="small" color={Colors.primaryText} /> : checked ? <Ionicons name="checkmark" size={15} color={Colors.onPrimary} /> : null}
                                       </View>
                                       <View style={styles.itemCopy}>
                                         <Text style={[styles.itemName, checked && styles.itemNameChecked]}>{line.productName}</Text>
                                         <Text numeric style={styles.itemQuantity}>
-                                          {line.quantity} đơn vị{line.capacityKg !== null ? ` · ${line.capacityKg} kg/đv` : ''}
+                                          {formatQuantity(line.quantity)} {line.unit?.trim() || 'đơn vị'}
+                                          {line.capacityKg !== null ? ` · quy cách ${formatQuantity(line.capacityKg)} kg/kiện` : ''}
                                         </Text>
                                       </View>
                                     </Pressable>
@@ -183,15 +255,22 @@ export function SortingScreen() {
                     </View>
                   );
                 })}
-              </View>
-            ))}
+                </View>
+              );
+            })}
 
-            <Pressable style={styles.dispatchButton} onPress={() => navigation.navigate('MarketDispatch')}>
+            <Pressable
+              disabled={!sortingComplete}
+              style={[styles.dispatchButton, !sortingComplete && styles.dispatchButtonDisabled]}
+              onPress={() => navigation.navigate('MarketDispatch')}
+            >
               <Ionicons name="car-outline" size={19} color={Colors.onPrimary} />
-              <Text style={styles.dispatchButtonText}>Mở kế hoạch phân xe</Text>
+              <Text style={styles.dispatchButtonText}>
+                {sortingComplete ? 'Mở kế hoạch phân xe' : `Còn ${allLineIds.length - checkedCount} mặt hàng chưa phân loại`}
+              </Text>
               <Ionicons name="arrow-forward" size={17} color={Colors.onPrimary} />
             </Pressable>
-            <Text style={styles.disabledHint}>Tiến độ đánh dấu hiện chỉ lưu trong phiên làm việc cho tới khi BE có API lưu phân loại.</Text>
+            <Text style={styles.disabledHint}>Tiến độ phân loại được lưu trên hệ thống theo từng orderItemId và được khôi phục khi mở lại màn hình.</Text>
           </ScrollView>
         )}
       </View>
@@ -256,6 +335,7 @@ const styles = StyleSheet.create({
   itemNameChecked: { color: Colors.textMuted, textDecorationLine: 'line-through' },
   itemQuantity: { fontSize: 9, fontFamily: Fonts.monoMedium, color: Colors.textMuted, marginTop: 2 },
   dispatchButton: { height: 48, borderRadius: 12, backgroundColor: Colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 4 },
+  dispatchButtonDisabled: { opacity: 0.45 },
   dispatchButtonText: { color: Colors.onPrimary, fontSize: 11, fontWeight: '800' },
   disabledHint: { textAlign: 'center', fontSize: 9, lineHeight: 14, color: Colors.textMuted, marginTop: -3 },
 });

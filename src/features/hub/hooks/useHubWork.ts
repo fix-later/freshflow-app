@@ -6,6 +6,7 @@ type HubWorkState = {
   assignedHubs: AssignedHubDto[];
   inboundTasks: HubInboundTask[];
   warnings: string[];
+  lastSyncedAt: Date | null;
   loading: boolean;
   refreshing: boolean;
   error: string | null;
@@ -26,6 +27,7 @@ export function useHubWork(): HubWorkState {
   const [assignedHubs, setAssignedHubs] = useState<AssignedHubDto[]>([]);
   const [inboundTasks, setInboundTasks] = useState<HubInboundTask[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +42,7 @@ export function useHubWork(): HubWorkState {
       setAssignedHubs(work.assignedHubs);
       setInboundTasks(work.inboundTasks);
       setWarnings(work.warnings);
+      setLastSyncedAt(new Date());
     } catch (loadError) {
       setError(readErrorMessage(loadError));
     } finally {
@@ -51,11 +54,19 @@ export function useHubWork(): HubWorkState {
   useFocusEffect(
     useCallback(() => {
       void load();
+      // The MA handover is propagated asynchronously. Retry quickly while the
+      // Hub screen is fresh, then fall back to the normal background interval.
+      const firstRetryId = setTimeout(() => void load(), 3_000);
+      const secondRetryId = setTimeout(() => void load(), 10_000);
       const intervalId = setInterval(() => {
         void load();
       }, AUTO_REFRESH_INTERVAL_MS);
 
-      return () => clearInterval(intervalId);
+      return () => {
+        clearTimeout(firstRetryId);
+        clearTimeout(secondRetryId);
+        clearInterval(intervalId);
+      };
     }, [load]),
   );
 
@@ -65,6 +76,7 @@ export function useHubWork(): HubWorkState {
     assignedHubs,
     inboundTasks,
     warnings,
+    lastSyncedAt,
     loading,
     refreshing,
     error,

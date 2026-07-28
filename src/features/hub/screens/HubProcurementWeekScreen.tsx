@@ -5,7 +5,7 @@ import { EmptyState, ErrorView, Loading, Text } from '../../../components/ui';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import type {
-  HubProcurementBatchDto,
+  HubProcurementItemDto,
   HubProcurementStatus,
 } from '../api/hubApi';
 import { useHubProcurementWeek } from '../hooks/useHubProcurementWeek';
@@ -32,26 +32,18 @@ function shortCode(value: string): string {
   return `LO-${value.replaceAll('-', '').slice(0, 8).toUpperCase()}`;
 }
 
-function quantity(batch: HubProcurementBatchDto): number {
-  return batch.items.reduce((sum, item) => sum + item.targetQuantity, 0);
-}
-
-function actualQuantity(batch: HubProcurementBatchDto): number {
-  return batch.items.reduce((sum, item) => sum + (item.actualQuantity ?? 0), 0);
-}
-
 function formatQuantity(value: number | null): string {
   if (value === null) return 'Chưa cập nhật';
   return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value);
 }
 
-function formatMoney(value: number | null): string {
-  if (value === null) return 'Chưa cập nhật';
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(value);
+function itemQuantity(item: HubProcurementItemDto): number {
+  return item.actualQuantity ?? item.targetQuantity;
+}
+
+function formatItemQuantity(item: HubProcurementItemDto): string {
+  const unit = item.unit?.trim() || 'đơn vị';
+  return `${formatQuantity(itemQuantity(item))} ${unit}`;
 }
 
 function formatDateTime(value: string | null): string {
@@ -154,13 +146,13 @@ export function HubProcurementWeekScreen() {
 
                       <View style={styles.batchFacts}>
                         <View style={styles.fact}>
-                          <Text style={styles.factLabel}>Kế hoạch</Text>
-                          <Text numeric style={styles.factValue}>{formatQuantity(quantity(batch))}</Text>
+                          <Text style={styles.factLabel}>Đơn hàng</Text>
+                          <Text numeric style={styles.factValue}>{batch.orderIds.length}</Text>
                         </View>
                         <View style={styles.factDivider} />
                         <View style={styles.fact}>
-                          <Text style={styles.factLabel}>Đã thu mua</Text>
-                          <Text numeric style={styles.factValue}>{formatQuantity(actualQuantity(batch))}</Text>
+                          <Text style={styles.factLabel}>Mặt hàng</Text>
+                          <Text numeric style={styles.factValue}>{batch.items.length}</Text>
                         </View>
                         <View style={styles.factDivider} />
                         <View style={styles.fact}>
@@ -180,33 +172,58 @@ export function HubProcurementWeekScreen() {
                           >
                             <View style={styles.itemHeader}>
                               <Text style={styles.itemName}>{item.productName || 'Mặt hàng chưa đặt tên'}</Text>
-                              <Text numeric style={styles.itemCode}>{shortCode(item.marketProductId)}</Text>
+                              <View style={styles.quantityBadge}>
+                                <Text numeric style={styles.quantityText}>{formatItemQuantity(item)}</Text>
+                              </View>
                             </View>
-                            <View style={styles.itemMetrics}>
-                              <Text numeric style={styles.itemMetric}>Dự kiến: {formatQuantity(item.targetQuantity)}</Text>
-                              <Text numeric style={styles.itemMetric}>Thực mua: {formatQuantity(item.actualQuantity)}</Text>
-                            </View>
-                            <Text numeric style={styles.itemSecondary}>
-                              Đơn giá: {formatMoney(item.actualUnitPrice)}
-                            </Text>
-                            <Text numeric style={styles.itemSecondary}>
-                              Mua lúc: {formatDateTime(item.purchasedAt)}
-                            </Text>
+                            <Text numeric style={styles.itemCode}>{shortCode(item.marketProductId)}</Text>
                           </View>
                         ))}
                       </View>
 
                       <View style={styles.detailSection}>
                         <Text style={styles.detailTitle}>Đơn hàng trong lô</Text>
-                        <View style={styles.orderList}>
-                          {batch.orderIds.length === 0 ? (
-                            <Text style={styles.emptyDetail}>Chưa có đơn hàng liên kết</Text>
-                          ) : batch.orderIds.map((orderId) => (
-                            <View key={orderId} style={styles.orderChip}>
-                              <Text numeric style={styles.orderCode}>{shortCode(orderId).replace('LO-', 'DH-')}</Text>
+                        {batch.orders && batch.orders.length > 0 ? batch.orders.map((order) => (
+                          <View key={order.orderId} style={styles.orderCard}>
+                            <View style={styles.orderHeader}>
+                              <View style={styles.orderCopy}>
+                                <Text style={styles.restaurantName}>{order.restaurantName}</Text>
+                                <Text numeric style={styles.orderCode}>{shortCode(order.orderId).replace('LO-', 'DH-')}</Text>
+                              </View>
+                              {order.deliveryOrder !== null ? (
+                                <View style={styles.deliveryBadge}>
+                                  <Text numeric style={styles.deliveryText}>Giao #{order.deliveryOrder}</Text>
+                                </View>
+                              ) : null}
                             </View>
-                          ))}
-                        </View>
+                            {order.items.map((item) => (
+                              <View key={item.orderItemId} style={styles.orderItemRow}>
+                                <Text style={styles.orderItemName}>{item.productName}</Text>
+                                <Text numeric style={styles.orderItemQuantity}>
+                                  {formatQuantity(item.quantity)} {item.unit?.trim() || 'đơn vị'}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        )) : batch.orderIds.length === 0 ? (
+                          <Text style={styles.emptyDetail}>Chưa có đơn hàng liên kết</Text>
+                        ) : (
+                          <>
+                            <View style={styles.orderList}>
+                              {batch.orderIds.map((orderId) => (
+                                <View key={orderId} style={styles.orderChip}>
+                                  <Text numeric style={styles.orderCode}>{shortCode(orderId).replace('LO-', 'DH-')}</Text>
+                                </View>
+                              ))}
+                            </View>
+                            <View style={styles.apiNotice}>
+                              <Ionicons name="information-circle-outline" size={17} color={Colors.warning} />
+                              <Text style={styles.apiNoticeText}>
+                                API hiện chỉ trả mã đơn; chưa có nhà hàng và mặt hàng của từng đơn trong lô.
+                              </Text>
+                            </View>
+                          </>
+                        )}
                       </View>
                     </View>
                   );
@@ -288,10 +305,9 @@ const styles = StyleSheet.create({
   itemRowBorder: { borderTopWidth: 1, borderTopColor: Colors.border },
   itemHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   itemName: { flex: 1, fontSize: 11, fontWeight: '700', color: Colors.textPrimary },
-  itemCode: { fontSize: 7, fontFamily: Fonts.monoMedium, color: Colors.textMuted },
-  itemMetrics: { flexDirection: 'row', gap: 14, marginTop: 5 },
-  itemMetric: { fontSize: 9, fontFamily: Fonts.monoMedium, color: Colors.primaryText },
-  itemSecondary: { fontSize: 8, fontFamily: Fonts.monoRegular, color: Colors.textSecondary, marginTop: 3 },
+  itemCode: { fontSize: 7, fontFamily: Fonts.monoMedium, color: Colors.textMuted, marginTop: 4 },
+  quantityBadge: { borderRadius: 8, backgroundColor: Colors.primaryLight, paddingHorizontal: 8, paddingVertical: 5 },
+  quantityText: { fontSize: 9, fontFamily: Fonts.monoBold, color: Colors.primaryText },
   orderList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   orderChip: {
     borderRadius: 8,
@@ -302,4 +318,15 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   orderCode: { fontSize: 8, fontFamily: Fonts.monoMedium, color: Colors.textSecondary },
+  apiNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 9, padding: 9, borderRadius: 9, backgroundColor: Colors.warningLight },
+  apiNoticeText: { flex: 1, fontSize: 8, lineHeight: 12, color: Colors.textSecondary },
+  orderCard: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: 10, marginBottom: 7, backgroundColor: Colors.surfaceContainerLow },
+  orderHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 7 },
+  orderCopy: { flex: 1, minWidth: 0 },
+  restaurantName: { fontSize: 10, fontWeight: '800', color: Colors.textPrimary },
+  deliveryBadge: { borderRadius: 7, backgroundColor: Colors.primaryLight, paddingHorizontal: 7, paddingVertical: 4 },
+  deliveryText: { fontSize: 8, fontFamily: Fonts.monoBold, color: Colors.primaryText },
+  orderItemRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTopWidth: 1, borderTopColor: Colors.border },
+  orderItemName: { flex: 1, fontSize: 9, color: Colors.textPrimary },
+  orderItemQuantity: { fontSize: 8, fontFamily: Fonts.monoMedium, color: Colors.primaryText },
 });

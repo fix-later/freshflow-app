@@ -179,7 +179,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
               setTask(updated);
               Alert.alert(
                 'Đã bàn giao',
-                'Task nhận hàng đã được gửi tới các Hub Staff được phân công tại Hub đích.',
+                'Backend đã tiếp nhận bàn giao. Task Hub sẽ tự đồng bộ ngay khi integration event hoàn tất; Hub Staff có thể mở màn Lô hàng hoặc kéo để tải lại.',
               );
             } catch (handoverError) {
               Alert.alert('Không thể bàn giao', readError(handoverError));
