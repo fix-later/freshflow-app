@@ -62,8 +62,26 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function AssignedInboundTaskScreen({ task, navigation }: Props) {
+  const initiallyReceived = isInboundReceived(task.status);
   const [submitting, setSubmitting] = useState(false);
-  const [received, setReceived] = useState(isInboundReceived(task.status));
+  const [received, setReceived] = useState(initiallyReceived);
+  const [checkedItemIds, setCheckedItemIds] = useState(() => new Set(
+    initiallyReceived ? task.items.map((item) => item.marketProductId) : [],
+  ));
+  const checkedWeight = task.items.reduce((sum, item) => (
+    checkedItemIds.has(item.marketProductId) ? sum + item.quantityKg : sum
+  ), 0);
+  const allItemsChecked = task.items.length > 0 && checkedItemIds.size === task.items.length;
+
+  const toggleItem = (marketProductId: string) => {
+    if (received) return;
+    setCheckedItemIds((current) => {
+      const next = new Set(current);
+      if (next.has(marketProductId)) next.delete(marketProductId);
+      else next.add(marketProductId);
+      return next;
+    });
+  };
 
   const confirmInbound = async () => {
     setSubmitting(true);
@@ -71,8 +89,8 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
       await hubApi.confirmInbound(task.inboundId);
       setReceived(true);
       Alert.alert(
-        'Đã xác nhận nhận hàng',
-        'Lô hàng đã được ghi nhận tại Hub. Đơn chỉ xuất hiện ở màn phân loại khi order đã ở trạng thái AtHub và có route chứa đúng nhà hàng.',
+        'Đã kiểm đủ và nhận lô',
+        'Lô hàng đã được ghi nhận tại Hub. Các đơn thuộc lô này hiện có thể xuất hiện ở màn phân hàng theo nhà hàng.',
         [
           { text: 'Danh sách lô', onPress: () => navigation.goBack() },
           { text: 'Phân loại đơn', onPress: () => navigation.navigate('HubTabs', { screen: 'Sorting' }) },
@@ -86,9 +104,10 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
   };
 
   const requestConfirmation = () => {
+    if (!allItemsChecked) return;
     Alert.alert(
-      'Xác nhận nhận lô hàng?',
-      `${shortCode(task.inboundId)} gồm ${task.items.length} mặt hàng, tổng ${formatWeight(task.totalQuantityKg)}.`,
+      'Xác nhận đã kiểm đủ lô hàng?',
+      `Bạn đã đối chiếu đủ ${task.items.length} mặt hàng, tổng ${formatWeight(task.totalQuantityKg)} theo lô được đặt.`,
       [
         { text: 'Hủy', style: 'cancel' },
         { text: 'Xác nhận', onPress: () => void confirmInbound() },
@@ -143,28 +162,62 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
           </View>
 
           <View style={styles.assignmentNotice}>
-            <Ionicons name="shield-checkmark-outline" size={20} color={Colors.primaryText} />
+            <Ionicons name="clipboard-outline" size={20} color={Colors.primaryText} />
             <View style={styles.assignmentNoticeCopy}>
-              <Text style={styles.assignmentNoticeTitle}>Task thuộc phạm vi được phân công</Text>
+              <Text style={styles.assignmentNoticeTitle}>Cách kiểm đếm lô hàng</Text>
               <Text style={styles.assignmentNoticeText}>
-                API đã xác thực tài khoản của bạn được gán vào {task.hub.name} trước khi cho phép nhận lô.
+                Đếm hàng thực tế, đối chiếu với số lượng cần nhận bên dưới rồi đánh dấu từng mặt hàng. Chỉ xác nhận lô khi tất cả đều khớp.
               </Text>
             </View>
+          </View>
+
+          <View style={styles.countProgressCard}>
+            <View style={styles.countProgressTop}>
+              <View>
+                <Text style={styles.countProgressLabel}>TIẾN ĐỘ ĐỐI CHIẾU</Text>
+                <Text style={styles.countProgressTitle}>
+                  {allItemsChecked ? 'Số lượng đã khớp với lô đặt' : 'Đang kiểm số lượng thực nhận'}
+                </Text>
+              </View>
+              <Text numeric style={styles.countProgressValue}>{checkedItemIds.size}/{task.items.length}</Text>
+            </View>
+            <View style={styles.countProgressTrack}>
+              <View
+                style={[
+                  styles.countProgressFill,
+                  { width: `${task.items.length === 0 ? 0 : (checkedItemIds.size / task.items.length) * 100}%` },
+                ]}
+              />
+            </View>
+            <Text numeric style={styles.checkedWeight}>
+              Đã đối chiếu {formatWeight(checkedWeight)} / {formatWeight(task.totalQuantityKg)}
+            </Text>
           </View>
 
           <View style={styles.headingRow}>
             <View>
               <Text style={styles.sectionTitle}>Danh sách mặt hàng dự kiến</Text>
-              <Text style={styles.sectionSubtitle}>Đối chiếu hàng thực tế trước khi xác nhận</Text>
+              <Text style={styles.sectionSubtitle}>Chạm vào từng dòng khi số lượng thực tế đúng</Text>
             </View>
             <Text numeric style={styles.itemCount}>{task.items.length} mặt hàng</Text>
           </View>
 
           <View style={styles.productList}>
-            {task.items.map((item, index) => (
-              <View key={item.marketProductId} style={styles.productCard}>
-                <View style={styles.productIndex}>
-                  <Text numeric style={styles.productIndexText}>{index + 1}</Text>
+            {task.items.map((item, index) => {
+              const checked = checkedItemIds.has(item.marketProductId);
+              return (
+              <Pressable
+                key={item.marketProductId}
+                disabled={received}
+                style={[styles.productCard, checked && styles.productCardChecked]}
+                onPress={() => toggleItem(item.marketProductId)}
+              >
+                <View style={[styles.productIndex, checked && styles.productIndexChecked]}>
+                  {checked ? (
+                    <Ionicons name="checkmark" size={19} color={Colors.onPrimary} />
+                  ) : (
+                    <Text numeric style={styles.productIndexText}>{index + 1}</Text>
+                  )}
                 </View>
                 <View style={styles.productCopy}>
                   <Text style={styles.productName}>
@@ -173,26 +226,31 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                   <Text numeric numberOfLines={1} style={styles.marketProductCode}>
                     Mã nguồn: {item.marketProductId}
                   </Text>
+                  <Text style={[styles.checkStatus, checked && styles.checkStatusDone]}>
+                    {checked ? 'Đã kiểm đủ thực tế' : 'Chưa đối chiếu thực tế'}
+                  </Text>
                 </View>
                 <View style={styles.quantityBadge}>
+                  <Text style={styles.quantityLabel}>THEO ĐƠN/LÔ</Text>
                   <Text numeric style={styles.quantityValue}>{formatWeight(item.quantityKg)}</Text>
                 </View>
-              </View>
-            ))}
+              </Pressable>
+              );
+            })}
           </View>
 
           <View style={styles.noteCard}>
             <Ionicons name="information-circle-outline" size={20} color={Colors.secondary} />
             <Text style={styles.noteText}>
-              Xác nhận sẽ chuyển lô từ “Chờ nhận” sang “Đã đến Hub” và cập nhật sức chứa/tồn kho trên hệ thống.
+              Nếu có mặt hàng thiếu, thừa hoặc sai, không đánh dấu và không xác nhận nhận lô. BE hiện chưa có API nhập số lượng thực nhận hoặc lưu chênh lệch trước khi nhận.
             </Text>
           </View>
         </ScrollView>
 
         <View style={styles.footer}>
           <View style={styles.footerSummary}>
-            <Text style={styles.footerLabel}>Tổng dự kiến</Text>
-            <Text numeric style={styles.footerValue}>{formatWeight(task.totalQuantityKg)}</Text>
+            <Text style={styles.footerLabel}>{received ? 'Đã nhận đủ' : 'Đã đối chiếu'}</Text>
+            <Text numeric style={styles.footerValue}>{checkedItemIds.size}/{task.items.length} mặt hàng</Text>
           </View>
           {received ? (
             <Pressable
@@ -204,8 +262,8 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
             </Pressable>
           ) : (
             <Pressable
-              style={[styles.confirmButton, submitting && styles.buttonDisabled]}
-              disabled={submitting}
+              style={[styles.confirmButton, (submitting || !allItemsChecked) && styles.buttonDisabled]}
+              disabled={submitting || !allItemsChecked}
               onPress={requestConfirmation}
             >
               {submitting ? (
@@ -214,7 +272,11 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                 <Ionicons name="scan-outline" size={19} color={Colors.onPrimary} />
               )}
               <Text style={styles.confirmButtonText}>
-                {submitting ? 'Đang xác nhận...' : 'Xác nhận nhận hàng'}
+                {submitting
+                  ? 'Đang xác nhận...'
+                  : allItemsChecked
+                    ? 'Xác nhận đã kiểm đủ'
+                    : `Còn ${task.items.length - checkedItemIds.size} mặt hàng chưa kiểm`}
               </Text>
             </Pressable>
           )}
@@ -321,6 +383,21 @@ const styles = StyleSheet.create({
   assignmentNoticeCopy: { flex: 1 },
   assignmentNoticeTitle: { fontSize: 11, fontWeight: '800', color: Colors.primaryText },
   assignmentNoticeText: { fontSize: 9, lineHeight: 14, color: Colors.textSecondary, marginTop: 3 },
+  countProgressCard: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    padding: 13,
+  },
+  countProgressTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  countProgressLabel: { fontSize: 8, fontWeight: '800', color: Colors.textMuted, letterSpacing: 0.5 },
+  countProgressTitle: { fontSize: 11, fontWeight: '800', color: Colors.textPrimary, marginTop: 3 },
+  countProgressValue: { fontSize: 14, fontFamily: Fonts.monoBold, color: Colors.primaryText },
+  countProgressTrack: { height: 6, borderRadius: 999, backgroundColor: Colors.surfaceContainerHigh, overflow: 'hidden', marginTop: 11 },
+  countProgressFill: { height: '100%', borderRadius: 999, backgroundColor: Colors.primary },
+  checkedWeight: { fontSize: 9, fontFamily: Fonts.monoMedium, color: Colors.textSecondary, marginTop: 7 },
   headingRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -346,6 +423,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
+  productCardChecked: { borderColor: Colors.primary600, backgroundColor: Colors.primaryLight },
   productIndex: {
     width: 40,
     height: 40,
@@ -355,10 +433,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   productIndexText: { color: Colors.primaryText, fontSize: 13, fontFamily: Fonts.monoBold },
+  productIndexChecked: { backgroundColor: Colors.primary },
   productCopy: { flex: 1, minWidth: 0, paddingHorizontal: 9 },
   productName: { fontSize: 12, fontWeight: '700', color: Colors.textPrimary },
   marketProductCode: { fontSize: 8, fontFamily: Fonts.monoRegular, color: Colors.textMuted, marginTop: 3 },
-  quantityBadge: { borderRadius: 9, backgroundColor: Colors.surfaceContainerLow, paddingHorizontal: 9, paddingVertical: 7 },
+  checkStatus: { fontSize: 8, color: Colors.warning, marginTop: 4 },
+  checkStatusDone: { color: Colors.primaryText, fontWeight: '700' },
+  quantityBadge: { borderRadius: 9, backgroundColor: Colors.surfaceContainerLow, paddingHorizontal: 9, paddingVertical: 7, alignItems: 'flex-end' },
+  quantityLabel: { fontSize: 7, fontWeight: '800', color: Colors.textMuted, marginBottom: 2 },
   quantityValue: { fontSize: 10, fontFamily: Fonts.monoSemibold, color: Colors.textPrimary },
   noteCard: {
     marginTop: 14,

@@ -93,7 +93,7 @@ export function InboundQueueScreen() {
       <View style={styles.screen}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>TASK ĐƯỢC PHÂN CÔNG · {assignedHubs.length} HUB</Text>
-          <Text style={styles.title}>Lô hàng của tôi</Text>
+          <Text style={styles.title}>Kiểm đếm lô hàng</Text>
           <Text style={styles.subtitle}>
             {visibleTasks.length} lô · {formatWeight(visibleWeight)} {filter === 'pending' ? 'đang chờ nhận' : 'đã đến Hub'}
           </Text>
@@ -212,9 +212,9 @@ function TaskCard({ task, onPress }: { task: HubInboundTask; onPress: () => void
       </View>
 
       <View style={styles.cardFooter}>
-        <Text numeric style={styles.productCount}>{task.items.length} mặt hàng cần kiểm</Text>
+        <Text numeric style={styles.productCount}>{task.items.length} mặt hàng cần đối chiếu</Text>
         <View style={styles.openAction}>
-          <Text style={styles.openActionText}>{received ? 'Xem chi tiết' : 'Nhận lô hàng'}</Text>
+          <Text style={styles.openActionText}>{received ? 'Xem kết quả' : 'Bắt đầu kiểm đếm'}</Text>
           <Ionicons name="arrow-forward" size={15} color={Colors.primaryText} />
         </View>
       </View>

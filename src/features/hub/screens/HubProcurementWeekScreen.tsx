@@ -1,4 +1,5 @@
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, ErrorView, Loading, Text } from '../../../components/ui';
@@ -26,6 +27,17 @@ function formatDate(value: string): string {
     day: '2-digit',
     month: '2-digit',
   }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+function getVietnamDate(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function shortCode(value: string): string {
@@ -60,7 +72,11 @@ function formatDateTime(value: string | null): string {
 export function HubProcurementWeekScreen() {
   const hubWork = useHubWork();
   const week = useHubProcurementWeek(hubWork.assignedHubs);
-  const plansWithWork = week.plans.filter((plan) => plan.batches.length > 0);
+  const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
+  const today = getVietnamDate();
+  const plansWithWork = week.plans.filter((plan) => (
+    plan.date === today && plan.batches.length > 0
+  ));
   const batchCount = plansWithWork.reduce((sum, plan) => sum + plan.batches.length, 0);
   const orderIds = new Set(
     plansWithWork.flatMap((plan) => plan.batches.flatMap((batch) => batch.orderIds)),
@@ -97,7 +113,7 @@ export function HubProcurementWeekScreen() {
             <Ionicons name="calendar-outline" size={24} color={Colors.primaryText} />
           </View>
           <View style={styles.summaryCopy}>
-            <Text style={styles.summaryTitle}>Hôm nay và 6 ngày tiếp theo</Text>
+            <Text style={styles.summaryTitle}>Các lô dự kiến về Hub hôm nay</Text>
             <Text style={styles.summaryMeta} numeric>
               {batchCount} lô thu mua · {orderIds.size} đơn hàng
             </Text>
@@ -116,7 +132,7 @@ export function HubProcurementWeekScreen() {
           <EmptyState
             icon={<Ionicons name="checkmark-done-circle-outline" size={52} color={Colors.primaryText} />}
             title="Chưa có kế hoạch thu mua"
-            subtitle="Không có lô thu mua dự kiến về Hub trong 7 ngày tới."
+            subtitle="Không có lô thu mua dự kiến về Hub trong ngày hôm nay."
           />
         ) : (
           <View style={styles.dayList}>
@@ -132,6 +148,9 @@ export function HubProcurementWeekScreen() {
 
                 {plan.batches.map((batch) => {
                   const status = STATUS[batch.status] ?? STATUS.Built;
+                  const detailedOrderIds = new Set(batch.orders?.map((order) => order.orderId) ?? []);
+                  const missingOrderIds = batch.orderIds.filter((orderId) => !detailedOrderIds.has(orderId));
+                  const expanded = expandedBatchId === batch.batchId;
                   return (
                     <View key={batch.batchId} style={styles.batchCard}>
                       <View style={styles.batchHeader}>
@@ -161,70 +180,90 @@ export function HubProcurementWeekScreen() {
                         </View>
                       </View>
 
-                      <View style={styles.detailSection}>
-                        <Text style={styles.detailTitle}>Chi tiết mặt hàng</Text>
-                        {batch.items.length === 0 ? (
-                          <Text style={styles.emptyDetail}>Chưa có chi tiết mặt hàng</Text>
-                        ) : batch.items.map((item, index) => (
-                          <View
-                            key={item.marketProductId}
-                            style={[styles.itemRow, index > 0 && styles.itemRowBorder]}
-                          >
-                            <View style={styles.itemHeader}>
-                              <Text style={styles.itemName}>{item.productName || 'Mặt hàng chưa đặt tên'}</Text>
-                              <View style={styles.quantityBadge}>
-                                <Text numeric style={styles.quantityText}>{formatItemQuantity(item)}</Text>
-                              </View>
-                            </View>
-                            <Text numeric style={styles.itemCode}>{shortCode(item.marketProductId)}</Text>
-                          </View>
-                        ))}
-                      </View>
+                      <Pressable
+                        style={[styles.detailButton, expanded && styles.detailButtonExpanded]}
+                        onPress={() => setExpandedBatchId(expanded ? null : batch.batchId)}
+                      >
+                        <Ionicons name="receipt-outline" size={17} color={Colors.primaryText} />
+                        <Text style={styles.detailButtonText}>
+                          {expanded ? 'Ẩn chi tiết đơn hàng' : `Xem chi tiết ${batch.orderIds.length} đơn hàng`}
+                        </Text>
+                        <Ionicons
+                          name={expanded ? 'chevron-up' : 'chevron-down'}
+                          size={17}
+                          color={Colors.primaryText}
+                        />
+                      </Pressable>
 
-                      <View style={styles.detailSection}>
-                        <Text style={styles.detailTitle}>Đơn hàng trong lô</Text>
-                        {batch.orders && batch.orders.length > 0 ? batch.orders.map((order) => (
-                          <View key={order.orderId} style={styles.orderCard}>
-                            <View style={styles.orderHeader}>
-                              <View style={styles.orderCopy}>
-                                <Text style={styles.restaurantName}>{order.restaurantName}</Text>
-                                <Text numeric style={styles.orderCode}>{shortCode(order.orderId).replace('LO-', 'DH-')}</Text>
-                              </View>
-                              {order.deliveryOrder !== null ? (
-                                <View style={styles.deliveryBadge}>
-                                  <Text numeric style={styles.deliveryText}>Giao #{order.deliveryOrder}</Text>
+                      {expanded ? (
+                        <View style={styles.expandedContent}>
+                          <View style={styles.detailSection}>
+                            <Text style={styles.detailTitle}>Tổng hợp mặt hàng trong lô</Text>
+                            {batch.items.length === 0 ? (
+                              <Text style={styles.emptyDetail}>Chưa có chi tiết mặt hàng</Text>
+                            ) : batch.items.map((item, index) => (
+                              <View
+                                key={item.marketProductId}
+                                style={[styles.itemRow, index > 0 && styles.itemRowBorder]}
+                              >
+                                <View style={styles.itemHeader}>
+                                  <Text style={styles.itemName}>{item.productName || 'Mặt hàng chưa đặt tên'}</Text>
+                                  <View style={styles.quantityBadge}>
+                                    <Text numeric style={styles.quantityText}>{formatItemQuantity(item)}</Text>
+                                  </View>
                                 </View>
-                              ) : null}
-                            </View>
-                            {order.items.map((item) => (
-                              <View key={item.orderItemId} style={styles.orderItemRow}>
-                                <Text style={styles.orderItemName}>{item.productName}</Text>
-                                <Text numeric style={styles.orderItemQuantity}>
-                                  {formatQuantity(item.quantity)} {item.unit?.trim() || 'đơn vị'}
-                                </Text>
+                                <Text numeric style={styles.itemCode}>{shortCode(item.marketProductId)}</Text>
                               </View>
                             ))}
                           </View>
-                        )) : batch.orderIds.length === 0 ? (
-                          <Text style={styles.emptyDetail}>Chưa có đơn hàng liên kết</Text>
-                        ) : (
-                          <>
-                            <View style={styles.orderList}>
-                              {batch.orderIds.map((orderId) => (
-                                <View key={orderId} style={styles.orderChip}>
-                                  <Text numeric style={styles.orderCode}>{shortCode(orderId).replace('LO-', 'DH-')}</Text>
+
+                          <View style={styles.detailSection}>
+                            <Text style={styles.detailTitle}>Đơn hàng trong lô</Text>
+                            {batch.orders?.map((order) => (
+                              <View key={order.orderId} style={styles.orderCard}>
+                                <View style={styles.orderHeader}>
+                                  <View style={styles.orderCopy}>
+                                    <Text style={styles.restaurantName}>{order.restaurantName}</Text>
+                                    <Text numeric style={styles.orderCode}>{shortCode(order.orderId).replace('LO-', 'DH-')}</Text>
+                                  </View>
+                                  {order.deliveryOrder !== null ? (
+                                    <View style={styles.deliveryBadge}>
+                                      <Text numeric style={styles.deliveryText}>Giao #{order.deliveryOrder}</Text>
+                                    </View>
+                                  ) : null}
                                 </View>
-                              ))}
-                            </View>
-                            <View style={styles.apiNotice}>
-                              <Ionicons name="information-circle-outline" size={17} color={Colors.warning} />
-                              <Text style={styles.apiNoticeText}>
-                                API hiện chỉ trả mã đơn; chưa có nhà hàng và mặt hàng của từng đơn trong lô.
-                              </Text>
-                            </View>
-                          </>
-                        )}
-                      </View>
+                                {order.items.map((item) => (
+                                  <View key={item.orderItemId} style={styles.orderItemRow}>
+                                    <Text style={styles.orderItemName}>{item.productName}</Text>
+                                    <Text numeric style={styles.orderItemQuantity}>
+                                      {formatQuantity(item.quantity)} {item.unit?.trim() || 'đơn vị'}
+                                    </Text>
+                                  </View>
+                                ))}
+                              </View>
+                            ))}
+                            {batch.orderIds.length === 0 ? (
+                              <Text style={styles.emptyDetail}>Chưa có đơn hàng liên kết</Text>
+                            ) : missingOrderIds.length > 0 ? (
+                              <>
+                                <View style={styles.orderList}>
+                                  {missingOrderIds.map((orderId) => (
+                                    <View key={orderId} style={styles.orderChip}>
+                                      <Text numeric style={styles.orderCode}>{shortCode(orderId).replace('LO-', 'DH-')}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                                <View style={styles.apiNotice}>
+                                  <Ionicons name="information-circle-outline" size={17} color={Colors.warning} />
+                                  <Text style={styles.apiNoticeText}>
+                                    Còn {missingOrderIds.length}/{batch.orderIds.length} đơn chưa có chi tiết từ API mới. Có thể đơn chưa ở trạng thái AtHub/Batched hoặc BE chưa trả đủ dữ liệu.
+                                  </Text>
+                                </View>
+                              </>
+                            ) : null}
+                          </View>
+                        </View>
+                      ) : null}
                     </View>
                   );
                 })}
@@ -308,6 +347,21 @@ const styles = StyleSheet.create({
   itemCode: { fontSize: 7, fontFamily: Fonts.monoMedium, color: Colors.textMuted, marginTop: 4 },
   quantityBadge: { borderRadius: 8, backgroundColor: Colors.primaryLight, paddingHorizontal: 8, paddingVertical: 5 },
   quantityText: { fontSize: 9, fontFamily: Fonts.monoBold, color: Colors.primaryText },
+  detailButton: {
+    minHeight: 43,
+    marginTop: 13,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.primary600,
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailButtonExpanded: { backgroundColor: Colors.surfaceContainerLow },
+  detailButtonText: { flex: 1, fontSize: 10, fontWeight: '800', color: Colors.primaryText },
+  expandedContent: { marginTop: 2 },
   orderList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   orderChip: {
     borderRadius: 8,

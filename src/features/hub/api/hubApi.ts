@@ -1,5 +1,9 @@
 import { apiClient, getCursorPaged } from '../../../services/api/client';
-import { getHubProductCatalog } from './hubCatalogApi';
+import {
+  findUnitByProductName,
+  getHubProductCatalog,
+  type HubProductCatalog,
+} from './hubCatalogApi';
 
 export interface AssignedHubDto {
   hubId: string;
@@ -81,7 +85,7 @@ export interface HubProcurementItemDto {
 
 export interface HubProcurementOrderItemDto {
   orderItemId: string;
-  marketProductId: string;
+  marketProductId: string | null;
   productName: string;
   quantity: number;
   unit: string | null;
@@ -116,6 +120,38 @@ export interface HubProcurementDayPlan extends HubProcurementPlanDto {
   hub: AssignedHubDto;
 }
 
+export interface HubOrderLineDto {
+  orderId: string;
+  orderItemId: string;
+  productName: string;
+  quantity: number;
+  capacityKg: number | null;
+  /** Enriched by the App from the market-product catalog. */
+  unit?: string | null;
+}
+
+export interface HubRestaurantOrdersDto {
+  restaurantId: string;
+  restaurantName: string;
+  orderCount: number;
+  lines: HubOrderLineDto[];
+}
+
+export interface HubOrdersByRestaurantDto {
+  hubId: string;
+  serviceDate: string;
+  restaurants: HubRestaurantOrdersDto[];
+}
+
+export interface HubSortingDayPlan extends HubOrdersByRestaurantDto {
+  hub: AssignedHubDto;
+}
+
+export interface HubSortingWeekDto {
+  plans: HubSortingDayPlan[];
+  warnings: string[];
+}
+
 const PENDING_PAGE_SIZE = 200;
 
 async function getAllPendingInbound(hubId: string): Promise<HubInboundDto[]> {
@@ -138,6 +174,64 @@ async function getAllPendingInbound(hubId: string): Promise<HubInboundDto[]> {
   } while (cursor);
 
   return items;
+}
+
+async function getOrdersByRestaurant(
+  hubId: string,
+  serviceDate: string,
+  includeBatched: boolean,
+): Promise<HubOrdersByRestaurantDto> {
+  const { data } = await apiClient.get<HubOrdersByRestaurantDto>(
+    `/api/v1/hubs/${hubId}/orders-by-restaurant`,
+    { params: { service_date: serviceDate, include_batched: includeBatched } },
+  );
+  return data;
+}
+
+function enrichRestaurantOrders(
+  value: HubOrdersByRestaurantDto,
+  catalog: HubProductCatalog,
+): HubOrdersByRestaurantDto {
+  return {
+    ...value,
+    restaurants: value.restaurants.map((restaurant) => ({
+      ...restaurant,
+      lines: restaurant.lines.map((line) => ({
+        ...line,
+        unit: line.unit ?? findUnitByProductName(catalog, line.productName),
+      })),
+    })),
+  };
+}
+
+function mapProcurementOrders(
+  details: HubOrdersByRestaurantDto | undefined,
+): ReadonlyMap<string, HubProcurementOrderDto> {
+  const result = new Map<string, HubProcurementOrderDto>();
+  details?.restaurants.forEach((restaurant) => {
+    const linesByOrder = new Map<string, HubOrderLineDto[]>();
+    restaurant.lines.forEach((line) => {
+      const lines = linesByOrder.get(line.orderId) ?? [];
+      lines.push(line);
+      linesByOrder.set(line.orderId, lines);
+    });
+    linesByOrder.forEach((lines, orderId) => {
+      result.set(orderId, {
+        orderId,
+        restaurantId: restaurant.restaurantId,
+        restaurantName: restaurant.restaurantName,
+        deliveryOrder: null,
+        items: lines.map((line) => ({
+          orderItemId: line.orderItemId,
+          marketProductId: null,
+          productName: line.productName,
+          quantity: line.quantity,
+          unit: line.unit ?? null,
+        })),
+      });
+    });
+  });
+  return result;
 }
 
 export const hubApi = {
@@ -193,6 +287,57 @@ export const hubApi = {
     return data;
   },
 
+  /** Orders staged at one Hub, grouped by restaurant without requiring a route. */
+  getOrdersByRestaurant(
+    hubId: string,
+    serviceDate: string,
+    includeBatched = false,
+  ): Promise<HubOrdersByRestaurantDto> {
+    return getOrdersByRestaurant(hubId, serviceDate, includeBatched);
+  },
+
+  /** Route-free sorting work for every assigned Hub in a date window. */
+  async getSortingWeek(
+    assignedHubs: AssignedHubDto[],
+    dates: string[],
+  ): Promise<HubSortingWeekDto> {
+    const requests = assignedHubs.flatMap((hub) => (
+      dates.map((date) => ({ hub, date }))
+    ));
+    const results = await Promise.allSettled(requests.map(async ({ hub, date }) => ({
+      ...await getOrdersByRestaurant(hub.hubId, date, true),
+      hub,
+    })));
+    const fulfilled = results.flatMap((result) => (
+      result.status === 'fulfilled' ? [result.value] : []
+    ));
+
+    if (fulfilled.length === 0 && requests.length > 0) {
+      throw new Error('Không tải được đơn phân loại của các Hub được phân công.');
+    }
+
+    const catalog = await getHubProductCatalog(
+      assignedHubs.flatMap((hub) => hub.marketId ? [hub.marketId] : []),
+    );
+    const plans = fulfilled.map((plan): HubSortingDayPlan => ({
+      ...enrichRestaurantOrders(plan, catalog),
+      hub: plan.hub,
+    }));
+    const warnings = results.flatMap((result, index) => (
+      result.status === 'rejected'
+        ? [`Không tải được đơn phân loại của ${requests[index].hub.name} ngày ${requests[index].date}.`]
+        : []
+    ));
+
+    return {
+      plans: plans.sort((left, right) => (
+        left.serviceDate.localeCompare(right.serviceDate)
+        || left.hub.name.localeCompare(right.hub.name)
+      )),
+      warnings,
+    };
+  },
+
   /** Aggregate daily procurement plans without mixing them with physical inbound tasks. */
   async getProcurementWeek(
     assignedHubs: AssignedHubDto[],
@@ -210,17 +355,35 @@ export const hubApi = {
     const catalog = await getHubProductCatalog(
       plans.flatMap((plan) => plan.batches.map((batch) => batch.marketId)),
     );
+    const plansWithBatches = plans.filter((plan) => plan.batches.length > 0);
+    const orderDetailResults = await Promise.allSettled(plansWithBatches.map((plan) => (
+      getOrdersByRestaurant(plan.hubId, plan.date, true)
+    )));
+    const detailsByPlan = new Map<string, ReadonlyMap<string, HubProcurementOrderDto>>();
+    orderDetailResults.forEach((result, index) => {
+      if (result.status !== 'fulfilled') return;
+      const enriched = enrichRestaurantOrders(result.value, catalog);
+      const plan = plansWithBatches[index];
+      detailsByPlan.set(`${plan.hubId}:${plan.date}`, mapProcurementOrders(enriched));
+    });
     const enrichedPlans = plans.map((plan): HubProcurementDayPlan => ({
       ...plan,
-      batches: plan.batches.map((batch) => ({
-        ...batch,
-        items: batch.items.map((item) => ({
-          ...item,
-          unit: item.unit
-            ?? catalog.byMarketProductId.get(item.marketProductId)?.unit
-            ?? null,
-        })),
-      })),
+      batches: plan.batches.map((batch) => {
+        const orderDetails = detailsByPlan.get(`${plan.hubId}:${plan.date}`);
+        return {
+          ...batch,
+          items: batch.items.map((item) => ({
+            ...item,
+            unit: item.unit
+              ?? catalog.byMarketProductId.get(item.marketProductId)?.unit
+              ?? null,
+          })),
+          orders: batch.orderIds.flatMap((orderId) => {
+            const order = orderDetails?.get(orderId);
+            return order ? [order] : [];
+          }),
+        };
+      }),
     }));
 
     return enrichedPlans.sort((left, right) => (
