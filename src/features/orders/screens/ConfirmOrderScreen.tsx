@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +14,7 @@ import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
 import { Text } from '../../../components/ui/Text';
-import { orderApi } from '../api/orderApi';
+import { orderApi, DEFAULT_DELIVERY_WINDOW_DAYS } from '../api/orderApi';
 import { useCartStore } from '../../../store/cartStore';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';
 import { creditApi } from '../../credit/api/creditApi';
@@ -123,6 +123,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
   const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
   const [creditRatio, setCreditRatio] = useState<number | null>(null);
   const [availableCredit, setAvailableCredit] = useState<number>(0);
+  const [deliveryWindowDays, setDeliveryWindowDays] = useState(DEFAULT_DELIVERY_WINDOW_DAYS);
   const { clearCart } = useCartStore();
 
   useEffect(() => {
@@ -139,6 +140,13 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         // non-critical — silent fail
       }
     })();
+
+    orderApi
+      .getOrderingWindow()
+      .then((window) => setDeliveryWindowDays(window.deliveryWindowDays))
+      .catch(() => {
+        // non-critical — keep the default fallback, backend still validates for real at submit time
+      });
   }, []);
 
   const subtotal = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
@@ -153,8 +161,11 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
 
   const handleSubmit = async () => {
     setLoading(true);
+    // Declared outside the try so the catch block can still offer "Xem bản nháp"
+    // for a draft that was created successfully but failed at the confirm step —
+    // otherwise the user loses track of it and re-submitting creates a duplicate.
+    let currentDraftId = draftOrderId;
     try {
-      let currentDraftId = draftOrderId;
       if (!currentDraftId) {
         const itemNotes = items
           .filter((item) => item.note?.trim())
@@ -175,13 +186,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         Alert.alert(
           'Chưa thể xác nhận đơn',
           `${issues || 'Đơn hàng chưa đáp ứng điều kiện xác nhận.'}\n\nBản nháp đã được lưu trong lịch sử đơn hàng.`,
-          [
-            {
-              text: 'Xem bản nháp',
-              onPress: () => openOrderManagement(currentDraftId),
-            },
-            { text: 'Đóng', style: 'cancel' },
-          ],
+          buildFailureAlertButtons(currentDraftId),
         );
         return;
       }
@@ -194,12 +199,17 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      const buttons = buildFailureAlertButtons(currentDraftId);
       if (code === 'INSUFFICIENT_STOCK') {
-        Alert.alert('Không đủ hàng', message ?? 'Một hoặc nhiều sản phẩm không đủ số lượng tồn kho.');
+        Alert.alert('Không đủ hàng', message ?? 'Một hoặc nhiều sản phẩm không đủ số lượng tồn kho.', buttons);
       } else if (code === 'RESTAURANT_NOT_APPROVED' || code === 'RESTAURANT_NOT_ACTIVE') {
-        Alert.alert('Tài khoản chưa được duyệt', 'Nhà hàng cần được Admin phê duyệt trước khi đặt hàng.');
+        Alert.alert('Tài khoản chưa được duyệt', 'Nhà hàng cần được Admin phê duyệt trước khi đặt hàng.', buttons);
       } else if (code === 'DELIVERY_DATE_OUT_OF_WINDOW') {
-        Alert.alert('Thời gian không hợp lệ', 'Ngày giao phải từ hiện tại đến tối đa 7 ngày tiếp theo.');
+        Alert.alert(
+          'Thời gian không hợp lệ',
+          `Ngày giao phải từ hiện tại đến tối đa ${deliveryWindowDays} ngày tiếp theo.`,
+          buttons,
+        );
       } else if (
         code === 'CREDIT_LIMIT_EXCEEDED' ||
         code === 'INSUFFICIENT_CREDIT' ||
@@ -208,14 +218,28 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         Alert.alert(
           'Hạn mức tín dụng không đủ',
           'Đơn hàng vượt quá hạn mức tín dụng hiện tại của nhà hàng. Vui lòng liên hệ FreshFlow để được cấp hạn mức.',
+          buttons,
         );
       } else {
-        Alert.alert('Không thể đặt hàng', message ?? 'Đã xảy ra lỗi. Vui lòng thử lại.');
+        Alert.alert('Không thể đặt hàng', message ?? 'Đã xảy ra lỗi. Vui lòng thử lại.', buttons);
       }
     } finally {
       setLoading(false);
     }
   };
+
+  // `currentDraftId` is only non-null once `orderApi.create()` has succeeded — if it
+  // failed before that point, there is no draft to show and this falls back to a plain "Đóng".
+  const buildFailureAlertButtons = useCallback(
+    (currentDraftId: string | null) =>
+      currentDraftId
+        ? [
+            { text: 'Xem bản nháp', onPress: () => openOrderManagement(currentDraftId) },
+            { text: 'Đóng', style: 'cancel' as const },
+          ]
+        : undefined,
+    [openOrderManagement],
+  );
 
   if (placedOrderId) {
     return (

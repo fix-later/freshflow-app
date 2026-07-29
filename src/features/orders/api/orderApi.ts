@@ -24,7 +24,22 @@ export interface OrderItemDto {
   unitPrice: number;
   subtotal: number;
   actualQuantity: number | null;
+  /**
+   * Only populated by GET /orders/{id} (backend enriches via IMarketProductImageReader
+   * there only) — every other endpoint that returns an OrderDto (create/update/remove
+   * item, confirm, cancel, confirmReceipt, reorder) leaves this null.
+   */
+  imageUrl: string | null;
 }
+
+/** GET /api/v1/orders/ordering-window — admin-configurable cutoff time + delivery window. */
+export interface OrderingWindowDto {
+  dailyCutoffTime: string;
+  deliveryWindowDays: number;
+}
+
+/** Fallback used only until `orderApi.getOrderingWindow()` resolves — matches the backend's seed. */
+export const DEFAULT_DELIVERY_WINDOW_DAYS = 7;
 
 export interface OrderDto {
   orderId: string;
@@ -175,7 +190,28 @@ export const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
   cancelled: '#EF4444',
 };
 
+let cachedOrderingWindow: OrderingWindowDto | null = null;
+let orderingWindowPromise: Promise<OrderingWindowDto> | null = null;
+
 export const orderApi = {
+  /** GET /api/v1/orders/ordering-window — real cutoff time + delivery window (admin can change this). */
+  async getOrderingWindow(): Promise<OrderingWindowDto> {
+    if (cachedOrderingWindow) return cachedOrderingWindow;
+    if (orderingWindowPromise) return orderingWindowPromise;
+
+    orderingWindowPromise = apiClient
+      .get<OrderingWindowDto>('/api/v1/orders/ordering-window')
+      .then(({ data }) => {
+        cachedOrderingWindow = data;
+        return data;
+      })
+      .finally(() => {
+        orderingWindowPromise = null;
+      });
+
+    return orderingWindowPromise;
+  },
+
   async create(payload: CreateOrderPayload): Promise<OrderDto> {
     const { data } = await apiClient.post<OrderDto>('/api/v1/orders', payload);
     return data;

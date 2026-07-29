@@ -126,6 +126,8 @@ export function TrackOrderScreen() {
   useFocusEffect(
     useCallback(() => {
       loadDeliveries();
+
+      let active = true;
       const connection = createOrderStatusConnection((event) => {
         setOrders((current) =>
           current
@@ -137,11 +139,20 @@ export function TrackOrderScreen() {
             .filter((order) => DELIVERY_STATUSES.includes(order.status)),
         );
       });
-      connection.start().catch((connectionError) => {
-        console.warn('Order realtime connection failed:', connectionError);
+
+      connection.start().then(() => {
+        // If the screen was unmounted before start resolved, stop immediately.
+        if (!active) {
+          connection.stop().catch(() => undefined);
+        }
+      }).catch((connectionError) => {
+        if (active) {
+          console.warn('Order realtime connection failed:', connectionError);
+        }
       });
 
       return () => {
+        active = false;
         connection.stop().catch(() => undefined);
       };
     }, [loadDeliveries]),
