@@ -58,23 +58,7 @@ const CANCEL_REASON_OPTIONS = [
   { id: OTHER_REASON_ID, label: 'Khác' },
 ];
 
-// No product image API yet — reuse the same deterministic placeholder set as the catalog screens.
-const PRODUCT_PLACEHOLDERS = [
-  'https://images.unsplash.com/photo-1607301405390-d831c242f59f?w=200',
-  'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=200',
-  'https://images.unsplash.com/photo-1582972236019-ea4af5ffe587?w=200',
-  'https://images.unsplash.com/photo-1566385101042-1a0f0b3c7b0b?w=200',
-  'https://images.unsplash.com/photo-1598033129183-c4f50c736c10?w=200',
-  'https://images.unsplash.com/photo-1595853035070-59a39fe84de3?w=200',
-  'https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=200',
-  'https://images.unsplash.com/photo-1601004890684-d8cbf643f5f2?w=200',
-  'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=200',
-  'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200',
-];
 
-function productImage(index: number): string {
-  return PRODUCT_PLACEHOLDERS[index % PRODUCT_PLACEHOLDERS.length];
-}
 
 function formatDateTime(iso: string | null | undefined) {
   if (!iso) return '—';
@@ -108,7 +92,13 @@ function ItemRow({
   const subtotal = item.subtotal ?? unitPrice * quantity;
   return (
     <View style={styles.itemRow}>
-      <Image source={{ uri: productImage(index) }} style={styles.itemImg} />
+      {item.imageUrl ? (
+        <Image source={{ uri: item.imageUrl }} style={styles.itemImg} />
+      ) : (
+        <View style={[styles.itemImg, styles.itemImgPlaceholder]}>
+          <Ionicons name="image-outline" size={22} color={Colors.outline} />
+        </View>
+      )}
       <View style={styles.itemInfo}>
         <Text style={styles.itemName} numberOfLines={2}>{item.productNameSnapshot || 'Sản phẩm'}</Text>
         <Text style={styles.itemUnitPrice}>{unitPrice.toLocaleString('vi-VN')}đ x {quantity}</Text>
@@ -237,8 +227,10 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const performCancel = async (reason: string) => {
     setCancelling(true);
     try {
-      const result = await orderApi.cancel(orderId, reason);
-      setOrder(result);
+      await orderApi.cancel(orderId, reason);
+      // Refetch via GET /orders/{id} rather than using the mutation's own response —
+      // only that endpoint enriches items.imageUrl (see OrderItemDto's comment).
+      await fetchOrder();
       setCancelModalVisible(false);
       Alert.alert('Đã hủy đơn', 'Đơn hàng của bạn đã được hủy thành công.');
     } catch (err: unknown) {
@@ -276,8 +268,8 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const performConfirmReceipt = async () => {
     setConfirmingReceipt(true);
     try {
-      const result = await orderApi.confirmReceipt(orderId);
-      setOrder(result);
+      await orderApi.confirmReceipt(orderId);
+      await fetchOrder();
       Alert.alert('Đã xác nhận', 'Bạn đã xác nhận nhận hàng cho đơn này.');
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -302,7 +294,8 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     if (quantity < 1) return;
     setUpdatingItemId(item.orderItemId);
     try {
-      setOrder(await orderApi.updateItem(orderId, item.orderItemId, quantity));
+      await orderApi.updateItem(orderId, item.orderItemId, quantity);
+      await fetchOrder();
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       Alert.alert('Không thể cập nhật sản phẩm', message ?? 'Vui lòng kiểm tra tồn kho và thử lại.');
@@ -323,7 +316,8 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           onPress: async () => {
             setUpdatingItemId(item.orderItemId);
             try {
-              setOrder(await orderApi.removeItem(orderId, item.orderItemId));
+              await orderApi.removeItem(orderId, item.orderItemId);
+              await fetchOrder();
             } catch (err: unknown) {
               const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
               Alert.alert('Không thể xóa sản phẩm', message ?? 'Vui lòng thử lại.');
@@ -347,7 +341,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
       }
 
       const confirmed = await orderApi.confirm(orderId);
-      setOrder(confirmed);
+      await fetchOrder();
       Alert.alert(
         'Đã xác nhận đơn hàng',
         `Dự kiến giao: ${formatDateTime(confirmed.scheduledFor)}`,
@@ -758,6 +752,7 @@ const styles = StyleSheet.create({
   // Items
   itemRow: { flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 },
   itemImg: { width: 48, height: 48, borderRadius: 10, backgroundColor: Colors.surfaceVariant },
+  itemImgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 13, fontWeight: '600', color: Colors.onSurface, marginBottom: 4 },
   itemUnitPrice: { fontSize: 12, color: Colors.textSecondary },

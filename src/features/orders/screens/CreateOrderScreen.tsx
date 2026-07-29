@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -19,6 +19,7 @@ import {
   TextInput,
 } from '../../../components/ui/Text';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';
+import { orderApi, DEFAULT_DELIVERY_WINDOW_DAYS } from '../api/orderApi';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'CreateOrder'>;
 
@@ -48,10 +49,10 @@ function formatCustomLabel(date: Date, time: Date): string {
   return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
 }
 
-function getDeliveryUpperBound(): Date {
+function getDeliveryUpperBound(deliveryWindowDays: number): Date {
   const upperBound = new Date();
   upperBound.setHours(0, 0, 0, 0);
-  upperBound.setDate(upperBound.getDate() + 7);
+  upperBound.setDate(upperBound.getDate() + deliveryWindowDays);
   return upperBound;
 }
 
@@ -97,6 +98,16 @@ export function CreateOrderScreen({ route, navigation }: Props) {
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [deliveryWindowDays, setDeliveryWindowDays] = useState(DEFAULT_DELIVERY_WINDOW_DAYS);
+
+  useEffect(() => {
+    orderApi
+      .getOrderingWindow()
+      .then((window) => setDeliveryWindowDays(window.deliveryWindowDays))
+      .catch(() => {
+        // Non-critical — keep the default fallback and let the backend be the final say at submit time.
+      });
+  }, []);
 
   const subtotal = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
   const itemCount = items.reduce((sum, it) => sum + it.quantity, 0);
@@ -127,10 +138,10 @@ export function CreateOrderScreen({ route, navigation }: Props) {
       deliveryLabel = 'Sáng mai (5:00)';
     } else if (timeOption === 'custom') {
       const customDate = new Date(buildScheduledForCustom(selectedDate, selectedTime));
-      if (customDate <= new Date() || customDate > getDeliveryUpperBound()) {
+      if (customDate <= new Date() || customDate > getDeliveryUpperBound(deliveryWindowDays)) {
         Alert.alert(
           'Thời gian giao không hợp lệ',
-          'Ngày giao phải ở tương lai và nằm trong cửa sổ 7 ngày theo quy định của hệ thống.',
+          `Ngày giao phải ở tương lai và nằm trong cửa sổ ${deliveryWindowDays} ngày theo quy định của hệ thống.`,
         );
         return;
       }
@@ -219,7 +230,7 @@ export function CreateOrderScreen({ route, navigation }: Props) {
               mode="date"
               display="default"
               minimumDate={new Date()}
-              maximumDate={getDeliveryUpperBound()}
+              maximumDate={getDeliveryUpperBound(deliveryWindowDays)}
               onChange={onChangeDate}
             />
           )}
