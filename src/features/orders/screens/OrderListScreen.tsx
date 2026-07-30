@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -113,14 +113,13 @@ function EmptyProductImage({
 
 export function OrderListScreen() {
   const navigation = useNavigation<OrdersNav>();
-  const { cart, cartCount, addToCart, removeFromCart, updateItemQty } = useCartStore();
+  const { cart, cartCount, addToCart, removeFromCart, updateItemQty, selectedMarketId, setSelectedMarketId } = useCartStore();
   const { toggleFavorite, isFavorite } = useFavoritesStore();
 
   const [markets, setMarkets] = useState<MarketDto[]>([]);
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [catalogProducts, setCatalogProducts] = useState<ProductDto[]>([]);
   const [marketProducts, setMarketProducts] = useState<MarketProductDto[]>([]);
-  const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
   const [selectedRootId, setSelectedRootId] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -131,6 +130,15 @@ export function OrderListScreen() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+
+  // Lets loadInitialData read the latest selection without depending on it —
+  // adding selectedMarketId to its deps would recreate the callback (and the
+  // mount effect that calls it) on every market switch, re-fetching the whole
+  // catalog just to pick a default market that's already selected.
+  const selectedMarketIdRef = useRef(selectedMarketId);
+  useEffect(() => {
+    selectedMarketIdRef.current = selectedMarketId;
+  }, [selectedMarketId]);
 
   const loadInitialData = useCallback(async () => {
     try {
@@ -144,7 +152,7 @@ export function OrderListScreen() {
       setMarkets(marketData.filter((market) => market.isActive));
       setCategories(categoryData.filter((category) => category.isActive));
       setCatalogProducts(productData.filter((product) => !product.isDeleted));
-      setSelectedMarketId((current) => current ?? marketData.find((market) => market.isActive)?.id ?? null);
+      setSelectedMarketId(selectedMarketIdRef.current ?? marketData.find((market) => market.isActive)?.id ?? null);
     } catch {
       setError('Không thể tải danh mục mua sắm. Vui lòng thử lại.');
     } finally {
