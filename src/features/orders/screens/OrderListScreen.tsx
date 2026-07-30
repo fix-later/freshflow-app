@@ -15,6 +15,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo } from '../../../components/ui/BrandLogo';
+import LogoIconSource from '../../../../assets/images/logo/logo.svg';
 import { Text, TextInput } from '../../../components/ui/Text';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
@@ -706,7 +707,7 @@ export function OrderListScreen() {
 
             <View style={styles.sheetHeaderRow}>
               <View style={styles.sheetHeaderIcon}>
-                <Ionicons name="storefront" size={22} color={Colors.onPrimary} />
+                <LogoIconSource width={50} height={50} />
               </View>
               <View style={styles.sheetHeaderText}>
                 <Text style={styles.sheetTitle}>
@@ -1125,12 +1126,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sheetHeaderIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
+    width: 50,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.deepTeal,
   },
   sheetHeaderText: { flex: 1 },
   sheetTitle: { fontSize: 18, color: Colors.deepTeal, fontFamily: Fonts.bold },
