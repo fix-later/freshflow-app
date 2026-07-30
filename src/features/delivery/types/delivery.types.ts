@@ -76,6 +76,40 @@ export interface DriverRouteDto {
   deliveries: DriverDeliveryDto[];
 }
 
+// ─── GET /logistics/routes/{routeId}/loading-manifest ──────────────────────────
+// Not under /driver — lives in RoutesController, mirrors LoadingManifestDto. Requires
+// the backend to grant the `driver` role (+ a route-ownership check) on this action;
+// until then this call 403s for a driver token.
+
+/** One product line to load, tied to the order/order-item it belongs to. Mirrors `LoadingLineDto`. */
+export interface LoadingLineDto {
+  orderId: string;
+  orderItemId: string;
+  productName: string;
+  quantity: number;
+  capacityKg: number | null;
+}
+
+/**
+ * One restaurant stop's lines to load. `stopOrder` here is the *loading* sequence
+ * (reverse of the delivery `stopOrder` on `DriverRouteStopDto` — furthest stop
+ * loaded first/innermost), not the order stops get visited in.
+ */
+export interface LoadingStopDto {
+  stopOrder: number;
+  restaurantId: string;
+  restaurantName: string;
+  lines: LoadingLineDto[];
+}
+
+/** Mirrors `LoadingManifestDto` — the only source of real order IDs before confirm-pickup. */
+export interface LoadingManifestDto {
+  routeId: string;
+  status: RouteStatus;
+  serviceDate: string;
+  stops: LoadingStopDto[];
+}
+
 // ─── POST /driver/routes/{routeId}/start ───────────────────────────────────────
 
 /** Mirrors `StartRouteResultDto`. */

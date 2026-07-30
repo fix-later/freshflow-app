@@ -21,7 +21,7 @@ import { Colors } from '../../../constants/colors';
 import { RouteOverviewMap, type RouteStop } from '../../../components/RouteOverviewMap';
 import { type DriverStackParamList } from '../../../navigation/types';
 import { driverApi } from '../api/driverApi';
-import { driverRouteStore, type DeliveryStop } from '../store/driverRouteStore';
+import { driverRouteStore, type DeliveryStop, type PickupPreviewStop } from '../store/driverRouteStore';
 import { type RouteStatus } from '../types/delivery.types';
 
 type Nav = NativeStackNavigationProp<DriverStackParamList>;
@@ -96,6 +96,13 @@ export function DriverHomeScreen() {
   const [currentLng, setCurrentLng] = useState<number | undefined>();
   const [startingRoute, setStartingRoute] = useState(false);
 
+  // Route is assigned but the driver hasn't confirmed pickup even once yet —
+  // route.deliveries doesn't exist server-side until then, so the reorder/stop
+  // list below (which is keyed by deliveryId) has nothing to show. Render a
+  // read-only preview built from route.stops instead of falsely reporting "no route".
+  const [hasPickupStarted, setHasPickupStarted] = useState(false);
+  const [previewStops, setPreviewStops] = useState<PickupPreviewStop[]>([]);
+
   const [reorderMode, setReorderMode] = useState(false);
   const [stopById, setStopById] = useState<Map<string, DeliveryStop>>(new Map());
   const [orderIds, setOrderIds] = useState<string[]>([]);
@@ -139,6 +146,8 @@ export function DriverHomeScreen() {
     setMapOrderIds(ids);
     setRouteStatus(route?.status ?? null);
     setServiceDate(route?.serviceDate ?? '');
+    setHasPickupStarted(driverRouteStore.hasPickupStarted());
+    setPreviewStops(driverRouteStore.getPickupPreviewStops());
   }, []);
 
   const loadRoute = useCallback(async () => {
@@ -304,13 +313,98 @@ export function DriverHomeScreen() {
     );
   }
 
-  if (!routeStatus || orderedStops.length === 0) {
+  if (!routeStatus) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <View style={styles.centered}>
           <Ionicons name="calendar-outline" size={52} color={Colors.textMuted} />
           <Text style={styles.emptyTitle}>Chưa có tuyến đường</Text>
           <Text style={styles.helperText}>Bạn chưa được phân công tuyến giao hàng nào cho hôm nay.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Route assigned, but pickup has never been confirmed — route.deliveries is
+  // still empty server-side, so there's no per-order stop list to show yet.
+  // Render a read-only preview from route.stops instead of the reorderable list.
+  if (!hasPickupStarted) {
+    const previewMapStops: RouteStop[] = previewStops.map((s, idx) => ({
+      order: idx + 1,
+      lat: s.lat,
+      lng: s.lng,
+      status: 'pending',
+    }));
+
+    return (
+      <SafeAreaView style={styles.screen} edges={['bottom']}>
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <View style={styles.greetCard}>
+            <View style={{ gap: 2 }}>
+              <Text style={styles.greetTitle}>Xin chào, Tài xế!</Text>
+              <Text style={styles.greetSub}>Chúc bạn một ca làm việc thuận lợi.</Text>
+            </View>
+          </View>
+
+          <Text style={styles.sectionLabel}>Tuyến đường hôm nay</Text>
+          <View style={styles.routeCard}>
+            <View style={styles.routeCardHeader}>
+              <View style={styles.statusBadge}>
+                <Ionicons name="bicycle-outline" size={13} color={Colors.primary} />
+                <Text style={styles.statusLabel}>{ROUTE_STATUS_LABEL[routeStatus]}</Text>
+              </View>
+              <Text style={styles.routeDate}>{serviceDate}</Text>
+            </View>
+
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Ionicons name="location-outline" size={22} color={Colors.primary} />
+                <Text style={styles.statVal}>{previewStops.length}</Text>
+                <Text style={styles.statLbl}>Điểm giao</Text>
+              </View>
+            </View>
+
+            <View style={styles.mapThumbWrap}>
+              <RouteOverviewMap stops={previewMapStops} style={styles.mapThumb} />
+            </View>
+          </View>
+
+          <View style={styles.reorderBanner}>
+            <Ionicons name="information-circle-outline" size={15} color={Colors.primary} />
+            <Text style={styles.reorderBannerText}>
+              Danh sách điểm giao chi tiết và sắp xếp thứ tự sẽ hiển thị sau khi bạn nhận hàng tại Hub.
+            </Text>
+          </View>
+
+          <Text style={styles.sectionLabel}>Điểm giao dự kiến</Text>
+          <View style={styles.stopList}>
+            {previewStops.map((stop, idx) => (
+              <View
+                key={stop.entityId}
+                style={[styles.stopCard, { marginBottom: idx < previewStops.length - 1 ? 8 : 0 }]}
+              >
+                <View style={styles.stopNumBadge}>
+                  <Text style={styles.stopNumText}>{idx + 1}</Text>
+                </View>
+                <View style={styles.stopInfo}>
+                  <Text style={styles.stopName} numberOfLines={1}>{stop.restaurantName}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={{ height: 110 }} />
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <Pressable
+            style={({ pressed }) => [styles.hubBtn, pressed && { opacity: 0.85 }, startingRoute && { opacity: 0.6 }]}
+            onPress={startingRoute ? undefined : handleGoToHub}
+            disabled={startingRoute}
+          >
+            <Ionicons name="cube-outline" size={18} color={Colors.onPrimary} />
+            <Text style={styles.hubBtnText}>{startingRoute ? 'Đang bắt đầu...' : 'Nhận hàng tại Hub'}</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );

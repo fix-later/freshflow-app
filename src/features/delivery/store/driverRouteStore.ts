@@ -28,6 +28,21 @@ export interface DeliveryStop {
   actualArrival: string | null;
 }
 
+/**
+ * A restaurant stop before pickup has ever been confirmed — built straight from
+ * `route.stops`, which the backend populates as soon as the route is assigned
+ * (unlike `route.deliveries`, which only exists after confirm-pickup creates
+ * Delivery rows). No deliveryId/status here on purpose: nothing has happened to
+ * this stop yet.
+ */
+export interface PickupPreviewStop {
+  entityId: string;
+  order: number;
+  restaurantName: string;
+  lat: number;
+  lng: number;
+}
+
 let _route: DriverRouteDto | null = null;
 let _stops: DeliveryStop[] = [];
 
@@ -77,6 +92,26 @@ export const driverRouteStore = {
 
   getHubStop() {
     return _route?.stops.find(s => s.entityType === 'market');
+  },
+
+  /** True once at least one Delivery exists for this route (pickup confirmed at least once). */
+  hasPickupStarted(): boolean {
+    return (_route?.deliveries.length ?? 0) > 0;
+  },
+
+  /** Restaurant stops for the "not picked up yet" preview — see PickupPreviewStop. */
+  getPickupPreviewStops(): PickupPreviewStop[] {
+    if (!_route) return [];
+    return _route.stops
+      .filter(s => s.entityType === 'restaurant')
+      .sort((a, b) => a.stopOrder - b.stopOrder)
+      .map(s => ({
+        entityId: s.entityId,
+        order: s.stopOrder,
+        restaurantName: s.entityName,
+        lat: s.latitude,
+        lng: s.longitude,
+      }));
   },
 
   /** Patches the in-memory route status after a successful action (e.g. startRoute) without a full refetch. */
