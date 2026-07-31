@@ -20,6 +20,7 @@ import {
   assistantApi,
   type PendingAssistantConfirmation,
 } from '../api/assistantApi';
+import { useCartStore } from '../../../store/cartStore';
 
 interface ChatMessage {
   id: string;
@@ -39,9 +40,57 @@ function createSessionId() {
   return `mobile-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function resolveErrorMessage(status?: number, code?: string): string {
+  if (code === 'ASSISTANT_PROVIDER_RATE_LIMITED' || status === 429) {
+    return 'Trợ lý AI đang quá tải, vui lòng thử lại sau ít phút.';
+  }
+  if (code === 'ASSISTANT_PROVIDER_TIMEOUT' || status === 504) {
+    return 'Trợ lý AI phản hồi quá chậm. Vui lòng thử lại.';
+  }
+  if (code === 'ASSISTANT_PROVIDER_AUTH_FAILED' || code === 'ASSISTANT_PROVIDER_UNAVAILABLE' || status === 502) {
+    return 'Trợ lý AI tạm thời không khả dụng. Vui lòng thử lại sau.';
+  }
+  if (status === 401 || status === 403) {
+    return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  }
+  return 'Trợ lý đang bận. Vui lòng thử lại sau ít phút.';
+}
+
+interface OrderPreview {
+  wouldSucceed: boolean;
+  totalAmount: number;
+  resolvedScheduledFor: string | null;
+  issues: { code: string; message: string }[];
+}
+
+function parsePreview(previewJson: string): OrderPreview | null {
+  try {
+    return JSON.parse(previewJson) as OrderPreview;
+  } catch {
+    return null;
+  }
+}
+
+function formatPrice(value: number) {
+  return `${value.toLocaleString('vi-VN')}đ`;
+}
+
+function formatScheduledDate(iso: string | null) {
+  if (!iso) return null;
+  const date = new Date(iso);
+  return date.toLocaleDateString('vi-VN', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export function RestaurantAssistantScreen() {
   const navigation = useNavigation<any>();
   const sessionId = useRef(createSessionId());
+  const { selectedMarketId } = useCartStore();
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -75,6 +124,7 @@ export function RestaurantAssistantScreen() {
       const response = await assistantApi.chat({
         sessionId: sessionId.current,
         message,
+        marketId: selectedMarketId,
         confirmOrderId: options?.confirmOrderId,
       });
       setMessages((current) => [
@@ -88,14 +138,15 @@ export function RestaurantAssistantScreen() {
         },
       ]);
     } catch (error: unknown) {
-      const message =
-        (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      const errorCode = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      const vietnameseMessage = resolveErrorMessage(status, errorCode);
       setMessages((current) => [
         ...current,
         {
           id: `error-${Date.now()}`,
           role: 'assistant',
-          content: message ?? 'Trợ lý đang bận. Vui lòng thử lại sau ít phút.',
+          content: vietnameseMessage,
         },
       ]);
     } finally {
@@ -164,19 +215,16 @@ export function RestaurantAssistantScreen() {
                   {item.content}
                 </Text>
                 {item.pendingConfirmation ? (
-                  <Pressable
-                    style={styles.confirmButton}
-                    disabled={sending}
-                    onPress={() =>
+                  <OrderPreviewCard
+                    previewJson={item.pendingConfirmation.previewJson}
+                    sending={sending}
+                    onConfirm={() =>
                       void sendMessage('Tôi xác nhận đơn hàng này.', {
                         confirmOrderId: item.pendingConfirmation?.orderId,
                         hideUserMessage: false,
                       })
                     }
-                  >
-                    <Ionicons name="shield-checkmark-outline" size={17} color={Colors.onPrimary} />
-                    <Text style={styles.confirmButtonText}>Xác nhận đơn</Text>
-                  </Pressable>
+                  />
                 ) : null}
                 {item.draftOrderId ? (
                   <Pressable
@@ -267,6 +315,70 @@ export function RestaurantAssistantScreen() {
   );
 }
 
+function OrderPreviewCard({
+  previewJson,
+  sending,
+  onConfirm,
+}: {
+  previewJson: string;
+  sending: boolean;
+  onConfirm: () => void;
+}) {
+  const preview = parsePreview(previewJson);
+
+  return (
+    <View style={styles.previewCard}>
+      {/* Tóm tắt tổng tiền */}
+      {preview ? (
+        <>
+          <View style={styles.previewRow}>
+            <Ionicons name="receipt-outline" size={14} color={Colors.primaryText} />
+            <Text style={styles.previewLabel}>Tổng đơn hàng</Text>
+            <Text style={styles.previewValue}>{formatPrice(preview.totalAmount)}</Text>
+          </View>
+
+          {preview.resolvedScheduledFor ? (
+            <View style={styles.previewRow}>
+              <Ionicons name="time-outline" size={14} color={Colors.primaryText} />
+              <Text style={styles.previewLabel}>Giao lúc</Text>
+              <Text style={styles.previewValue}>
+                {formatScheduledDate(preview.resolvedScheduledFor)}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Cảnh báo nếu có vấn đề */}
+          {!preview.wouldSucceed && preview.issues.length > 0 ? (
+            <View style={styles.previewWarningBox}>
+              <Ionicons name="warning-outline" size={14} color={Colors.warning} />
+              <Text style={styles.previewWarningText}>
+                {preview.issues[0]?.message ?? 'Có vấn đề cần kiểm tra trước khi xác nhận.'}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.previewDivider} />
+        </>
+      ) : null}
+
+      <Pressable
+        style={[
+          styles.confirmButton,
+          preview && !preview.wouldSucceed && styles.confirmButtonWarn,
+        ]}
+        disabled={sending}
+        onPress={onConfirm}
+      >
+        <Ionicons name="shield-checkmark-outline" size={17} color={Colors.onPrimary} />
+        <Text style={styles.confirmButtonText}>
+          {preview && !preview.wouldSucceed ? 'Xác nhận (có cảnh báo)' : 'Xác nhận đơn'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   header: {
@@ -353,6 +465,50 @@ const styles = StyleSheet.create({
     gap: 7,
     borderRadius: 13,
     backgroundColor: Colors.primary,
+  },
+  confirmButtonWarn: {
+    backgroundColor: Colors.warning,
+  },
+  previewCard: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    gap: 6,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  previewLabel: {
+    flex: 1,
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  previewValue: {
+    fontSize: 12,
+    color: Colors.textPrimary,
+    fontFamily: Fonts.semibold,
+  },
+  previewWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 5,
+    padding: 7,
+    borderRadius: 8,
+    backgroundColor: 'rgba(230,168,23,0.10)',
+  },
+  previewWarningText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 15,
+    color: Colors.textPrimary,
+  },
+  previewDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 2,
   },
   confirmButtonText: { fontSize: 12, color: Colors.onPrimary, fontFamily: Fonts.bold },
   draftButton: {

@@ -15,6 +15,8 @@ export interface CartStore {
   cart: CartItem[];
   cartCount: number;
   cartTotal: number;
+  selectedMarketId: string | null;
+  setSelectedMarketId: (marketId: string | null) => void;
   addToCart: (item: {
     id: string;
     name: string;

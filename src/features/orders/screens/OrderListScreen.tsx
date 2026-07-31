@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,6 +15,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo } from '../../../components/ui/BrandLogo';
+import LogoIconSource from '../../../../assets/images/logo/logo.svg';
 import { Text, TextInput } from '../../../components/ui/Text';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
@@ -113,24 +114,33 @@ function EmptyProductImage({
 
 export function OrderListScreen() {
   const navigation = useNavigation<OrdersNav>();
-  const { cart, cartCount, addToCart, removeFromCart, updateItemQty } = useCartStore();
+  const { cart, cartCount, addToCart, removeFromCart, updateItemQty, selectedMarketId, setSelectedMarketId } = useCartStore();
   const { toggleFavorite, isFavorite } = useFavoritesStore();
 
   const [markets, setMarkets] = useState<MarketDto[]>([]);
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [catalogProducts, setCatalogProducts] = useState<ProductDto[]>([]);
   const [marketProducts, setMarketProducts] = useState<MarketProductDto[]>([]);
-  const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
   const [selectedRootId, setSelectedRootId] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showMarketPicker, setShowMarketPicker] = useState(false);
+  const [marketSearchQuery, setMarketSearchQuery] = useState('');
   const [showCart, setShowCart] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+
+  // Lets loadInitialData read the latest selection without depending on it —
+  // adding selectedMarketId to its deps would recreate the callback (and the
+  // mount effect that calls it) on every market switch, re-fetching the whole
+  // catalog just to check whether a market is already selected.
+  const selectedMarketIdRef = useRef(selectedMarketId);
+  useEffect(() => {
+    selectedMarketIdRef.current = selectedMarketId;
+  }, [selectedMarketId]);
 
   const loadInitialData = useCallback(async () => {
     try {
@@ -144,7 +154,12 @@ export function OrderListScreen() {
       setMarkets(marketData.filter((market) => market.isActive));
       setCategories(categoryData.filter((category) => category.isActive));
       setCatalogProducts(productData.filter((product) => !product.isDeleted));
-      setSelectedMarketId((current) => current ?? marketData.find((market) => market.isActive)?.id ?? null);
+
+      // First time this session (no market chosen yet) — prompt the user to pick one
+      // explicitly instead of silently defaulting to the first active market.
+      if (!selectedMarketIdRef.current) {
+        setShowMarketPicker(true);
+      }
     } catch {
       setError('Không thể tải danh mục mua sắm. Vui lòng thử lại.');
     } finally {
@@ -212,6 +227,22 @@ export function OrderListScreen() {
   );
 
   const selectedMarket = markets.find((market) => market.id === selectedMarketId) ?? null;
+
+  const filteredMarkets = useMemo(() => {
+    const query = marketSearchQuery.trim().toLocaleLowerCase('vi-VN');
+    if (!query) return markets;
+    return markets.filter(
+      (market) =>
+        market.name.toLocaleLowerCase('vi-VN').includes(query) ||
+        market.address?.toLocaleLowerCase('vi-VN').includes(query) ||
+        market.location?.toLocaleLowerCase('vi-VN').includes(query),
+    );
+  }, [markets, marketSearchQuery]);
+
+  const closeMarketPicker = () => {
+    setShowMarketPicker(false);
+    setMarketSearchQuery('');
+  };
 
   const filteredProducts = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase('vi-VN');
@@ -630,6 +661,17 @@ export function OrderListScreen() {
                   <Text style={styles.retryText}>Thử lại</Text>
                 </Pressable>
               </View>
+            ) : !selectedMarketId ? (
+              <View style={styles.catalogState}>
+                <Ionicons name="storefront-outline" size={48} color={Colors.textMuted} />
+                <Text style={styles.emptyTitle}>Hãy chọn chợ để bắt đầu mua sắm</Text>
+                <Text style={styles.emptySubtitle}>
+                  Giá và tồn kho được hiển thị theo từng chợ đầu mối.
+                </Text>
+                <Pressable style={styles.retryButton} onPress={() => setShowMarketPicker(true)}>
+                  <Text style={styles.retryText}>Chọn chợ</Text>
+                </Pressable>
+              </View>
             ) : (
               <View style={styles.catalogState}>
                 <Ionicons name="search-outline" size={48} color={Colors.textMuted} />
@@ -656,45 +698,89 @@ export function OrderListScreen() {
         visible={showMarketPicker}
         animationType="slide"
         transparent
-        onRequestClose={() => setShowMarketPicker(false)}
+        onRequestClose={closeMarketPicker}
       >
         <View style={styles.modalOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowMarketPicker(false)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeMarketPicker} />
           <View style={styles.sheet}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Chọn chợ đầu mối</Text>
-            <Text style={styles.sheetSubtitle}>Giá và tồn kho được hiển thị theo từng chợ.</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {markets.map((market) => {
-                const active = market.id === selectedMarketId;
-                return (
-                  <Pressable
-                    key={market.id}
-                    style={[styles.marketOption, active && styles.marketOptionActive]}
-                    onPress={() => {
-                      setSelectedMarketId(market.id);
-                      setShowMarketPicker(false);
-                    }}
-                  >
-                    <View style={[styles.marketOptionIcon, active && styles.marketOptionIconActive]}>
-                      <Ionicons
-                        name="storefront-outline"
-                        size={21}
-                        color={active ? Colors.onPrimary : Colors.primaryText}
-                      />
-                    </View>
-                    <View style={styles.marketOptionText}>
-                      <Text style={styles.marketOptionName}>{market.name}</Text>
-                      <Text style={styles.marketOptionAddress} numberOfLines={1}>
-                        {market.address || market.location || 'Chưa cập nhật địa chỉ'}
-                      </Text>
-                    </View>
-                    {active ? (
-                      <Ionicons name="checkmark-circle" size={22} color={Colors.primaryText} />
-                    ) : null}
+
+            <View style={styles.sheetHeaderRow}>
+              <View style={styles.sheetHeaderIcon}>
+                <LogoIconSource width={50} height={50} />
+              </View>
+              <View style={styles.sheetHeaderText}>
+                <Text style={styles.sheetTitle}>
+                  {selectedMarketId ? 'Đổi chợ đầu mối' : 'Chọn chợ đầu mối'}
+                </Text>
+                <Text style={styles.sheetSubtitle}>
+                  {selectedMarketId
+                    ? 'Giá và tồn kho được hiển thị riêng theo từng chợ.'
+                    : 'Chọn chợ bạn muốn mua sắm hôm nay để bắt đầu.'}
+                </Text>
+              </View>
+            </View>
+
+            {markets.length > 4 ? (
+              <View style={styles.marketSearchBox}>
+                <Ionicons name="search-outline" size={16} color={Colors.textMuted} />
+                <TextInput
+                  style={styles.marketSearchInput}
+                  value={marketSearchQuery}
+                  onChangeText={setMarketSearchQuery}
+                  placeholder="Tìm chợ theo tên hoặc địa chỉ..."
+                  placeholderTextColor={Colors.textMuted}
+                />
+                {marketSearchQuery ? (
+                  <Pressable onPress={() => setMarketSearchQuery('')}>
+                    <Ionicons name="close-circle" size={17} color={Colors.textMuted} />
                   </Pressable>
-                );
-              })}
+                ) : null}
+              </View>
+            ) : null}
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {filteredMarkets.length === 0 ? (
+                <View style={styles.marketEmptyState}>
+                  <Ionicons name="search-outline" size={32} color={Colors.outline} />
+                  <Text style={styles.marketEmptyText}>Không tìm thấy chợ phù hợp.</Text>
+                </View>
+              ) : (
+                filteredMarkets.map((market) => {
+                  const active = market.id === selectedMarketId;
+                  return (
+                    <Pressable
+                      key={market.id}
+                      style={[styles.marketOption, active && styles.marketOptionActive]}
+                      onPress={() => {
+                        setSelectedMarketId(market.id);
+                        closeMarketPicker();
+                      }}
+                    >
+                      <View style={[styles.marketOptionIcon, active && styles.marketOptionIconActive]}>
+                        <Ionicons
+                          name="storefront-outline"
+                          size={21}
+                          color={active ? Colors.onPrimary : Colors.primaryText}
+                        />
+                      </View>
+                      <View style={styles.marketOptionText}>
+                        <Text style={styles.marketOptionName}>{market.name}</Text>
+                        <Text style={styles.marketOptionAddress} numberOfLines={1}>
+                          {market.address || market.location || 'Chưa cập nhật địa chỉ'}
+                        </Text>
+                      </View>
+                      {active ? (
+                        <View style={styles.marketOptionCheckBadge}>
+                          <Ionicons name="checkmark" size={15} color={Colors.onPrimary} />
+                        </View>
+                      ) : (
+                        <Ionicons name="chevron-forward" size={18} color={Colors.outline} />
+                      )}
+                    </Pressable>
+                  );
+                })
+              )}
             </ScrollView>
           </View>
         </View>
@@ -1033,8 +1119,36 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: Colors.surfaceContainerHigh,
   },
-  sheetTitle: { fontSize: 19, color: Colors.deepTeal, fontFamily: Fonts.bold },
-  sheetSubtitle: { marginTop: 4, marginBottom: 16, fontSize: 12, color: Colors.textSecondary },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  sheetHeaderIcon: {
+    width: 50,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetHeaderText: { flex: 1 },
+  sheetTitle: { fontSize: 18, color: Colors.deepTeal, fontFamily: Fonts.bold },
+  sheetSubtitle: { marginTop: 3, fontSize: 12, color: Colors.textSecondary, lineHeight: 16 },
+  marketSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  marketSearchInput: { flex: 1, fontSize: 13, color: Colors.textPrimary, paddingVertical: 0 },
+  marketEmptyState: { alignItems: 'center', gap: 8, paddingVertical: 32 },
+  marketEmptyText: { fontSize: 13, color: Colors.textMuted },
   marketOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1043,7 +1157,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     backgroundColor: Colors.surfaceContainerLow,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: 'transparent',
   },
   marketOptionActive: { backgroundColor: Colors.primaryLight, borderColor: Colors.primary },
@@ -1059,4 +1173,12 @@ const styles = StyleSheet.create({
   marketOptionText: { flex: 1 },
   marketOptionName: { fontSize: 14, color: Colors.deepTeal, fontFamily: Fonts.semibold },
   marketOptionAddress: { marginTop: 3, fontSize: 11, color: Colors.textMuted },
+  marketOptionCheckBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+  },
 });

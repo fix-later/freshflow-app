@@ -3,6 +3,7 @@ import { type CartItem, CartContext } from './cartStore';
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
 
   const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.qty, 0), [cart]);
   const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.qty, 0), [cart]);
@@ -57,6 +58,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         cart,
         cartCount,
         cartTotal,
+        selectedMarketId,
+        setSelectedMarketId,
         addToCart,
         removeFromCart,
         updateItemQty,
