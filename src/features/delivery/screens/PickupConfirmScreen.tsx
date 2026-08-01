@@ -27,8 +27,19 @@ interface PickupItem {
 
 function buildPickupItems(manifest: LoadingManifestDto): PickupItem[] {
   const items: PickupItem[] = [];
+  const previewStops = driverRouteStore.getPickupPreviewStops();
+  const customOrderMap = new Map(previewStops.map(s => [s.entityId, s.order]));
+
+  // Loading order onto truck: Last-delivered stop (Stop N) loaded FIRST (innermost),
+  // down to First-delivered stop (Stop 1) loaded LAST (outermost near truck door).
+  const sortedStops = [...manifest.stops].sort((a, b) => {
+    const orderA = customOrderMap.get(a.restaurantId) ?? a.stopOrder;
+    const orderB = customOrderMap.get(b.restaurantId) ?? b.stopOrder;
+    return orderB - orderA;
+  });
+
   let seq = 0;
-  for (const stop of manifest.stops) {
+  for (const stop of sortedStops) {
     const lineCountByOrder = new Map<string, number>();
     for (const line of stop.lines) {
       lineCountByOrder.set(line.orderId, (lineCountByOrder.get(line.orderId) ?? 0) + 1);
@@ -112,6 +123,14 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
 
   const allChecked = items.length > 0 && checked.size === items.length;
 
+  const toggleSelectAll = () => {
+    if (allChecked) {
+      setChecked(new Set());
+    } else {
+      setChecked(new Set(items.map(i => i.orderId)));
+    }
+  };
+
   const handleConfirm = () => {
     Alert.alert(
       'Xác nhận đã nhận hàng',
@@ -190,16 +209,33 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
             <View style={styles.instructBox}>
               <Ionicons name="information-circle-outline" size={15} color={Colors.secondary} />
               <Text style={styles.instructText}>
-                Nhấn vào từng đơn để đánh dấu đã nhận. Xác nhận khi đã nhận đủ tất cả.
+                Thứ tự bốc hàng được tự động sắp xếp theo tuyến đường bạn chọn: Hàng cho điểm giao cuối xếp vào sâu trong thùng xe trước ➔ Hàng cho điểm giao đầu xếp ngoài cửa xe sau cùng.
               </Text>
             </View>
 
-            {/* Progress */}
+            {/* Progress & Select All */}
             <View style={styles.progressRow}>
-              <Text style={styles.progressLabel}>Đã kiểm tra</Text>
-              <Text style={styles.progressCount}>
-                <Text style={styles.progressHighlight}>{checked.size}</Text>/{items.length} đơn
-              </Text>
+              <View style={{ gap: 2 }}>
+                <Text style={styles.progressLabel}>Đã kiểm tra</Text>
+                <Text style={styles.progressCount}>
+                  <Text style={styles.progressHighlight}>{checked.size}</Text>/{items.length} đơn
+                </Text>
+              </View>
+              {items.length > 0 && (
+                <Pressable
+                  style={({ pressed }) => [styles.selectAllBtn, pressed && { opacity: 0.7 }]}
+                  onPress={toggleSelectAll}
+                >
+                  <Ionicons
+                    name={allChecked ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                    size={15}
+                    color={Colors.primary}
+                  />
+                  <Text style={styles.selectAllBtnText}>
+                    {allChecked ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                  </Text>
+                </Pressable>
+              )}
             </View>
             <Text style={styles.sectionTitle}>Danh sách đơn cần nhận</Text>
           </>
@@ -272,9 +308,17 @@ const styles = StyleSheet.create({
   progressRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10,
   },
-  progressLabel: { fontSize: 13, color: Colors.textSecondary },
+  progressLabel: { fontSize: 12, color: Colors.textSecondary },
   progressCount: { fontSize: 13, color: Colors.textSecondary },
   progressHighlight: { fontWeight: '800', color: Colors.primary },
+
+  selectAllBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 8, borderWidth: 1, borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+  },
+  selectAllBtnText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
 
   sectionTitle: {
     fontSize: 11, fontWeight: '700', color: Colors.textMuted,

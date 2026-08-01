@@ -110,6 +110,12 @@ export interface LoadingManifestDto {
   stops: LoadingStopDto[];
 }
 
+// ─── POST /api/v1/driver/routes/{routeId}/reorder ──────────────────────────────
+
+export interface ReorderRouteRequest {
+  stopOrder: string[];
+}
+
 // ─── POST /driver/routes/{routeId}/start ───────────────────────────────────────
 
 /** Mirrors `StartRouteResultDto`. */

@@ -1,5 +1,5 @@
 import { driverApi } from '../api/driverApi';
-import type { DeliveryStatus, DriverRouteDto, RouteStatus } from '../types/delivery.types';
+import type { DeliveryStatus, DriverDeliveryDto, DriverRouteDto, RouteStatus } from '../types/delivery.types';
 
 // Module-level mutable store — same pattern as the old stopStatusStore/stopOrderStore,
 // now backed by the real API instead of mock data. Holds the driver's single active
@@ -45,20 +45,53 @@ export interface PickupPreviewStop {
 
 let _route: DriverRouteDto | null = null;
 let _stops: DeliveryStop[] = [];
+let _previewStops: PickupPreviewStop[] = [];
 
 function mergeStops(route: DriverRouteDto): DeliveryStop[] {
-  const restaurantStops = route.stops
-    .filter(s => s.entityType === 'restaurant')
-    .sort((a, b) => a.stopOrder - b.stopOrder);
+  const restaurantStops = route.stops.filter(s => s.entityType === 'restaurant');
 
+  // If driver arranged a custom preview order before pickup, preserve that custom order!
+  if (_previewStops.length > 0) {
+    const stopByEntityId = new Map(restaurantStops.map(s => [s.entityId, s]));
+
+    const deliveryByEntityId = new Map<string, DriverDeliveryDto>();
+    restaurantStops.forEach((stop, idx) => {
+      const delivery =
+        route.deliveries.find(d => d.sequenceNumber === stop.stopOrder) ?? route.deliveries[idx];
+      if (delivery) {
+        deliveryByEntityId.set(stop.entityId, delivery);
+      }
+    });
+
+    const orderedPreview = [..._previewStops].sort((a, b) => a.order - b.order);
+
+    return orderedPreview.map((ps, idx) => {
+      const stop = stopByEntityId.get(ps.entityId);
+      const delivery = deliveryByEntityId.get(ps.entityId);
+      return {
+        deliveryId: delivery?.deliveryId ?? `del-${ps.entityId}`,
+        orderId: delivery?.orderId ?? `ord-${ps.entityId}`,
+        order: idx + 1,
+        restaurantName: ps.restaurantName,
+        lat: ps.lat,
+        lng: ps.lng,
+        status: delivery?.status ?? 'pending',
+        estimatedArrival: delivery?.estimatedArrival ?? null,
+        actualArrival: delivery?.actualArrival ?? null,
+      };
+    });
+  }
+
+  // Fallback to server default stopOrder
+  const sortedStops = restaurantStops.sort((a, b) => a.stopOrder - b.stopOrder);
   return [...route.deliveries]
     .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
     .map((d, idx) => {
-      const stop = restaurantStops[idx];
+      const stop = sortedStops[idx];
       return {
         deliveryId: d.deliveryId,
         orderId: d.orderId,
-        order: d.sequenceNumber,
+        order: idx + 1,
         restaurantName: stop?.entityName ?? `Đơn #${d.orderId.slice(0, 8).toUpperCase()}`,
         lat: stop?.latitude ?? 0,
         lng: stop?.longitude ?? 0,
@@ -69,11 +102,27 @@ function mergeStops(route: DriverRouteDto): DeliveryStop[] {
     });
 }
 
+function buildPreviewStops(route: DriverRouteDto): PickupPreviewStop[] {
+  return route.stops
+    .filter(s => s.entityType === 'restaurant')
+    .sort((a, b) => a.stopOrder - b.stopOrder)
+    .map((s, idx) => ({
+      entityId: s.entityId,
+      order: idx + 1,
+      restaurantName: s.entityName,
+      lat: s.latitude,
+      lng: s.longitude,
+    }));
+}
+
 export const driverRouteStore = {
   /** Fetches today's route(s) and keeps the first one (a driver has at most one active route per day). */
   async load(): Promise<DriverRouteDto | null> {
     const routes = await driverApi.getTodayRoutes();
     _route = routes[0] ?? null;
+    if (_route && _previewStops.length === 0) {
+      _previewStops = buildPreviewStops(_route);
+    }
     _stops = _route ? mergeStops(_route) : [];
     return _route;
   },
@@ -101,17 +150,17 @@ export const driverRouteStore = {
 
   /** Restaurant stops for the "not picked up yet" preview — see PickupPreviewStop. */
   getPickupPreviewStops(): PickupPreviewStop[] {
-    if (!_route) return [];
-    return _route.stops
-      .filter(s => s.entityType === 'restaurant')
-      .sort((a, b) => a.stopOrder - b.stopOrder)
-      .map(s => ({
-        entityId: s.entityId,
-        order: s.stopOrder,
-        restaurantName: s.entityName,
-        lat: s.latitude,
-        lng: s.longitude,
-      }));
+    return _previewStops;
+  },
+
+  /** Reorder preview stops before pickup confirmation. */
+  setPickupPreviewStopOrder(entityIds: string[]) {
+    const byId = new Map(_previewStops.map(s => [s.entityId, s]));
+    const reordered = entityIds
+      .map(id => byId.get(id))
+      .filter((s): s is PickupPreviewStop => s !== undefined);
+    reordered.forEach((s, idx) => { s.order = idx + 1; });
+    _previewStops = reordered;
   },
 
   /** Patches the in-memory route status after a successful action (e.g. startRoute) without a full refetch. */

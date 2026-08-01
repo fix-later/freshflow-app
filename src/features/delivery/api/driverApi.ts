@@ -28,11 +28,14 @@ export const driverApi = {
     return data;
   },
 
+  /** POST /api/v1/driver/routes/{routeId}/reorder — persist custom stop sequence on server. */
+  async reorderRoute(routeId: string, stopOrder: string[]): Promise<void> {
+    await apiClient.post(`/api/v1/driver/routes/${routeId}/reorder`, { stopOrder });
+  },
+
   /**
    * GET /api/v1/logistics/routes/{routeId}/loading-manifest — the real orderIds
    * for this route's restaurant stops, needed to build the confirm-pickup checklist.
-   * Not under /driver — requires the backend to grant the `driver` role (+ a
-   * route-ownership check) on this action; 403s for a driver token until then.
    */
   async getLoadingManifest(routeId: string): Promise<LoadingManifestDto> {
     const { data } = await apiClient.get(`/api/v1/logistics/routes/${routeId}/loading-manifest`);
