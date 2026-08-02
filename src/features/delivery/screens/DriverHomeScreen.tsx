@@ -112,7 +112,6 @@ export function DriverHomeScreen() {
   const [showRouteMap, setShowRouteMap] = useState(false);
   const [currentLat, setCurrentLat] = useState<number | undefined>();
   const [currentLng, setCurrentLng] = useState<number | undefined>();
-  const [startingRoute, setStartingRoute] = useState(false);
 
   const [reorderMode, setReorderMode] = useState(false);
   const [itemById, setItemById] = useState<Map<string, HomeStopItem>>(new Map());
@@ -283,8 +282,10 @@ export function DriverHomeScreen() {
     setMapOrderIds([...orderIds]);
     setReorderMode(false);
     const route = driverRouteStore.getRoute();
-    if (route) {
-      driverApi.reorderRoute(route.routeId, orderIds).catch(() => {});
+    if (route && !hasPickupStarted && route.status === 'assigned') {
+      const hubStop = driverRouteStore.getHubStop();
+      const fullStopOrder = hubStop ? [hubStop.entityId, ...orderIds] : orderIds;
+      driverApi.reorderRoute(route.routeId, fullStopOrder).catch(() => {});
     }
   };
 
@@ -302,7 +303,7 @@ export function DriverHomeScreen() {
     }
   };
 
-  const handleMainAction = async () => {
+  const handleMainAction = () => {
     const route = driverRouteStore.getRoute();
     if (!route) return;
 
@@ -311,22 +312,10 @@ export function DriverHomeScreen() {
     if (hasPickupStarted) {
       // Pickup confirmed already! Go directly to StopList delivery execution screen
       navigation.navigate('StopList', { routeId: route.routeId });
-      return;
-    }
-
-    // Pickup not confirmed yet — start route if needed and go to PickupConfirmScreen
-    try {
-      if (NOT_STARTED_STATUSES.includes(route.status)) {
-        setStartingRoute(true);
-        await driverApi.startRoute(route.routeId);
-        driverRouteStore.setRouteStatus('in_progress');
-        setRouteStatus('in_progress');
-      }
+    } else {
+      // Pickup not confirmed yet — navigate to PickupConfirmScreen to check off items & confirm pickup.
+      // `startRoute` will be executed on PickupConfirmScreen AFTER confirmPickup creates delivery rows.
       navigation.navigate('PickupConfirm', { routeId: route.routeId });
-    } catch {
-      Alert.alert('Lỗi', 'Không thể bắt đầu tuyến đường. Vui lòng thử lại.');
-    } finally {
-      setStartingRoute(false);
     }
   };
 
@@ -518,9 +507,8 @@ export function DriverHomeScreen() {
       {/* ── Footer ── */}
       <View style={styles.footer}>
         <Pressable
-          style={({ pressed }) => [styles.hubBtn, pressed && { opacity: 0.85 }, startingRoute && { opacity: 0.6 }]}
-          onPress={startingRoute ? undefined : handleMainAction}
-          disabled={startingRoute}
+          style={({ pressed }) => [styles.hubBtn, pressed && { opacity: 0.85 }]}
+          onPress={handleMainAction}
         >
           <Ionicons
             name={hasPickupStarted ? 'bicycle-outline' : 'cube-outline'}
@@ -528,9 +516,7 @@ export function DriverHomeScreen() {
             color={Colors.onPrimary}
           />
           <Text style={styles.hubBtnText}>
-            {startingRoute
-              ? 'Đang xử lý...'
-              : hasPickupStarted
+            {hasPickupStarted
               ? 'Vào danh sách giao hàng'
               : 'Nhận hàng tại Hub'}
           </Text>

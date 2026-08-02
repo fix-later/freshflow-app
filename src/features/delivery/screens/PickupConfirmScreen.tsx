@@ -143,13 +143,16 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
             setConfirming(true);
             try {
               await driverApi.confirmPickup(routeId, items.map(i => i.orderId));
-              // Deliveries now exist server-side for the first time — refetch so
-              // downstream screens (StopList etc.), which read driverRouteStore,
-              // see the real per-order data instead of the stale empty list.
-              await driverRouteStore.load();
+              // Deliveries now exist server-side for the first time. Reload store to sync deliveries.
+              const reloadedRoute = await driverRouteStore.load();
+              // Now that deliveries exist on BE and route is assigned, start the route to transition it to in_progress
+              if (reloadedRoute && ['planned', 'selected', 'reviewed', 'assigned'].includes(reloadedRoute.status)) {
+                await driverApi.startRoute(routeId);
+                driverRouteStore.setRouteStatus('in_progress');
+              }
               navigation.replace('StopList', { routeId });
             } catch {
-              Alert.alert('Lỗi', 'Không thể xác nhận nhận hàng. Vui lòng thử lại.');
+              Alert.alert('Lỗi', 'Không thể xác nhận nhận hàng hoặc bắt đầu tuyến đường. Vui lòng thử lại.');
             } finally {
               setConfirming(false);
             }
