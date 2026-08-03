@@ -166,7 +166,7 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={Colors.driverPrimary} />
         </View>
       </SafeAreaView>
     );
@@ -179,7 +179,7 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
           <Ionicons name="cloud-offline-outline" size={52} color={Colors.error} />
           <Text style={styles.errorText}>{error}</Text>
           <Pressable style={styles.retryBtn} onPress={loadManifest}>
-            <Ionicons name="refresh" size={18} color={Colors.onPrimary} />
+            <Ionicons name="refresh" size={18} color={Colors.driverOnPrimary} />
             <Text style={styles.retryBtnText}>Thử lại</Text>
           </Pressable>
         </View>
@@ -200,7 +200,7 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
             {hub && (
               <View style={styles.hubCard}>
                 <View style={styles.hubIconWrap}>
-                  <Ionicons name="business-outline" size={28} color={Colors.primary} />
+                  <Ionicons name="business-outline" size={28} color={Colors.driverPrimary} />
                 </View>
                 <View style={styles.hubInfo}>
                   <Text style={styles.hubName}>{hub.entityName}</Text>
@@ -232,7 +232,7 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
                   <Ionicons
                     name={allChecked ? 'checkmark-circle' : 'checkmark-circle-outline'}
                     size={15}
-                    color={Colors.primary}
+                    color={Colors.driverPrimary}
                   />
                   <Text style={styles.selectAllBtnText}>
                     {allChecked ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
@@ -267,7 +267,7 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
           onPress={allChecked && !confirming ? handleConfirm : undefined}
           disabled={!allChecked || confirming}
         >
-          <Ionicons name="checkmark-circle" size={18} color={Colors.onPrimary} />
+          <Ionicons name="checkmark-circle" size={18} color={Colors.driverOnPrimary} />
           <Text style={styles.confirmBtnText}>{confirming ? 'Đang xác nhận...' : 'Xác nhận nhận hàng'}</Text>
         </Pressable>
       </View>
@@ -282,9 +282,9 @@ const styles = StyleSheet.create({
   retryBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
     marginTop: 4, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 11,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.driverPrimary,
   },
-  retryBtnText: { fontSize: 14, fontWeight: '700', color: Colors.onPrimary },
+  retryBtnText: { fontSize: 14, fontWeight: '700', color: Colors.driverOnPrimary },
   list: { padding: 16, paddingBottom: 0 },
 
   hubCard: {
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   },
   hubIconWrap: {
     width: 48, height: 48, borderRadius: 14,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.driverPrimaryLight,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   hubInfo: { flex: 1, gap: 3 },
@@ -313,15 +313,15 @@ const styles = StyleSheet.create({
   },
   progressLabel: { fontSize: 12, color: Colors.textSecondary },
   progressCount: { fontSize: 13, color: Colors.textSecondary },
-  progressHighlight: { fontWeight: '800', color: Colors.primary },
+  progressHighlight: { fontWeight: '800', color: Colors.driverPrimary },
 
   selectAllBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 8, borderWidth: 1, borderColor: Colors.primary,
-    backgroundColor: Colors.primaryLight,
+    borderRadius: 8, borderWidth: 1, borderColor: Colors.driverPrimary,
+    backgroundColor: Colors.driverPrimaryLight,
   },
-  selectAllBtnText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
+  selectAllBtnText: { fontSize: 11, fontWeight: '700', color: Colors.driverPrimary },
 
   sectionTitle: {
     fontSize: 11, fontWeight: '700', color: Colors.textMuted,
@@ -335,17 +335,17 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: Colors.outlineVariant,
   },
   cardChecked: {
-    borderColor: Colors.primary + '60',
-    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.driverPrimary + '60',
+    backgroundColor: Colors.driverPrimaryLight,
   },
   stopNum: {
     width: 34, height: 34, borderRadius: 10,
     backgroundColor: Colors.surfaceContainerHigh,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  stopNumChecked: { backgroundColor: Colors.primary },
+  stopNumChecked: { backgroundColor: Colors.driverPrimary },
   stopNumText: { fontSize: 14, fontWeight: '800', color: Colors.textMuted },
-  stopNumTextChecked: { color: Colors.onPrimary },
+  stopNumTextChecked: { color: Colors.driverOnPrimary },
 
   cardInfo: { flex: 1, gap: 4 },
   cardName: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: Colors.outlineVariant,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  checkboxChecked: { backgroundColor: Colors.driverPrimary, borderColor: Colors.driverPrimary },
 
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -369,9 +369,9 @@ const styles = StyleSheet.create({
   footerSub: { fontSize: 11, color: Colors.textMuted },
   confirmBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary,
+    gap: 8, backgroundColor: Colors.driverPrimary,
     borderRadius: 14, paddingVertical: 14,
   },
   confirmBtnDisabled: { opacity: 0.4 },
-  confirmBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  confirmBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 15 },
 });

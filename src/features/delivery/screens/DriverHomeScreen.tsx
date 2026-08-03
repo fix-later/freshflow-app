@@ -93,7 +93,7 @@ function StopOrderCard({
         <Ionicons
           name="reorder-four-outline"
           size={22}
-          color={isDragging ? Colors.primary : Colors.textMuted}
+          color={isDragging ? Colors.driverPrimary : Colors.textMuted}
           style={styles.dragHandle}
         />
       )}
@@ -331,7 +331,7 @@ export function DriverHomeScreen() {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={Colors.driverPrimary} />
           <Text style={styles.helperText}>Đang tải tuyến đường hôm nay...</Text>
         </View>
       </SafeAreaView>
@@ -345,7 +345,7 @@ export function DriverHomeScreen() {
           <Ionicons name="cloud-offline-outline" size={52} color={Colors.error} />
           <Text style={styles.errorText}>{error}</Text>
           <Pressable style={styles.retryBtn} onPress={loadRoute}>
-            <Ionicons name="refresh" size={18} color={Colors.onPrimary} />
+            <Ionicons name="refresh" size={18} color={Colors.driverOnPrimary} />
             <Text style={styles.retryBtnText}>Thử lại</Text>
           </Pressable>
         </View>
@@ -385,7 +385,7 @@ export function DriverHomeScreen() {
         <View style={styles.routeCard}>
           <View style={styles.routeCardHeader}>
             <View style={styles.statusBadge}>
-              <Ionicons name="bicycle-outline" size={13} color={Colors.primary} />
+              <Ionicons name="bicycle-outline" size={13} color={Colors.driverPrimary} />
               <Text style={styles.statusLabel}>{ROUTE_STATUS_LABEL[routeStatus]}</Text>
             </View>
             <Text style={styles.routeDate}>{serviceDate}</Text>
@@ -393,7 +393,7 @@ export function DriverHomeScreen() {
 
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Ionicons name="location-outline" size={22} color={Colors.primary} />
+              <Ionicons name="location-outline" size={22} color={Colors.driverPrimary} />
               <Text style={styles.statVal}>{orderedItems.length}</Text>
               <Text style={styles.statLbl}>Điểm giao</Text>
             </View>
@@ -431,12 +431,12 @@ export function DriverHomeScreen() {
           {!hasPickupStarted && (
             reorderMode ? (
               <TouchableOpacity style={styles.reorderDoneBtn} onPress={handleReorderDone}>
-                <Ionicons name="checkmark" size={13} color={Colors.onPrimary} />
+                <Ionicons name="checkmark" size={13} color={Colors.driverOnPrimary} />
                 <Text style={styles.reorderDoneBtnText}>Xong</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={styles.reorderToggleBtn} onPress={() => setReorderMode(true)}>
-                <Ionicons name="swap-vertical-outline" size={13} color={Colors.primary} />
+                <Ionicons name="swap-vertical-outline" size={13} color={Colors.driverPrimary} />
                 <Text style={styles.reorderToggleBtnText}>Sắp xếp</Text>
               </TouchableOpacity>
             )
@@ -445,7 +445,7 @@ export function DriverHomeScreen() {
 
         {reorderMode && (
           <View style={styles.reorderBanner}>
-            <Ionicons name="hand-left-outline" size={15} color={Colors.primary} />
+            <Ionicons name="hand-left-outline" size={15} color={Colors.driverPrimary} />
             <Text style={styles.reorderBannerText}>
               Giữ và kéo biểu tượng ≡ để đổi thứ tự ghé từng nhà hàng. Thứ tự này sẽ dùng để
               chất hàng lên xe — điểm giao cuối chất trước, điểm giao đầu chất sau cùng để dễ
@@ -513,7 +513,7 @@ export function DriverHomeScreen() {
           <Ionicons
             name={hasPickupStarted ? 'bicycle-outline' : 'cube-outline'}
             size={18}
-            color={Colors.onPrimary}
+            color={Colors.driverOnPrimary}
           />
           <Text style={styles.hubBtnText}>
             {hasPickupStarted
@@ -562,16 +562,16 @@ const styles = StyleSheet.create({
   retryBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
     marginTop: 4, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 11,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.driverPrimary,
   },
-  retryBtnText: { fontSize: 14, fontWeight: '700', color: Colors.onPrimary },
+  retryBtnText: { fontSize: 14, fontWeight: '700', color: Colors.driverOnPrimary },
 
   greetCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: Colors.primary, borderRadius: 16, padding: 18,
+    backgroundColor: Colors.driverPrimary, borderRadius: 16, padding: 18,
   },
   greetTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
-  greetSub: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+  greetSub: { fontSize: 12, color: 'rgba(255,255,255,0.85)' },
 
   sectionLabel: {
     fontSize: 12, fontWeight: '700', color: Colors.textMuted,
@@ -588,9 +588,9 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: Colors.primaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
+    backgroundColor: Colors.driverPrimaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
   },
-  statusLabel: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  statusLabel: { fontSize: 12, fontWeight: '700', color: Colors.driverPrimary },
   routeDate: { fontSize: 12, color: Colors.textMuted },
 
   statsRow: { flexDirection: 'row', alignItems: 'center' },
@@ -621,20 +621,20 @@ const styles = StyleSheet.create({
   reorderToggleBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 8, borderWidth: 1, borderColor: Colors.primary,
+    borderRadius: 8, borderWidth: 1, borderColor: Colors.driverPrimary,
   },
-  reorderToggleBtnText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
+  reorderToggleBtnText: { fontSize: 11, fontWeight: '700', color: Colors.driverPrimary },
   reorderDoneBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: Colors.driverPrimary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6,
   },
-  reorderDoneBtnText: { fontSize: 12, fontWeight: '700', color: Colors.onPrimary },
+  reorderDoneBtnText: { fontSize: 12, fontWeight: '700', color: Colors.driverOnPrimary },
 
   reorderBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    backgroundColor: Colors.primaryLight, borderRadius: 10, padding: 10,
+    backgroundColor: Colors.driverPrimaryLight, borderRadius: 10, padding: 10,
   },
-  reorderBannerText: { flex: 1, fontSize: 12, color: Colors.primary, fontWeight: '600', lineHeight: 17 },
+  reorderBannerText: { flex: 1, fontSize: 12, color: Colors.driverPrimary, fontWeight: '600', lineHeight: 17 },
 
   stopList: { gap: 0 },
 
@@ -644,26 +644,26 @@ const styles = StyleSheet.create({
     borderRadius: 14, padding: 12,
     borderWidth: 1, borderColor: Colors.outlineVariant,
   },
-  stopCardReorder: { borderColor: Colors.primary + '25' },
+  stopCardReorder: { borderColor: Colors.driverPrimary + '25' },
   stopCardDragging: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primary,
+    backgroundColor: Colors.driverPrimaryLight,
+    borderColor: Colors.driverPrimary,
     borderWidth: 1.5,
   },
   stopCardTarget: {
-    borderColor: Colors.primary,
+    borderColor: Colors.driverPrimary,
     borderWidth: 2,
     borderStyle: 'dashed',
   },
 
   stopNumBadge: {
     width: 34, height: 34, borderRadius: 10,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.driverPrimaryLight,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  stopNumBadgeDragging: { backgroundColor: Colors.primary },
-  stopNumText: { fontSize: 14, fontWeight: '800', color: Colors.primary },
-  stopNumTextDragging: { color: Colors.onPrimary },
+  stopNumBadgeDragging: { backgroundColor: Colors.driverPrimary },
+  stopNumText: { fontSize: 14, fontWeight: '800', color: Colors.driverPrimary },
+  stopNumTextDragging: { color: Colors.driverOnPrimary },
 
   stopInfo: { flex: 1, gap: 2 },
   stopName: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
@@ -679,9 +679,9 @@ const styles = StyleSheet.create({
   },
   hubBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 15,
+    gap: 8, backgroundColor: Colors.driverPrimary, borderRadius: 14, paddingVertical: 15,
   },
-  hubBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  hubBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 15 },
 
   modalScreen: { flex: 1, backgroundColor: Colors.background },
   modalHeader: {

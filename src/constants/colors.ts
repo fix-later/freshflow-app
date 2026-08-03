@@ -9,6 +9,13 @@ export const Colors = {
   onPrimaryContainer: '#2B8057',
   primaryText: '#2B8057',
 
+  // Driver palette (Darker rich emerald green for high contrast and readability)
+  driverPrimary: '#059669',
+  driverPrimary600: '#047857',
+  driverPrimaryLight: '#ECFDF5',
+  driverOnPrimary: '#FFFFFF',
+  driverPrimaryText: '#047857',
+
   // Secondary / accent (mirrors web freshflowAccent brand scale)
   secondary: '#313F90',
   secondaryContainer: '#E2E4EB',

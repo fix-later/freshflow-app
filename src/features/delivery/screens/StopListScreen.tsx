@@ -45,7 +45,7 @@ function StopCard({ stop, onPress }: { stop: DeliveryStop; onPress: () => void }
         </View>
         {!isDone && (
           <View style={styles.navBtn}>
-            <Ionicons name="navigate-outline" size={13} color={Colors.primary} />
+            <Ionicons name="navigate-outline" size={13} color={Colors.driverPrimary} />
             <Text style={styles.navBtnText}>Điều hướng</Text>
           </View>
         )}
@@ -63,7 +63,7 @@ function RouteCompleteView({ delivered, failed, durationText, onGoHome }: {
   return (
     <View style={styles.completeView}>
       <View style={styles.completeCircle}>
-        <Ionicons name="flag" size={40} color={Colors.onPrimary} />
+        <Ionicons name="flag" size={40} color={Colors.driverOnPrimary} />
       </View>
       <Text style={styles.completeTitle}>Tuyến đường hoàn tất!</Text>
       <Text style={styles.completeSub}>Bạn đã hoàn thành ca giao hàng hôm nay.</Text>
@@ -81,7 +81,7 @@ function RouteCompleteView({ delivered, failed, durationText, onGoHome }: {
         </View>
         <View style={styles.completeStatDivider} />
         <View style={styles.completeStat}>
-          <Ionicons name="location" size={24} color={Colors.primary} />
+          <Ionicons name="location" size={24} color={Colors.driverPrimary} />
           <Text style={styles.completeStatVal}>{delivered + failed}</Text>
           <Text style={styles.completeStatLbl}>Tổng điểm</Text>
         </View>
@@ -94,7 +94,7 @@ function RouteCompleteView({ delivered, failed, durationText, onGoHome }: {
         </View>
       </View>
       <Pressable style={styles.goHomeBtn} onPress={onGoHome}>
-        <Ionicons name="home-outline" size={18} color={Colors.onPrimary} />
+        <Ionicons name="home-outline" size={18} color={Colors.driverOnPrimary} />
         <Text style={styles.goHomeBtnText}>Về trang chủ</Text>
       </Pressable>
     </View>
@@ -156,7 +156,7 @@ export function StopListScreen({ route, navigation }: Props) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={Colors.driverPrimary} />
         </View>
       </SafeAreaView>
     );
@@ -238,7 +238,7 @@ export function StopListScreen({ route, navigation }: Props) {
             style={({ pressed }) => [styles.completeBtn, pressed && { opacity: 0.85 }]}
             onPress={handleCompleteRoute}
           >
-            <Ionicons name="checkmark-done-circle" size={18} color={Colors.onPrimary} />
+            <Ionicons name="checkmark-done-circle" size={18} color={Colors.driverOnPrimary} />
             <Text style={styles.completeBtnText}>Hoàn tất tuyến đường</Text>
           </Pressable>
         </View>
@@ -263,13 +263,13 @@ const styles = StyleSheet.create({
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   progressTitle: { fontSize: 12, color: Colors.textMuted, marginBottom: 2 },
   progressFrac: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
-  progressPct: { fontSize: 28, fontWeight: '900', color: Colors.primary },
+  progressPct: { fontSize: 28, fontWeight: '900', color: Colors.driverPrimary },
   progressTrack: {
     height: 8, borderRadius: 4,
     backgroundColor: Colors.surfaceContainerHigh,
     overflow: 'hidden',
   },
-  progressFill: { height: '100%', borderRadius: 4, backgroundColor: Colors.primary },
+  progressFill: { height: '100%', borderRadius: 4, backgroundColor: Colors.driverPrimary },
   progressMeta: { flexDirection: 'row', gap: 12 },
   progressMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dot: { width: 8, height: 8, borderRadius: 4 },
@@ -307,9 +307,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 4,
     alignSelf: 'flex-start', marginTop: 4,
     paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 8, backgroundColor: Colors.primaryLight,
+    borderRadius: 8, backgroundColor: Colors.driverPrimaryLight,
   },
-  navBtnText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  navBtnText: { fontSize: 12, fontWeight: '700', color: Colors.driverPrimary },
   // Complete footer
   completeFooter: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -321,10 +321,10 @@ const styles = StyleSheet.create({
   completeFooterText: { fontSize: 13, fontWeight: '600', color: Colors.success },
   completeBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary,
+    gap: 8, backgroundColor: Colors.driverPrimary,
     borderRadius: 14, paddingVertical: 14,
   },
-  completeBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  completeBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 15 },
   // Route complete view
   completeView: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   },
   completeCircle: {
     width: 88, height: 88, borderRadius: 44,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.driverPrimary,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 4,
   },
@@ -351,11 +351,11 @@ const styles = StyleSheet.create({
   completeStatDivider: { width: 1, backgroundColor: Colors.outlineVariant, marginHorizontal: 4 },
   goHomeBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary,
+    gap: 8, backgroundColor: Colors.driverPrimary,
     borderRadius: 14, paddingVertical: 14,
     paddingHorizontal: 32, marginTop: 8,
   },
-  goHomeBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  goHomeBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 15 },
   shiftCard: {
     flexDirection: 'row',
     backgroundColor: Colors.surfaceContainerLowest,
