@@ -17,7 +17,7 @@ import { Colors } from "../../../constants/colors";
 import { useAuthStore } from "../../../store/authStore";
 import { Button } from "../../../components/ui/Button";
 import { Logo } from "../../../components/ui/Logo";
-import { authApi } from "../api/authApi";
+import { authApi, UnsupportedRoleError } from "../api/authApi";
 
 export function LoginScreen() {
   const navigation = useNavigation();
@@ -31,12 +31,24 @@ export function LoginScreen() {
     if (!identifier.trim() || !password) return;
     setIsLoading(true);
     try {
-      const { user, accessToken } = await authApi.login(
+      const { user, accessToken, approvalStatus } = await authApi.login(
         identifier.trim(),
         password,
       );
       signIn(user, accessToken);
+      if (user.role === "RESTAURANT" && approvalStatus === "pending") {
+        Alert.alert(
+          "Tài khoản đang chờ duyệt",
+          "Hồ sơ nhà hàng của bạn đang chờ FreshFlow phê duyệt. Bạn có thể xem trước ứng dụng nhưng sẽ chưa đặt hàng được cho tới khi được duyệt.",
+          [{ text: "Đã hiểu" }],
+        );
+      }
     } catch (err: any) {
+      if (err instanceof UnsupportedRoleError) {
+        Alert.alert("Không hỗ trợ trên ứng dụng", err.message, [{ text: "Đã hiểu" }]);
+        return;
+      }
+
       const code: string = err?.response?.data?.code ?? "";
       const lockedUntil: string = err?.response?.data?.message ?? "";
 

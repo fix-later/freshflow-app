@@ -42,10 +42,14 @@ const ROLE_COLOR: Record<UserRole, string> = {
   [UserRole.DRIVER]: '#5c4033',
 };
 
+// Codes match ChangePasswordCommandHandler.cs exactly — VALIDATION_ERROR covers
+// both "new password same as current" (handler's own check) and FluentValidation
+// strength failures, but the FE form already blocks weak passwords before submit
+// (see validatePassword below), so in practice this is the same-password case.
 const CHANGE_PW_ERRORS: Record<string, string> = {
-  WRONG_PASSWORD: 'Mật khẩu hiện tại không đúng.',
-  WEAK_PASSWORD: 'Mật khẩu mới không đủ mạnh. Vui lòng kiểm tra lại.',
-  SAME_PASSWORD: 'Mật khẩu mới phải khác mật khẩu hiện tại.',
+  UNAUTHORIZED: 'Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.',
+  INVALID_CURRENT_PASSWORD: 'Mật khẩu hiện tại không đúng.',
+  VALIDATION_ERROR: 'Mật khẩu mới phải khác mật khẩu hiện tại.',
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -256,6 +260,20 @@ export function ProfileScreen() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      // BE revokes every refresh token for this user on a successful password
+      // change (ChangePasswordCommandHandler.cs), including the one this device
+      // is holding — so the current session is already dead. Sign out proactively
+      // instead of letting the user hit a confusing "session expired" error the
+      // next time the access token needs a silent refresh.
+      // Sign out unconditionally rather than from the button's onPress — on
+      // Android, Alert is dismissable by tapping outside it or pressing back,
+      // which would skip onPress and leave the dead session in place.
+      Alert.alert(
+        'Đổi mật khẩu thành công',
+        'Vui lòng đăng nhập lại bằng mật khẩu mới.',
+        [{ text: 'Đã hiểu' }],
+      );
+      void signOut();
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
       const fallback =
@@ -265,7 +283,7 @@ export function ProfileScreen() {
     } finally {
       setChangePwLoading(false);
     }
-  }, [canSubmitChangePw, currentPassword, newPassword]);
+  }, [canSubmitChangePw, currentPassword, newPassword, signOut]);
 
   const handleSignOut = useCallback(() => {
     Alert.alert('Đăng xuất', 'Bạn muốn đăng xuất khỏi FreshFlow?', [

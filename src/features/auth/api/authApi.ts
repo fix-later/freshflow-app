@@ -14,7 +14,22 @@ interface LoginResponse {
     email: string;
     role: string;
   };
-  approvalStatus: 'pending' | 'active' | 'suspended' | null;
+  // BE's RestaurantStatus enum has no JsonStringEnumConverter registered, so it
+  // serializes as its numeric ordinal (Pending=0, Active=1, Suspended=2), not a
+  // string — see RestaurantStatus.cs / Program.cs. Null for non-restaurant roles.
+  approvalStatus: 0 | 1 | 2 | null;
+}
+
+export type ApprovalStatus = 'pending' | 'active' | 'suspended' | null;
+
+const APPROVAL_STATUS_MAP: Record<0 | 1 | 2, ApprovalStatus> = {
+  0: 'pending',
+  1: 'active',
+  2: 'suspended',
+};
+
+function mapApprovalStatus(value: LoginResponse['approvalStatus']): ApprovalStatus {
+  return value === null ? null : APPROVAL_STATUS_MAP[value];
 }
 
 function parseJwt(token: string): Record<string, unknown> {
@@ -34,9 +49,21 @@ const ROLE_MAP: Record<string, UserRole> = {
   market_agent:       'MARKET_AGENT',
   hub_staff:          'HUB_STAFF',
   driver:             'DRIVER',
-  admin:              'RESTAURANT', // fallback — admin không có app stack riêng
   operations_manager: 'MARKET_AGENT',
 };
+
+// BE roles (see seed 20260606152229_AddRolesTable.cs) that have no mobile app
+// stack at all. Previously "admin" silently fell back to the RESTAURANT stack,
+// which then broke on every restaurant-only endpoint (404s) instead of telling
+// the user plainly that this account can't be used here.
+const UNSUPPORTED_MOBILE_ROLES = new Set(['admin']);
+
+export class UnsupportedRoleError extends Error {
+  constructor(public readonly role: string) {
+    super(`Vai trò "${role}" chưa được hỗ trợ trên ứng dụng di động.`);
+    this.name = 'UnsupportedRoleError';
+  }
+}
 
 // Map JWT claims → User (handles both modern short-form and legacy .NET SOAP claims)
 export function userFromToken(token: string): User {
@@ -54,8 +81,12 @@ export function userFromToken(token: string): User {
     (c['role'] as string) ??
     (c['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] as string) ??
     '';
+  const normalizedRole = rawRole.toLowerCase();
+  if (UNSUPPORTED_MOBILE_ROLES.has(normalizedRole)) {
+    throw new UnsupportedRoleError(rawRole);
+  }
   // Normalize: BE sends lowercase ("restaurant"), FE expects uppercase ("RESTAURANT")
-  const role: UserRole = ROLE_MAP[rawRole.toLowerCase()] ?? (rawRole.toUpperCase() as UserRole);
+  const role: UserRole = ROLE_MAP[normalizedRole] ?? (rawRole.toUpperCase() as UserRole);
   return { id, email, name, role };
 }
 
@@ -83,14 +114,21 @@ export const authApi = {
     return data;
   },
 
-  async login(identifier: string, password: string): Promise<{ user: User; accessToken: string }> {
+  async login(
+    identifier: string,
+    password: string,
+  ): Promise<{ user: User; accessToken: string; approvalStatus: ApprovalStatus }> {
     const { data } = await apiClient.post<LoginResponse>('/api/v1/auth/login', {
       identifier,
       password,
     });
+    // Resolve the role before persisting anything — throws for roles this app
+    // doesn't support (see UNSUPPORTED_MOBILE_ROLES), so no token ever gets
+    // stored for a session the app can't actually navigate into.
+    const user = userFromToken(data.accessToken);
     await SecureStore.setItemAsync(TOKEN_KEY, data.accessToken);
     await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, data.refreshToken);
-    return { user: userFromToken(data.accessToken), accessToken: data.accessToken };
+    return { user, accessToken: data.accessToken, approvalStatus: mapApprovalStatus(data.approvalStatus) };
   },
 
   async logout(refreshToken: string): Promise<void> {

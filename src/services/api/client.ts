@@ -123,6 +123,11 @@ apiClient.interceptors.response.use(
         return new Promise<string>((resolve, reject) =>
           failedQueue.push({ resolve, reject }),
         ).then((token) => {
+          // Mark retried before replay — otherwise a request that still comes
+          // back 401 after the queued retry (e.g. that endpoint is 401 for an
+          // unrelated reason) would re-enter this branch and kick off a second,
+          // redundant refresh cycle using the token that was just rotated.
+          original._retry = true;
           original.headers.Authorization = `Bearer ${token}`;
           return apiClient(original);
         });
