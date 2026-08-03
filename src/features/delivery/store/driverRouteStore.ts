@@ -140,7 +140,7 @@ export const driverRouteStore = {
   },
 
   getHubStop() {
-    return _route?.stops.find(s => s.entityType === 'market');
+    return _route?.stops.find(s => s.entityType === 'market' || s.stopOrder === 0) ?? _route?.stops[0];
   },
 
   /** True once at least one Delivery exists for this route (pickup confirmed at least once). */

@@ -250,6 +250,15 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
             onToggle={() => toggleItem(item.orderId)}
           />
         )}
+        ListEmptyComponent={
+          <View style={styles.emptyCard}>
+            <Ionicons name="cube-outline" size={42} color={Colors.textMuted} />
+            <Text style={styles.emptyTitle}>Chưa có đơn hàng sẵn sàng tại Hub</Text>
+            <Text style={styles.emptySub}>
+              Không tìm thấy đơn hàng nào ở trạng thái "Đã về Hub" (AtHub) cho tuyến này. Vui lòng chuyển trạng thái đơn hàng sang "AtHub" trên hệ thống Admin Backend.
+            </Text>
+          </View>
+        }
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         ListFooterComponent={<View style={{ height: 100 }} />}
       />
@@ -286,6 +295,16 @@ const styles = StyleSheet.create({
   },
   retryBtnText: { fontSize: 14, fontWeight: '700', color: Colors.driverOnPrimary },
   list: { padding: 16, paddingBottom: 0 },
+
+  emptyCard: {
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 16, padding: 24, gap: 10,
+    borderWidth: 1, borderColor: Colors.outlineVariant,
+    marginTop: 10,
+  },
+  emptyTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
+  emptySub: { fontSize: 12, color: Colors.textMuted, textAlign: 'center', lineHeight: 18 },
 
   hubCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
