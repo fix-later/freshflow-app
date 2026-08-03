@@ -22,9 +22,14 @@ import { restaurantApi } from '../../restaurant/api/restaurantApi';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'ConfirmOrder'>;
 
+// Matches RestaurantCredit's Warning (>=80%) / Exceeded (>=100%) thresholds on
+// the backend, so this banner agrees with what triggers BE credit alerts.
+const CREDIT_WARNING_RATIO = 0.8;
+const CREDIT_EXCEEDED_RATIO = 1;
+
 function CreditAlertBanner({ ratio, available }: { ratio: number; available: number }) {
-  if (ratio < 0.7) return null;
-  const isDanger = ratio >= 0.9;
+  if (ratio < CREDIT_WARNING_RATIO) return null;
+  const isDanger = ratio >= CREDIT_EXCEEDED_RATIO;
   const accent = isDanger ? '#EF4444' : '#F59E0B';
   const bg = isDanger ? '#FEE2E2' : '#FEF3C7';
   const icon: React.ComponentProps<typeof Ionicons>['name'] = isDanger ? 'warning' : 'alert-circle';

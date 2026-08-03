@@ -30,6 +30,13 @@ type Props = NativeStackScreenProps<RestaurantProfileStackParamList, 'CreditStat
 
 const STATEMENT_PAGE_SIZE = 20;
 
+// Backend always renders statement periods/dates in Asia/Ho_Chi_Minh (see
+// StatementPdfRenderer), even though PeriodStart/PeriodEnd are stored as UTC
+// boundaries of a VN calendar month. Pin the same zone here so the on-screen
+// detail agrees with the PDF instead of drifting a day/month off on devices
+// that aren't set to VN time.
+const VN_TIMEZONE = 'Asia/Ho_Chi_Minh';
+
 function formatVnd(amount: number) {
   return amount.toLocaleString('vi-VN') + 'đ';
 }
@@ -38,12 +45,20 @@ function formatPeriod(start: string, end: string) {
   const startDate = new Date(start);
   const endDate = new Date(end);
   const inclusiveEnd = new Date(endDate.getTime() - 1);
+  const opts: Intl.DateTimeFormatOptions = { timeZone: VN_TIMEZONE };
 
-  return `${startDate.toLocaleDateString('vi-VN')} – ${inclusiveEnd.toLocaleDateString('vi-VN')}`;
-}function formatMonthTitle(periodStart: string) {
-  const d = new Date(periodStart);
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  return `Tháng ${month}/${d.getFullYear()}`;
+  return `${startDate.toLocaleDateString('vi-VN', opts)} - ${inclusiveEnd.toLocaleDateString('vi-VN', opts)}`;
+}
+
+function formatMonthTitle(periodStart: string) {
+  // formatToParts didn't reliably return 'month'/'year' parts here (returned
+  // empty, causing "Tháng /"). toLocaleDateString's plain D/M/YYYY output
+  // does work (see formatPeriod/generatedAt above), so parse the month/year
+  // out of that instead — confirmed working on-device.
+  const [, month, year] = new Date(periodStart)
+    .toLocaleDateString('vi-VN', { timeZone: VN_TIMEZONE })
+    .split('/');
+  return `Tháng ${(month ?? '').padStart(2, '0')}/${year ?? ''}`;
 }
 
 function base64ArrayBuffer(arrayBuffer: ArrayBuffer): string {
@@ -97,7 +112,7 @@ function StatementCard({
           <Text style={styles.periodText}>{formatPeriod(item.periodStart, item.periodEnd)}</Text>
         </View>
         <Text style={styles.generatedDate}>
-          Chốt ngày {new Date(item.generatedAt).toLocaleDateString('vi-VN')}
+          Chốt ngày {new Date(item.generatedAt).toLocaleDateString('vi-VN', { timeZone: VN_TIMEZONE })}
         </Text>
       </View>
 
@@ -485,7 +500,7 @@ export function CreditStatementsScreen({ route }: Props) {
                           <View style={styles.dueDateRow}>
                             <Ionicons name="calendar-outline" size={16} color={Colors.warning} />
                             <Text style={styles.dueDateText}>
-                              Hạn thanh toán: {new Date(statementDetail.dueDate).toLocaleDateString('vi-VN')}
+                              Hạn thanh toán: {new Date(statementDetail.dueDate).toLocaleDateString('vi-VN', { timeZone: VN_TIMEZONE })}
                             </Text>
                           </View>
                         ) : null}
@@ -519,6 +534,7 @@ export function CreditStatementsScreen({ route }: Props) {
                                 ) : null}
                                 <Text style={styles.lineDate}>
                                   {new Date(line.occurredAt).toLocaleString('vi-VN', {
+                                    timeZone: VN_TIMEZONE,
                                     day: '2-digit',
                                     month: '2-digit',
                                     hour: '2-digit',
