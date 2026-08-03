@@ -15,8 +15,8 @@ import { Colors } from '../../../constants/colors';
 import { Text } from '../../../components/ui/Text';
 import {
   creditApi,
-  TRANSACTION_TYPE_COLOR,
-  TRANSACTION_TYPE_LABEL,
+  getTransactionTypeColor,
+  getTransactionTypeLabel,
   type CreditDto,
   type CreditTransactionDto,
 } from '../api/creditApi';
@@ -85,10 +85,11 @@ function StatCard({
 }
 
 function TransactionRow({ item }: { item: CreditTransactionDto }) {
-  const isCharge = item.type === 'charge';
-  const isAdjustment = item.type === 'adjustment';
-  const color = TRANSACTION_TYPE_COLOR[item.type] ?? Colors.textMuted;
-  const label = TRANSACTION_TYPE_LABEL[item.type] ?? item.type;
+  const typeLower = (item.type || '').toLowerCase();
+  const isCharge = typeLower === 'charge';
+  const isAdjustment = typeLower === 'adjustment';
+  const color = getTransactionTypeColor(item.type);
+  const label = getTransactionTypeLabel(item.type);
   const sign = isCharge ? '−' : isAdjustment ? '' : '+';
   const detail = item.orderId
     ? `Đơn #${item.orderId.slice(0, 8).toUpperCase()}`
