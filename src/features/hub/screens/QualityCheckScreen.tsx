@@ -87,7 +87,7 @@ export function QualityCheckScreen({ route, navigation }: Props) {
           <Pressable
             disabled={!completed}
             style={[styles.completeButton, !completed && styles.completeButtonDisabled]}
-            onPress={() => navigation.navigate('HubTabs', { screen: 'Sorting' })}
+            onPress={() => navigation.navigate('HubTabs', { screen: 'InboundQueue' })}
           >
             <Text style={[styles.completeText, !completed && styles.completeTextDisabled]}>Hoàn tất kiểm tra</Text><Ionicons name="checkmark-circle" size={18} color={completed ? Colors.onPrimary : Colors.textMuted} />
           </Pressable>

@@ -105,7 +105,6 @@ export type MarketAgentStackParamList = {
 export type HubTabParamList = {
   HubDashboard: undefined;
   InboundQueue: undefined;
-  Sorting: undefined;
   HubProfile: undefined;
 };
 

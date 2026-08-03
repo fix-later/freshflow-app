@@ -51,6 +51,31 @@ export interface HubInboundTask extends HubInboundDto {
   hub: AssignedHubDto;
 }
 
+export type HubDiscrepancyCondition = 'MISSING' | 'DAMAGED' | 'PARTIAL';
+
+export interface HubDiscrepancyDto {
+  discrepancyId: string;
+  hubId: string;
+  inboundEventId: string;
+  orderId: string;
+  orderItemId: string;
+  affectedQuantity: number;
+  conditionStatus: HubDiscrepancyCondition;
+  notes: string | null;
+  status: 'OPEN' | 'ACKNOWLEDGED' | string;
+  acknowledgedBy: string | null;
+  acknowledgedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecordHubDiscrepancyRequest {
+  orderItemId: string;
+  affectedQuantity: number;
+  conditionStatus: HubDiscrepancyCondition;
+  notes?: string | null;
+}
+
 export interface HubWorkDto {
   assignedHubs: AssignedHubDto[];
   inboundTasks: HubInboundTask[];
@@ -234,6 +259,35 @@ function mapProcurementOrders(
   return result;
 }
 
+function normalizeProductName(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLocaleLowerCase('vi-VN');
+}
+
+function getVietnamDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value.slice(0, 10);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(parsed);
+  const read = (type: Intl.DateTimeFormatPartTypes) => (
+    parts.find((part) => part.type === type)?.value ?? ''
+  );
+  return `${read('year')}-${read('month')}-${read('day')}`;
+}
+
+function addIsoDays(value: string, days: number): string {
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
 export const hubApi = {
   /** Hubs that Admin/Operations Manager assigned to the authenticated Hub Staff. */
   async getAssignedHubs(): Promise<AssignedHubDto[]> {
@@ -309,6 +363,11 @@ export const hubApi = {
       // Keep the batch/order identifiers usable even when the optional detail API is unavailable.
     }
 
+    const marketProductIdByName = new Map(batch.items.map((item) => [
+      normalizeProductName(item.productName),
+      item.marketProductId,
+    ]));
+
     return {
       ...batch,
       items: batch.items.map((item) => ({
@@ -319,9 +378,44 @@ export const hubApi = {
       })),
       orders: batch.orderIds.flatMap((orderId) => {
         const order = orderDetails.get(orderId);
-        return order ? [order] : [];
+        return order ? [{
+          ...order,
+          items: order.items.map((item) => ({
+            ...item,
+            marketProductId: item.marketProductId
+              ?? marketProductIdByName.get(normalizeProductName(item.productName))
+              ?? null,
+          })),
+        }] : [];
       }),
     };
+  },
+
+  /** Resolve the procurement batch linked to a physical inbound task. */
+  async getInboundBatchDetail(task: HubInboundTask): Promise<HubProcurementBatchDto | null> {
+    if (!task.deliveryScheduleId) return null;
+
+    const centerDate = getVietnamDate(task.arrivedAt);
+    const offsets = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, 6, 7];
+    for (let index = 0; index < offsets.length; index += 3) {
+      const dates = offsets.slice(index, index + 3).map((offset) => addIsoDays(centerDate, offset));
+      const results = await Promise.allSettled(dates.map((date) => (
+        this.getProcurementPlan(task.hubId, date)
+      )));
+      const matchedIndex = results.findIndex((result) => (
+        result.status === 'fulfilled'
+        && result.value.batches.some((batch) => batch.batchId === task.deliveryScheduleId)
+      ));
+      if (matchedIndex >= 0) {
+        return this.getProcurementBatchDetail(
+          task.hubId,
+          dates[matchedIndex],
+          task.deliveryScheduleId,
+        );
+      }
+    }
+
+    return null;
   },
 
   /** Orders staged at one Hub, grouped by restaurant without requiring a route. */
@@ -434,5 +528,31 @@ export const hubApi = {
       code: inboundId,
     });
     return data;
+  },
+
+  async recordDiscrepancy(
+    hubId: string,
+    inboundId: string,
+    request: RecordHubDiscrepancyRequest,
+  ): Promise<HubDiscrepancyDto> {
+    const { data } = await apiClient.post<HubDiscrepancyDto>(
+      `/api/v1/hubs/${hubId}/inbound/${inboundId}/discrepancy`,
+      request,
+    );
+    return data;
+  },
+
+  async getDiscrepancies(hubId: string, status?: string): Promise<HubDiscrepancyDto[]> {
+    const discrepancies: HubDiscrepancyDto[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await getCursorPaged<HubDiscrepancyDto>(
+        `/api/v1/hubs/${hubId}/discrepancies`,
+        { params: { status, cursor, page_size: PENDING_PAGE_SIZE } },
+      );
+      discrepancies.push(...page.data);
+      cursor = page.meta.nextCursor ?? undefined;
+    } while (cursor);
+    return discrepancies;
   },
 };

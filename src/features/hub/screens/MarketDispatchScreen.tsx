@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +27,7 @@ import {
 } from '../api/hubDispatchApi';
 import { useHubDispatch } from '../hooks/useHubDispatch';
 import { useHubWork } from '../hooks/useHubWork';
+import { hubApi, type HubDiscrepancyDto } from '../api/hubApi';
 
 type VehicleChoice = {
   vehicle: HubVehicleDto;
@@ -137,6 +138,36 @@ export function MarketDispatchScreen() {
   const [assigningVehicleId, setAssigningVehicleId] = useState<string | null>(null);
   const [selectedVehicleChoice, setSelectedVehicleChoice] = useState<VehicleChoice | null>(null);
   const [eligibleDrivers, setEligibleDrivers] = useState<EligibleDriverDto[]>([]);
+  const [openDiscrepancies, setOpenDiscrepancies] = useState<HubDiscrepancyDto[]>([]);
+  const [discrepancyWarning, setDiscrepancyWarning] = useState<string | null>(null);
+
+  const loadOpenDiscrepancies = async () => {
+    if (assignedHubs.length === 0) {
+      setOpenDiscrepancies([]);
+      setDiscrepancyWarning(null);
+      return;
+    }
+    const results = await Promise.allSettled(
+      assignedHubs.map((hub) => hubApi.getDiscrepancies(hub.hubId, 'OPEN')),
+    );
+    setOpenDiscrepancies(results.flatMap((result) => (
+      result.status === 'fulfilled' ? result.value : []
+    )));
+    const failedCount = results.filter((result) => result.status === 'rejected').length;
+    setDiscrepancyWarning(failedCount > 0
+      ? `Chưa kiểm tra được discrepancy của ${failedCount} Hub. Hãy tải lại trước khi bàn giao.`
+      : null);
+  };
+
+  useEffect(() => {
+    void loadOpenDiscrepancies();
+    // Hub assignments are represented by this stable id list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignedHubs.map((hub) => hub.hubId).join(':')]);
+
+  const refreshAll = async () => {
+    await Promise.all([refresh(), loadOpenDiscrepancies()]);
+  };
 
   const routes = (plan?.routes ?? []).filter((item) => item.manifest.stops.length > 0);
   const vehicles = plan?.vehicles ?? [];
@@ -275,7 +306,7 @@ export function MarketDispatchScreen() {
             refreshControl={(
               <RefreshControl
                 refreshing={refreshing}
-                onRefresh={refresh}
+                onRefresh={() => void refreshAll()}
                 colors={[Colors.primaryText]}
                 tintColor={Colors.primaryText}
               />
@@ -304,6 +335,25 @@ export function MarketDispatchScreen() {
               </Text>
             </View>
 
+            {openDiscrepancies.length > 0 ? (
+              <View style={styles.discrepancyNotice}>
+                <Ionicons name="warning-outline" size={21} color="#8A5900" />
+                <View style={styles.discrepancyNoticeCopy}>
+                  <Text style={styles.discrepancyNoticeTitle}>
+                    {openDiscrepancies.length} discrepancy đang chờ Operations xử lý
+                  </Text>
+                  <Text style={styles.discrepancyNoticeText}>
+                    Tuyến chứa đơn bị ảnh hưởng sẽ không thể bàn giao để dispatch cho tới khi discrepancy được xác nhận.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+            {discrepancyWarning ? (
+              <View style={styles.inlineError}>
+                <Text style={styles.inlineErrorText}>{discrepancyWarning}</Text>
+              </View>
+            ) : null}
+
             <View style={styles.sectionHeading}>
               <View>
                 <Text style={styles.sectionTitle}>Tuyến giao nhà hàng</Text>
@@ -313,7 +363,7 @@ export function MarketDispatchScreen() {
                     : 'Các tuyến trong 7 ngày đã được cập nhật'}
                 </Text>
               </View>
-              <Pressable accessibilityLabel="Tải lại kế hoạch phân xe" style={styles.refreshButton} onPress={refresh}>
+              <Pressable accessibilityLabel="Tải lại kế hoạch phân xe" style={styles.refreshButton} onPress={() => void refreshAll()}>
                 <Ionicons name="refresh" size={18} color={Colors.onPrimary} />
               </Pressable>
             </View>
@@ -342,6 +392,12 @@ export function MarketDispatchScreen() {
                     key={item.route.id}
                     item={item}
                     vehicle={item.route.vehicleId ? vehicleById.get(item.route.vehicleId) : undefined}
+                    openDiscrepancyCount={openDiscrepancies.filter((discrepancy) => (
+                      item.manifest.stops.some((stop) => (
+                        stop.lines.some((line) => line.orderId === discrepancy.orderId)
+                      ))
+                    )).length}
+                    discrepancyCheckFailed={Boolean(discrepancyWarning)}
                     onAssign={() => void openVehiclePicker(item)}
                     onHandoff={() => {
                       const routeMarketIds = new Set(item.route.stops.filter((stop) => stop.entityType === 'market').map((stop) => stop.entityId));
@@ -381,11 +437,15 @@ export function MarketDispatchScreen() {
 function DispatchCard({
   item,
   vehicle,
+  openDiscrepancyCount,
+  discrepancyCheckFailed,
   onAssign,
   onHandoff,
 }: {
   item: HubDispatchPlanItem;
   vehicle?: HubVehicleDto;
+  openDiscrepancyCount: number;
+  discrepancyCheckFailed: boolean;
   onAssign: () => void;
   onHandoff: () => void;
 }) {
@@ -397,6 +457,7 @@ function DispatchCard({
     ? manifest.stops.map((stop) => stop.restaurantName)
     : restaurantStops.map((stop) => stop.entityName);
   const assignable = route.status === 'reviewed' && !route.vehicleId;
+  const handoffBlocked = openDiscrepancyCount > 0 || discrepancyCheckFailed;
 
   return (
     <View style={styles.dispatchCard}>
@@ -469,8 +530,26 @@ function DispatchCard({
           <Text numeric style={styles.durationText}>~{route.estimatedDurationMinutes} phút</Text>
         ) : null}
       </View>
+      {openDiscrepancyCount > 0 ? (
+        <View style={styles.routeDiscrepancy}>
+          <Ionicons name="warning-outline" size={16} color="#8A5900" />
+          <Text style={styles.routeDiscrepancyText}>
+            {openDiscrepancyCount} discrepancy mở · Chưa thể bàn giao để dispatch
+          </Text>
+        </View>
+      ) : null}
+      {discrepancyCheckFailed ? (
+        <View style={styles.routeDiscrepancy}>
+          <Ionicons name="cloud-offline-outline" size={16} color="#8A5900" />
+          <Text style={styles.routeDiscrepancyText}>Chưa xác minh được discrepancy · Tạm khóa bàn giao</Text>
+        </View>
+      ) : null}
       {route.vehicleId && route.driverUserId && route.status === 'assigned' ? (
-        <Pressable style={styles.assignButton} onPress={onHandoff}>
+        <Pressable
+          disabled={handoffBlocked}
+          style={[styles.assignButton, handoffBlocked && styles.handoffDisabled]}
+          onPress={onHandoff}
+        >
           <Text style={styles.assignButtonText}>Bàn giao cho tài xế</Text>
           <Ionicons name="arrow-forward" size={15} color={Colors.primaryText} />
         </Pressable>
@@ -698,6 +777,10 @@ const styles = StyleSheet.create({
     gap: 9,
   },
   noticeText: { flex: 1, color: Colors.textSecondary, fontSize: 10, lineHeight: 15 },
+  discrepancyNotice: { marginHorizontal: 16, marginTop: 10, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#D9B967', backgroundColor: Colors.warningLight, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
+  discrepancyNoticeCopy: { flex: 1 },
+  discrepancyNoticeTitle: { fontSize: 10, fontWeight: '800', color: '#704700' },
+  discrepancyNoticeText: { fontSize: 9, lineHeight: 14, color: '#805B20', marginTop: 3 },
   sectionHeading: {
     marginHorizontal: 16,
     marginTop: 20,
@@ -755,6 +838,9 @@ const styles = StyleSheet.create({
   cardFooter: { borderTopWidth: 1, borderTopColor: Colors.outlineVariant, paddingTop: 9, flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   cardFooterText: { flex: 1, fontSize: 8, color: Colors.textMuted },
   durationText: { fontSize: 8, fontFamily: Fonts.monoMedium, color: Colors.textSecondary },
+  routeDiscrepancy: { borderRadius: 9, backgroundColor: Colors.warningLight, paddingHorizontal: 9, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  routeDiscrepancyText: { flex: 1, fontSize: 8, fontWeight: '700', color: '#805B20' },
+  handoffDisabled: { opacity: 0.45 },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.overlay },
   modalSheet: { height: '70%', maxHeight: 600, backgroundColor: Colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 18 },

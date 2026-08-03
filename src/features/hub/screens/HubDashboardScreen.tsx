@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -10,8 +9,6 @@ import { EmptyState, ErrorView, Loading, Text } from '../../../components/ui';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import { isInboundReceived, type HubInboundTask } from '../api/hubApi';
-import { useHubDispatch } from '../hooks/useHubDispatch';
-import { useHubProcurementWeek } from '../hooks/useHubProcurementWeek';
 import { useHubWork } from '../hooks/useHubWork';
 
 type Navigation = NativeStackNavigationProp<HubStackParamList>;
@@ -47,32 +44,10 @@ export function HubDashboardScreen() {
   const navigation = useNavigation<Navigation>();
   const { user } = useAuth();
   const { assignedHubs, inboundTasks, loading, refreshing, error, refresh } = useHubWork();
-  const procurementWeek = useHubProcurementWeek(assignedHubs);
-  const {
-    plan: dispatchPlan,
-    loading: dispatchLoading,
-    refreshing: dispatchRefreshing,
-    error: dispatchError,
-    refresh: refreshDispatch,
-  } = useHubDispatch(assignedHubs);
   const displayName = user?.name?.trim() || 'Nhân viên Hub';
   const pendingTasks = inboundTasks.filter((task) => !isInboundReceived(task.status));
   const receivedTasks = inboundTasks.filter((task) => isInboundReceived(task.status));
   const pendingWeight = pendingTasks.reduce((sum, task) => sum + task.totalQuantityKg, 0);
-  const procurementBatches = procurementWeek.plans.flatMap((plan) => plan.batches);
-  const procurementOrderCount = new Set(
-    procurementBatches.flatMap((batch) => batch.orderIds),
-  ).size;
-  const procurementWaitingCount = procurementBatches.filter(
-    (batch) => batch.status !== 'HandedOff' && batch.status !== 'Cancelled',
-  ).length;
-  const weekOrderCount = dispatchPlan?.routes.reduce(
-    (sum, item) => sum + item.manifest.stops.length,
-    0,
-  ) ?? 0;
-  const routesWaitingForVehicle = dispatchPlan?.routes.filter(
-    ({ route: dispatchRoute }) => dispatchRoute.status === 'reviewed' && !dispatchRoute.vehicleId,
-  ).length ?? 0;
   const assignmentLabel = assignedHubs.length === 0
     ? 'Chưa được Admin phân công Hub'
     : assignedHubs.length === 1
@@ -83,10 +58,6 @@ export function HubDashboardScreen() {
     navigation.navigate('CheckIn', { batchId: task.inboundId, assignedTask: task });
   };
 
-  const refreshAll = useCallback(async () => {
-    await Promise.all([refresh(), refreshDispatch(), procurementWeek.refresh()]);
-  }, [refresh, refreshDispatch, procurementWeek.refresh]);
-
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
@@ -95,8 +66,8 @@ export function HubDashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={(
           <RefreshControl
-            refreshing={refreshing || dispatchRefreshing || procurementWeek.refreshing}
-            onRefresh={refreshAll}
+            refreshing={refreshing}
+            onRefresh={refresh}
             colors={[Colors.primaryText]}
             tintColor={Colors.primary}
           />
@@ -144,53 +115,6 @@ export function HubDashboardScreen() {
               <Metric icon="file-tray-full-outline" value={`${pendingTasks.length}`} label="Lô chờ nhận" tone="amber" />
               <Metric icon="scale-outline" value={formatWeight(pendingWeight)} label="Kg chờ nhận" tone="green" />
             </View>
-
-            <Pressable
-              style={styles.procurementOverview}
-              onPress={() => navigation.navigate('HubProcurementWeek')}
-            >
-              <View style={styles.dispatchOverviewIcon}>
-                <Ionicons name="calendar-outline" size={22} color={Colors.primaryText} />
-              </View>
-              <View style={styles.dispatchOverviewCopy}>
-                <Text style={styles.dispatchOverviewTitle}>Hàng dự kiến về Hub trong 7 ngày</Text>
-                <Text style={styles.dispatchOverviewSub}>
-                  {procurementWeek.loading && procurementWeek.plans.length === 0
-                    ? 'Đang đồng bộ kế hoạch thu mua...'
-                    : procurementWeek.error && procurementWeek.plans.length === 0
-                      ? 'Chưa tải được kế hoạch · Chạm để xem lại'
-                      : `${procurementOrderCount} đơn · ${procurementBatches.length} lô thu mua`}
-                </Text>
-              </View>
-              {procurementWaitingCount > 0 ? (
-                <View style={styles.dispatchCountBadge}>
-                  <Text numeric style={styles.dispatchCountText}>{procurementWaitingCount}</Text>
-                </View>
-              ) : null}
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </Pressable>
-
-            <Pressable style={styles.dispatchOverview} onPress={() => navigation.navigate('MarketDispatch')}>
-              <View style={styles.dispatchOverviewIcon}>
-                <Ionicons name="car-sport-outline" size={22} color={Colors.primaryText} />
-              </View>
-              <View style={styles.dispatchOverviewCopy}>
-                <Text style={styles.dispatchOverviewTitle}>Đơn và phân xe trong 7 ngày</Text>
-                <Text style={styles.dispatchOverviewSub}>
-                  {dispatchLoading && !dispatchPlan
-                    ? 'Đang đồng bộ kế hoạch giao hàng...'
-                    : dispatchError && !dispatchPlan
-                      ? 'Chưa tải được kế hoạch · Chạm để thử lại'
-                      : `${weekOrderCount} đơn/điểm giao · ${routesWaitingForVehicle} tuyến chờ xe`}
-                </Text>
-              </View>
-              {routesWaitingForVehicle > 0 ? (
-                <View style={styles.dispatchCountBadge}>
-                  <Text numeric style={styles.dispatchCountText}>{routesWaitingForVehicle}</Text>
-                </View>
-              ) : null}
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </Pressable>
 
             <View style={styles.sectionHeading}>
               <View>
@@ -286,10 +210,6 @@ export function HubDashboardScreen() {
                   >
                     <Ionicons name="file-tray-full-outline" size={19} color={Colors.onPrimary} />
                     <Text style={styles.primaryActionText}>Mở danh sách task</Text>
-                  </Pressable>
-                  <Pressable style={styles.secondaryAction} onPress={() => navigation.navigate('IncidentReport')}>
-                    <Ionicons name="warning-outline" size={19} color="#8A5900" />
-                    <Text style={styles.secondaryActionText}>Báo sự cố</Text>
                   </Pressable>
                 </View>
               </>
@@ -427,53 +347,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   metricLabel: { fontSize: 9, color: Colors.textMuted, marginTop: 2 },
-  dispatchOverview: {
-    minHeight: 72,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.primary600,
-    backgroundColor: Colors.primaryLight,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    ...CARD_SHADOW,
-  },
-  procurementOverview: {
-    minHeight: 72,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.primary600,
-    backgroundColor: Colors.primaryLight,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    ...CARD_SHADOW,
-  },
-  dispatchOverviewIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dispatchOverviewCopy: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
-  dispatchOverviewTitle: { fontSize: 12, fontWeight: '800', color: Colors.textPrimary },
-  dispatchOverviewSub: { fontSize: 9, color: Colors.textSecondary, marginTop: 4 },
-  dispatchCountBadge: {
-    minWidth: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: Colors.warningLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 5,
-  },
-  dispatchCountText: { fontSize: 10, fontFamily: Fonts.monoBold, color: '#8A5900' },
   sectionHeading: {
     marginHorizontal: 16,
     marginTop: 21,
