@@ -19,7 +19,7 @@ function ProfileHeaderButton() {
   const navigation = useNavigation<NativeStackNavigationProp<DriverStackParamList>>();
   return (
     <Pressable onPress={() => navigation.navigate('DriverProfile')} hitSlop={8} style={{ paddingHorizontal: 8 }}>
-      <Ionicons name="person-circle-outline" size={26} color={Colors.primary} />
+      <Ionicons name="person-circle-outline" size={26} color={Colors.driverPrimary} />
     </Pressable>
   );
 }

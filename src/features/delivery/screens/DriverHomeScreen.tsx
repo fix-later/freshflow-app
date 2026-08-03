@@ -21,8 +21,8 @@ import { Colors } from '../../../constants/colors';
 import { RouteOverviewMap, type RouteStop } from '../../../components/RouteOverviewMap';
 import { type DriverStackParamList } from '../../../navigation/types';
 import { driverApi } from '../api/driverApi';
-import { driverRouteStore, type DeliveryStop } from '../store/driverRouteStore';
-import { type RouteStatus } from '../types/delivery.types';
+import { driverRouteStore } from '../store/driverRouteStore';
+import { type DeliveryStatus, type RouteStatus } from '../types/delivery.types';
 
 type Nav = NativeStackNavigationProp<DriverStackParamList>;
 
@@ -41,14 +41,29 @@ const NOT_STARTED_STATUSES: RouteStatus[] = ['planned', 'selected', 'reviewed', 
 // Estimated height of each card + 8px gap (used for drag index calculation)
 const ITEM_HEIGHT = 62;
 
+/**
+ * A single row in the "Thứ tự điểm giao" drag list. Before the driver has ever
+ * confirmed pickup, `route.deliveries` is still empty server-side (it's created
+ * by confirm-pickup), so `id`/`subtitle` come from the read-only stop preview
+ * instead of a real delivery — same card, same drag mechanics either way.
+ */
+interface HomeStopItem {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  lat: number;
+  lng: number;
+  status: DeliveryStatus;
+}
+
 function StopOrderCard({
-  stop,
+  item,
   displayOrder,
   reorderMode,
   isDragging,
   isTarget,
 }: {
-  stop: DeliveryStop;
+  item: HomeStopItem;
   displayOrder: number;
   reorderMode: boolean;
   isDragging: boolean;
@@ -69,14 +84,16 @@ function StopOrderCard({
         </Text>
       </View>
       <View style={styles.stopInfo}>
-        <Text style={styles.stopName} numberOfLines={1}>{stop.restaurantName}</Text>
-        <Text style={styles.stopOrderId} numberOfLines={1}>Đơn #{stop.orderId.slice(0, 8).toUpperCase()}</Text>
+        <Text style={styles.stopName} numberOfLines={1}>{item.title}</Text>
+        {item.subtitle && (
+          <Text style={styles.stopOrderId} numberOfLines={1}>{item.subtitle}</Text>
+        )}
       </View>
       {reorderMode && (
         <Ionicons
           name="reorder-four-outline"
           size={22}
-          color={isDragging ? Colors.primary : Colors.textMuted}
+          color={isDragging ? Colors.driverPrimary : Colors.textMuted}
           style={styles.dragHandle}
         />
       )}
@@ -91,13 +108,13 @@ export function DriverHomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [routeStatus, setRouteStatus] = useState<RouteStatus | null>(null);
   const [serviceDate, setServiceDate] = useState('');
+  const [hasPickupStarted, setHasPickupStarted] = useState(false);
   const [showRouteMap, setShowRouteMap] = useState(false);
   const [currentLat, setCurrentLat] = useState<number | undefined>();
   const [currentLng, setCurrentLng] = useState<number | undefined>();
-  const [startingRoute, setStartingRoute] = useState(false);
 
   const [reorderMode, setReorderMode] = useState(false);
-  const [stopById, setStopById] = useState<Map<string, DeliveryStop>>(new Map());
+  const [itemById, setItemById] = useState<Map<string, HomeStopItem>>(new Map());
   const [orderIds, setOrderIds] = useState<string[]>([]);
   // Map only re-renders when reorder mode exits ("Xong")
   const [mapOrderIds, setMapOrderIds] = useState<string[]>([]);
@@ -129,16 +146,38 @@ export function DriverHomeScreen() {
   }, [reorderMode]);
 
   // Reflects whatever driverRouteStore currently holds (including any client-side
-  // reorder) into local render state, without hitting the network.
+  // reorder) into local render state, without hitting the network. Before pickup
+  // is confirmed, `deliveries` is empty server-side, so the item list is built
+  // from the stop preview instead — same shape either way.
   const syncFromStore = useCallback(() => {
     const route = driverRouteStore.getRoute();
-    const stops = driverRouteStore.getStops();
-    setStopById(new Map(stops.map(s => [s.deliveryId, s])));
-    const ids = stops.map(s => s.deliveryId);
-    setOrderIds(ids);
-    setMapOrderIds(ids);
+    const started = driverRouteStore.hasPickupStarted();
+    setHasPickupStarted(started);
     setRouteStatus(route?.status ?? null);
     setServiceDate(route?.serviceDate ?? '');
+
+    const items: HomeStopItem[] = started
+      ? driverRouteStore.getStops().map(s => ({
+          id: s.deliveryId,
+          title: s.restaurantName,
+          subtitle: `Đơn #${s.orderId.slice(0, 8).toUpperCase()}`,
+          lat: s.lat,
+          lng: s.lng,
+          status: s.status,
+        }))
+      : driverRouteStore.getPickupPreviewStops().map(s => ({
+          id: s.entityId,
+          title: s.restaurantName,
+          subtitle: null,
+          lat: s.lat,
+          lng: s.lng,
+          status: 'pending' as const,
+        }));
+
+    setItemById(new Map(items.map(i => [i.id, i])));
+    const ids = items.map(i => i.id);
+    setOrderIds(ids);
+    setMapOrderIds(ids);
   }, []);
 
   const loadRoute = useCallback(async () => {
@@ -225,15 +264,29 @@ export function DriverHomeScreen() {
     }),
   ).current;
 
-  const orderedStops = orderIds.map((id, idx) => ({
-    stop: stopById.get(id)!,
+  const orderedItems = orderIds.map((id, idx) => ({
+    item: itemById.get(id)!,
     displayOrder: idx + 1,
-  })).filter(({ stop }) => stop);
+  })).filter(({ item }) => item);
+
+  const commitOrder = (ids: string[]) => {
+    if (hasPickupStarted) {
+      driverRouteStore.setStopOrder(ids);
+    } else {
+      driverRouteStore.setPickupPreviewStopOrder(ids);
+    }
+  };
 
   const handleReorderDone = () => {
-    driverRouteStore.setStopOrder(orderIds);
+    commitOrder(orderIds);
     setMapOrderIds([...orderIds]);
     setReorderMode(false);
+    const route = driverRouteStore.getRoute();
+    if (route && !hasPickupStarted && route.status === 'assigned') {
+      const hubStop = driverRouteStore.getHubStop();
+      const fullStopOrder = hubStop ? [hubStop.entityId, ...orderIds] : orderIds;
+      driverApi.reorderRoute(route.routeId, fullStopOrder).catch(() => {});
+    }
   };
 
   const handleShowMap = async () => {
@@ -250,30 +303,26 @@ export function DriverHomeScreen() {
     }
   };
 
-  const handleGoToHub = async () => {
+  const handleMainAction = () => {
     const route = driverRouteStore.getRoute();
     if (!route) return;
-    // Commit whatever order the driver last arranged, even if they never tapped "Xong".
-    driverRouteStore.setStopOrder(orderIds);
-    try {
-      if (NOT_STARTED_STATUSES.includes(route.status)) {
-        setStartingRoute(true);
-        await driverApi.startRoute(route.routeId);
-        driverRouteStore.setRouteStatus('in_progress');
-        setRouteStatus('in_progress');
-      }
+
+    commitOrder(orderIds);
+
+    if (hasPickupStarted) {
+      // Pickup confirmed already! Go directly to StopList delivery execution screen
+      navigation.navigate('StopList', { routeId: route.routeId });
+    } else {
+      // Pickup not confirmed yet — navigate to PickupConfirmScreen to check off items & confirm pickup.
+      // `startRoute` will be executed on PickupConfirmScreen AFTER confirmPickup creates delivery rows.
       navigation.navigate('PickupConfirm', { routeId: route.routeId });
-    } catch {
-      Alert.alert('Lỗi', 'Không thể bắt đầu tuyến đường. Vui lòng thử lại.');
-    } finally {
-      setStartingRoute(false);
     }
   };
 
   const buildMapStops = (ids: string[]): RouteStop[] =>
     ids.map((id, idx) => {
-      const s = stopById.get(id);
-      return { order: idx + 1, lat: s?.lat ?? 0, lng: s?.lng ?? 0, status: s?.status ?? 'pending' };
+      const item = itemById.get(id);
+      return { order: idx + 1, lat: item?.lat ?? 0, lng: item?.lng ?? 0, status: item?.status ?? 'pending' };
     });
 
   const mapStops = buildMapStops(mapOrderIds);
@@ -282,7 +331,7 @@ export function DriverHomeScreen() {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={Colors.driverPrimary} />
           <Text style={styles.helperText}>Đang tải tuyến đường hôm nay...</Text>
         </View>
       </SafeAreaView>
@@ -296,7 +345,7 @@ export function DriverHomeScreen() {
           <Ionicons name="cloud-offline-outline" size={52} color={Colors.error} />
           <Text style={styles.errorText}>{error}</Text>
           <Pressable style={styles.retryBtn} onPress={loadRoute}>
-            <Ionicons name="refresh" size={18} color={Colors.onPrimary} />
+            <Ionicons name="refresh" size={18} color={Colors.driverOnPrimary} />
             <Text style={styles.retryBtnText}>Thử lại</Text>
           </Pressable>
         </View>
@@ -304,7 +353,7 @@ export function DriverHomeScreen() {
     );
   }
 
-  if (!routeStatus || orderedStops.length === 0) {
+  if (!routeStatus) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <View style={styles.centered}>
@@ -336,7 +385,7 @@ export function DriverHomeScreen() {
         <View style={styles.routeCard}>
           <View style={styles.routeCardHeader}>
             <View style={styles.statusBadge}>
-              <Ionicons name="bicycle-outline" size={13} color={Colors.primary} />
+              <Ionicons name="bicycle-outline" size={13} color={Colors.driverPrimary} />
               <Text style={styles.statusLabel}>{ROUTE_STATUS_LABEL[routeStatus]}</Text>
             </View>
             <Text style={styles.routeDate}>{serviceDate}</Text>
@@ -344,8 +393,8 @@ export function DriverHomeScreen() {
 
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Ionicons name="location-outline" size={22} color={Colors.primary} />
-              <Text style={styles.statVal}>{orderedStops.length}</Text>
+              <Ionicons name="location-outline" size={22} color={Colors.driverPrimary} />
+              <Text style={styles.statVal}>{orderedItems.length}</Text>
               <Text style={styles.statLbl}>Điểm giao</Text>
             </View>
           </View>
@@ -369,28 +418,38 @@ export function DriverHomeScreen() {
 
         {/* ── Stop order section ── */}
         <View style={styles.stopSectionHeader}>
-          <View style={{ gap: 2 }}>
-            <Text style={styles.sectionLabel}>Thứ tự điểm giao</Text>
-            <Text style={styles.stopSectionSub}>Sắp xếp trước khi ra lấy hàng nếu cần</Text>
+          <View style={{ flex: 1, gap: 2, marginRight: 8 }}>
+            <Text style={styles.sectionLabel}>
+              Thứ tự điểm giao{!hasPickupStarted ? ' dự kiến' : ''}
+            </Text>
+            <Text style={styles.stopSectionSub} numberOfLines={1}>
+              {!hasPickupStarted
+                ? 'Sắp xếp lại tuyến đường trước khi lấy hàng'
+                : 'Thứ tự giao hàng đến các nhà hàng'}
+            </Text>
           </View>
-          {reorderMode ? (
-            <TouchableOpacity style={styles.reorderDoneBtn} onPress={handleReorderDone}>
-              <Ionicons name="checkmark" size={13} color={Colors.onPrimary} />
-              <Text style={styles.reorderDoneBtnText}>Xong</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.reorderToggleBtn} onPress={() => setReorderMode(true)}>
-              <Ionicons name="swap-vertical-outline" size={13} color={Colors.primary} />
-              <Text style={styles.reorderToggleBtnText}>Sắp xếp</Text>
-            </TouchableOpacity>
+          {!hasPickupStarted && (
+            reorderMode ? (
+              <TouchableOpacity style={styles.reorderDoneBtn} onPress={handleReorderDone}>
+                <Ionicons name="checkmark" size={13} color={Colors.driverOnPrimary} />
+                <Text style={styles.reorderDoneBtnText}>Xong</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.reorderToggleBtn} onPress={() => setReorderMode(true)}>
+                <Ionicons name="swap-vertical-outline" size={13} color={Colors.driverPrimary} />
+                <Text style={styles.reorderToggleBtnText}>Sắp xếp</Text>
+              </TouchableOpacity>
+            )
           )}
         </View>
 
         {reorderMode && (
           <View style={styles.reorderBanner}>
-            <Ionicons name="hand-left-outline" size={15} color={Colors.primary} />
+            <Ionicons name="hand-left-outline" size={15} color={Colors.driverPrimary} />
             <Text style={styles.reorderBannerText}>
-              Giữ và kéo biểu tượng ≡ để thay đổi thứ tự. Nhấn Xong để cập nhật bản đồ.
+              Giữ và kéo biểu tượng ≡ để đổi thứ tự ghé từng nhà hàng. Thứ tự này sẽ dùng để
+              chất hàng lên xe — điểm giao cuối chất trước, điểm giao đầu chất sau cùng để dễ
+              lấy ra khi giao.
             </Text>
           </View>
         )}
@@ -407,12 +466,12 @@ export function DriverHomeScreen() {
             });
           }}
         >
-          {orderedStops.map(({ stop, displayOrder }, idx) => {
+          {orderedItems.map(({ item, displayOrder }, idx) => {
             const isDragging = idx === draggingIdx;
             const isTarget = draggingIdx >= 0 && !isDragging && idx === insertIdx;
             return (
               <Animated.View
-                key={stop.deliveryId}
+                key={item.id}
                 onLayout={idx === 0 ? (e) => {
                   itemHeightRef.current = e.nativeEvent.layout.height + 8;
                 } : undefined}
@@ -427,15 +486,15 @@ export function DriverHomeScreen() {
                     elevation: 8,
                     borderRadius: 14,
                   },
-                  { marginBottom: idx < orderedStops.length - 1 ? 8 : 0 },
+                  { marginBottom: idx < orderedItems.length - 1 ? 8 : 0 },
                 ]}
               >
                 <StopOrderCard
-                  stop={stop}
+                  item={item}
                   displayOrder={displayOrder}
                   reorderMode={reorderMode}
-                  isDragging={isDragging}
                   isTarget={isTarget}
+                  isDragging={isDragging}
                 />
               </Animated.View>
             );
@@ -448,12 +507,19 @@ export function DriverHomeScreen() {
       {/* ── Footer ── */}
       <View style={styles.footer}>
         <Pressable
-          style={({ pressed }) => [styles.hubBtn, pressed && { opacity: 0.85 }, startingRoute && { opacity: 0.6 }]}
-          onPress={startingRoute ? undefined : handleGoToHub}
-          disabled={startingRoute}
+          style={({ pressed }) => [styles.hubBtn, pressed && { opacity: 0.85 }]}
+          onPress={handleMainAction}
         >
-          <Ionicons name="cube-outline" size={18} color={Colors.onPrimary} />
-          <Text style={styles.hubBtnText}>{startingRoute ? 'Đang bắt đầu...' : 'Nhận hàng tại Hub'}</Text>
+          <Ionicons
+            name={hasPickupStarted ? 'bicycle-outline' : 'cube-outline'}
+            size={18}
+            color={Colors.driverOnPrimary}
+          />
+          <Text style={styles.hubBtnText}>
+            {hasPickupStarted
+              ? 'Vào danh sách giao hàng'
+              : 'Nhận hàng tại Hub'}
+          </Text>
         </Pressable>
       </View>
 
@@ -468,7 +534,7 @@ export function DriverHomeScreen() {
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>Bản đồ tuyến đường</Text>
-              <Text style={styles.modalSub}>{serviceDate} · {orderedStops.length} điểm giao</Text>
+              <Text style={styles.modalSub}>{serviceDate} · {orderedItems.length} điểm giao</Text>
             </View>
             <Pressable onPress={() => setShowRouteMap(false)} hitSlop={12} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color={Colors.textPrimary} />
@@ -496,16 +562,16 @@ const styles = StyleSheet.create({
   retryBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
     marginTop: 4, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 11,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.driverPrimary,
   },
-  retryBtnText: { fontSize: 14, fontWeight: '700', color: Colors.onPrimary },
+  retryBtnText: { fontSize: 14, fontWeight: '700', color: Colors.driverOnPrimary },
 
   greetCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: Colors.primary, borderRadius: 16, padding: 18,
+    backgroundColor: Colors.driverPrimary, borderRadius: 16, padding: 18,
   },
   greetTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
-  greetSub: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+  greetSub: { fontSize: 12, color: 'rgba(255,255,255,0.85)' },
 
   sectionLabel: {
     fontSize: 12, fontWeight: '700', color: Colors.textMuted,
@@ -522,9 +588,9 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: Colors.primaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
+    backgroundColor: Colors.driverPrimaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
   },
-  statusLabel: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  statusLabel: { fontSize: 12, fontWeight: '700', color: Colors.driverPrimary },
   routeDate: { fontSize: 12, color: Colors.textMuted },
 
   statsRow: { flexDirection: 'row', alignItems: 'center' },
@@ -548,27 +614,27 @@ const styles = StyleSheet.create({
   mapThumbBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
 
   stopSectionHeader: {
-    flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 4,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4,
   },
   stopSectionSub: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
 
   reorderToggleBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 8, borderWidth: 1, borderColor: Colors.primary,
+    borderRadius: 8, borderWidth: 1, borderColor: Colors.driverPrimary,
   },
-  reorderToggleBtnText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
+  reorderToggleBtnText: { fontSize: 11, fontWeight: '700', color: Colors.driverPrimary },
   reorderDoneBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: Colors.driverPrimary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6,
   },
-  reorderDoneBtnText: { fontSize: 12, fontWeight: '700', color: Colors.onPrimary },
+  reorderDoneBtnText: { fontSize: 12, fontWeight: '700', color: Colors.driverOnPrimary },
 
   reorderBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    backgroundColor: Colors.primaryLight, borderRadius: 10, padding: 10,
+    backgroundColor: Colors.driverPrimaryLight, borderRadius: 10, padding: 10,
   },
-  reorderBannerText: { flex: 1, fontSize: 12, color: Colors.primary, fontWeight: '600', lineHeight: 17 },
+  reorderBannerText: { flex: 1, fontSize: 12, color: Colors.driverPrimary, fontWeight: '600', lineHeight: 17 },
 
   stopList: { gap: 0 },
 
@@ -578,26 +644,26 @@ const styles = StyleSheet.create({
     borderRadius: 14, padding: 12,
     borderWidth: 1, borderColor: Colors.outlineVariant,
   },
-  stopCardReorder: { borderColor: Colors.primary + '25' },
+  stopCardReorder: { borderColor: Colors.driverPrimary + '25' },
   stopCardDragging: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primary,
+    backgroundColor: Colors.driverPrimaryLight,
+    borderColor: Colors.driverPrimary,
     borderWidth: 1.5,
   },
   stopCardTarget: {
-    borderColor: Colors.primary,
+    borderColor: Colors.driverPrimary,
     borderWidth: 2,
     borderStyle: 'dashed',
   },
 
   stopNumBadge: {
     width: 34, height: 34, borderRadius: 10,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.driverPrimaryLight,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  stopNumBadgeDragging: { backgroundColor: Colors.primary },
-  stopNumText: { fontSize: 14, fontWeight: '800', color: Colors.primary },
-  stopNumTextDragging: { color: Colors.onPrimary },
+  stopNumBadgeDragging: { backgroundColor: Colors.driverPrimary },
+  stopNumText: { fontSize: 14, fontWeight: '800', color: Colors.driverPrimary },
+  stopNumTextDragging: { color: Colors.driverOnPrimary },
 
   stopInfo: { flex: 1, gap: 2 },
   stopName: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
@@ -613,9 +679,9 @@ const styles = StyleSheet.create({
   },
   hubBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 15,
+    gap: 8, backgroundColor: Colors.driverPrimary, borderRadius: 14, paddingVertical: 15,
   },
-  hubBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  hubBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 15 },
 
   modalScreen: { flex: 1, backgroundColor: Colors.background },
   modalHeader: {

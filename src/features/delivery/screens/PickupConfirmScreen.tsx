@@ -7,16 +7,57 @@ import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
 import { type DriverStackParamList } from '../../../navigation/types';
 import { driverApi } from '../api/driverApi';
-import { driverRouteStore, type DeliveryStop } from '../store/driverRouteStore';
+import { driverRouteStore } from '../store/driverRouteStore';
+import { type LoadingManifestDto } from '../types/delivery.types';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'PickupConfirm'>;
 
+/**
+ * One order to check off during hub pickup. Built from the loading manifest
+ * (real orderIds, grouped per restaurant stop) rather than driverRouteStore's
+ * stop list, which is keyed by `deliveries` — still empty at this point since
+ * confirm-pickup is what creates those rows.
+ */
+interface PickupItem {
+  orderId: string;
+  order: number;
+  restaurantName: string;
+  lineCount: number;
+}
+
+function buildPickupItems(manifest: LoadingManifestDto): PickupItem[] {
+  const items: PickupItem[] = [];
+  const previewStops = driverRouteStore.getPickupPreviewStops();
+  const customOrderMap = new Map(previewStops.map(s => [s.entityId, s.order]));
+
+  // Loading order onto truck: Last-delivered stop (Stop N) loaded FIRST (innermost),
+  // down to First-delivered stop (Stop 1) loaded LAST (outermost near truck door).
+  const sortedStops = [...manifest.stops].sort((a, b) => {
+    const orderA = customOrderMap.get(a.restaurantId) ?? a.stopOrder;
+    const orderB = customOrderMap.get(b.restaurantId) ?? b.stopOrder;
+    return orderB - orderA;
+  });
+
+  let seq = 0;
+  for (const stop of sortedStops) {
+    const lineCountByOrder = new Map<string, number>();
+    for (const line of stop.lines) {
+      lineCountByOrder.set(line.orderId, (lineCountByOrder.get(line.orderId) ?? 0) + 1);
+    }
+    for (const [orderId, lineCount] of lineCountByOrder) {
+      seq += 1;
+      items.push({ orderId, order: seq, restaurantName: stop.restaurantName, lineCount });
+    }
+  }
+  return items;
+}
+
 function PackageCard({
-  stop,
+  item,
   checked,
   onToggle,
 }: {
-  stop: DeliveryStop;
+  item: PickupItem;
   checked: boolean;
   onToggle: () => void;
 }) {
@@ -26,11 +67,13 @@ function PackageCard({
       onPress={onToggle}
     >
       <View style={[styles.stopNum, checked && styles.stopNumChecked]}>
-        <Text style={[styles.stopNumText, checked && styles.stopNumTextChecked]}>{stop.order}</Text>
+        <Text style={[styles.stopNumText, checked && styles.stopNumTextChecked]}>{item.order}</Text>
       </View>
       <View style={styles.cardInfo}>
-        <Text style={styles.cardName} numberOfLines={1}>{stop.restaurantName}</Text>
-        <Text style={styles.cardMeta}>Đơn #{stop.orderId.slice(0, 8).toUpperCase()}</Text>
+        <Text style={styles.cardName} numberOfLines={1}>{item.restaurantName}</Text>
+        <Text style={styles.cardMeta}>
+          Đơn #{item.orderId.slice(0, 8).toUpperCase()} · {item.lineCount} mặt hàng
+        </Text>
       </View>
       <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
         {checked && <Ionicons name="checkmark" size={16} color="#fff" />}
@@ -42,43 +85,56 @@ function PackageCard({
 export function PickupConfirmScreen({ route, navigation }: Props) {
   const { routeId } = route.params;
 
-  const [loading, setLoading] = useState(driverRouteStore.getStops().length === 0);
-  const [stops, setStops] = useState<DeliveryStop[]>(driverRouteStore.getStops());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<PickupItem[]>([]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
 
+  const loadManifest = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const manifest = await driverApi.getLoadingManifest(routeId);
+      setItems(buildPickupItems(manifest));
+    } catch {
+      setError('Không thể tải danh sách hàng cần nhận. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  }, [routeId]);
+
   useFocusEffect(
     useCallback(() => {
-      if (driverRouteStore.getStops().length === 0) {
-        setLoading(true);
-        driverRouteStore.load().finally(() => {
-          setStops(driverRouteStore.getStops());
-          setLoading(false);
-        });
-      } else {
-        setStops(driverRouteStore.getStops());
-        setLoading(false);
-      }
-    }, []),
+      loadManifest();
+    }, [loadManifest]),
   );
 
   const hub = driverRouteStore.getHubStop();
 
-  const toggleStop = (deliveryId: string) => {
+  const toggleItem = (orderId: string) => {
     setChecked(prev => {
       const next = new Set(prev);
-      if (next.has(deliveryId)) next.delete(deliveryId);
-      else next.add(deliveryId);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
       return next;
     });
   };
 
-  const allChecked = stops.length > 0 && checked.size === stops.length;
+  const allChecked = items.length > 0 && checked.size === items.length;
+
+  const toggleSelectAll = () => {
+    if (allChecked) {
+      setChecked(new Set());
+    } else {
+      setChecked(new Set(items.map(i => i.orderId)));
+    }
+  };
 
   const handleConfirm = () => {
     Alert.alert(
       'Xác nhận đã nhận hàng',
-      `Bạn xác nhận đã nhận đủ hàng cho ${stops.length} đơn từ ${hub?.entityName ?? 'hub'}?`,
+      `Bạn xác nhận đã nhận đủ hàng cho ${items.length} đơn từ ${hub?.entityName ?? 'hub'}?`,
       [
         { text: 'Huỷ', style: 'cancel' },
         {
@@ -86,10 +142,17 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
           onPress: async () => {
             setConfirming(true);
             try {
-              await driverApi.confirmPickup(routeId, stops.map(s => s.orderId));
+              await driverApi.confirmPickup(routeId, items.map(i => i.orderId));
+              // Deliveries now exist server-side for the first time. Reload store to sync deliveries.
+              const reloadedRoute = await driverRouteStore.load();
+              // Now that deliveries exist on BE and route is assigned, start the route to transition it to in_progress
+              if (reloadedRoute && ['planned', 'selected', 'reviewed', 'assigned'].includes(reloadedRoute.status)) {
+                await driverApi.startRoute(routeId);
+                driverRouteStore.setRouteStatus('in_progress');
+              }
               navigation.replace('StopList', { routeId });
             } catch {
-              Alert.alert('Lỗi', 'Không thể xác nhận nhận hàng. Vui lòng thử lại.');
+              Alert.alert('Lỗi', 'Không thể xác nhận nhận hàng hoặc bắt đầu tuyến đường. Vui lòng thử lại.');
             } finally {
               setConfirming(false);
             }
@@ -103,7 +166,22 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={Colors.driverPrimary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['bottom']}>
+        <View style={styles.centered}>
+          <Ionicons name="cloud-offline-outline" size={52} color={Colors.error} />
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable style={styles.retryBtn} onPress={loadManifest}>
+            <Ionicons name="refresh" size={18} color={Colors.driverOnPrimary} />
+            <Text style={styles.retryBtnText}>Thử lại</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -112,8 +190,8 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <FlatList
-        data={stops}
-        keyExtractor={stop => stop.deliveryId}
+        data={items}
+        keyExtractor={item => item.orderId}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
@@ -122,7 +200,7 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
             {hub && (
               <View style={styles.hubCard}>
                 <View style={styles.hubIconWrap}>
-                  <Ionicons name="business-outline" size={28} color={Colors.primary} />
+                  <Ionicons name="business-outline" size={28} color={Colors.driverPrimary} />
                 </View>
                 <View style={styles.hubInfo}>
                   <Text style={styles.hubName}>{hub.entityName}</Text>
@@ -134,27 +212,53 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
             <View style={styles.instructBox}>
               <Ionicons name="information-circle-outline" size={15} color={Colors.secondary} />
               <Text style={styles.instructText}>
-                Nhấn vào từng đơn để đánh dấu đã nhận. Xác nhận khi đã nhận đủ tất cả.
+                Thứ tự bốc hàng được tự động sắp xếp theo tuyến đường bạn chọn: Hàng cho điểm giao cuối xếp vào sâu trong thùng xe trước ➔ Hàng cho điểm giao đầu xếp ngoài cửa xe sau cùng.
               </Text>
             </View>
 
-            {/* Progress */}
+            {/* Progress & Select All */}
             <View style={styles.progressRow}>
-              <Text style={styles.progressLabel}>Đã kiểm tra</Text>
-              <Text style={styles.progressCount}>
-                <Text style={styles.progressHighlight}>{checked.size}</Text>/{stops.length} đơn
-              </Text>
+              <View style={{ gap: 2 }}>
+                <Text style={styles.progressLabel}>Đã kiểm tra</Text>
+                <Text style={styles.progressCount}>
+                  <Text style={styles.progressHighlight}>{checked.size}</Text>/{items.length} đơn
+                </Text>
+              </View>
+              {items.length > 0 && (
+                <Pressable
+                  style={({ pressed }) => [styles.selectAllBtn, pressed && { opacity: 0.7 }]}
+                  onPress={toggleSelectAll}
+                >
+                  <Ionicons
+                    name={allChecked ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                    size={15}
+                    color={Colors.driverPrimary}
+                  />
+                  <Text style={styles.selectAllBtnText}>
+                    {allChecked ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                  </Text>
+                </Pressable>
+              )}
             </View>
             <Text style={styles.sectionTitle}>Danh sách đơn cần nhận</Text>
           </>
         }
         renderItem={({ item }) => (
           <PackageCard
-            stop={item}
-            checked={checked.has(item.deliveryId)}
-            onToggle={() => toggleStop(item.deliveryId)}
+            item={item}
+            checked={checked.has(item.orderId)}
+            onToggle={() => toggleItem(item.orderId)}
           />
         )}
+        ListEmptyComponent={
+          <View style={styles.emptyCard}>
+            <Ionicons name="cube-outline" size={42} color={Colors.textMuted} />
+            <Text style={styles.emptyTitle}>Chưa có đơn hàng sẵn sàng tại Hub</Text>
+            <Text style={styles.emptySub}>
+              Không tìm thấy đơn hàng nào ở trạng thái "Đã về Hub" (AtHub) cho tuyến này. Vui lòng chuyển trạng thái đơn hàng sang "AtHub" trên hệ thống Admin Backend.
+            </Text>
+          </View>
+        }
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         ListFooterComponent={<View style={{ height: 100 }} />}
       />
@@ -163,16 +267,16 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
       <View style={styles.footer}>
         <View style={styles.footerInfo}>
           <Text style={styles.footerLabel}>
-            {allChecked ? 'Đã kiểm tra toàn bộ đơn hàng' : `Còn ${stops.length - checked.size} đơn chưa kiểm tra`}
+            {allChecked ? 'Đã kiểm tra toàn bộ đơn hàng' : `Còn ${items.length - checked.size} đơn chưa kiểm tra`}
           </Text>
-          <Text style={styles.footerSub}>{stops.length} điểm giao</Text>
+          <Text style={styles.footerSub}>{items.length} đơn</Text>
         </View>
         <Pressable
           style={[styles.confirmBtn, (!allChecked || confirming) && styles.confirmBtnDisabled]}
           onPress={allChecked && !confirming ? handleConfirm : undefined}
           disabled={!allChecked || confirming}
         >
-          <Ionicons name="checkmark-circle" size={18} color={Colors.onPrimary} />
+          <Ionicons name="checkmark-circle" size={18} color={Colors.driverOnPrimary} />
           <Text style={styles.confirmBtnText}>{confirming ? 'Đang xác nhận...' : 'Xác nhận nhận hàng'}</Text>
         </Pressable>
       </View>
@@ -182,8 +286,25 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
+  errorText: { maxWidth: 300, fontSize: 14, lineHeight: 20, textAlign: 'center', color: Colors.error },
+  retryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    marginTop: 4, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 11,
+    backgroundColor: Colors.driverPrimary,
+  },
+  retryBtnText: { fontSize: 14, fontWeight: '700', color: Colors.driverOnPrimary },
   list: { padding: 16, paddingBottom: 0 },
+
+  emptyCard: {
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 16, padding: 24, gap: 10,
+    borderWidth: 1, borderColor: Colors.outlineVariant,
+    marginTop: 10,
+  },
+  emptyTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
+  emptySub: { fontSize: 12, color: Colors.textMuted, textAlign: 'center', lineHeight: 18 },
 
   hubCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -194,7 +315,7 @@ const styles = StyleSheet.create({
   },
   hubIconWrap: {
     width: 48, height: 48, borderRadius: 14,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.driverPrimaryLight,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   hubInfo: { flex: 1, gap: 3 },
@@ -209,9 +330,17 @@ const styles = StyleSheet.create({
   progressRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10,
   },
-  progressLabel: { fontSize: 13, color: Colors.textSecondary },
+  progressLabel: { fontSize: 12, color: Colors.textSecondary },
   progressCount: { fontSize: 13, color: Colors.textSecondary },
-  progressHighlight: { fontWeight: '800', color: Colors.primary },
+  progressHighlight: { fontWeight: '800', color: Colors.driverPrimary },
+
+  selectAllBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 8, borderWidth: 1, borderColor: Colors.driverPrimary,
+    backgroundColor: Colors.driverPrimaryLight,
+  },
+  selectAllBtnText: { fontSize: 11, fontWeight: '700', color: Colors.driverPrimary },
 
   sectionTitle: {
     fontSize: 11, fontWeight: '700', color: Colors.textMuted,
@@ -225,17 +354,17 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: Colors.outlineVariant,
   },
   cardChecked: {
-    borderColor: Colors.primary + '60',
-    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.driverPrimary + '60',
+    backgroundColor: Colors.driverPrimaryLight,
   },
   stopNum: {
     width: 34, height: 34, borderRadius: 10,
     backgroundColor: Colors.surfaceContainerHigh,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  stopNumChecked: { backgroundColor: Colors.primary },
+  stopNumChecked: { backgroundColor: Colors.driverPrimary },
   stopNumText: { fontSize: 14, fontWeight: '800', color: Colors.textMuted },
-  stopNumTextChecked: { color: Colors.onPrimary },
+  stopNumTextChecked: { color: Colors.driverOnPrimary },
 
   cardInfo: { flex: 1, gap: 4 },
   cardName: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
@@ -246,7 +375,7 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: Colors.outlineVariant,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  checkboxChecked: { backgroundColor: Colors.driverPrimary, borderColor: Colors.driverPrimary },
 
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -259,9 +388,9 @@ const styles = StyleSheet.create({
   footerSub: { fontSize: 11, color: Colors.textMuted },
   confirmBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary,
+    gap: 8, backgroundColor: Colors.driverPrimary,
     borderRadius: 14, paddingVertical: 14,
   },
   confirmBtnDisabled: { opacity: 0.4 },
-  confirmBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  confirmBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 15 },
 });

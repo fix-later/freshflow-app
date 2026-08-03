@@ -391,9 +391,9 @@ const styles = StyleSheet.create({
   mapsBtn: {
     flexDirection: 'row', width: 'auto',
     paddingHorizontal: 12, gap: 5,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.driverPrimary,
   },
-  mapsBtnText: { fontSize: 12, fontWeight: '700', color: Colors.onPrimary },
+  mapsBtnText: { fontSize: 12, fontWeight: '700', color: Colors.driverOnPrimary },
 
   sheet: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -437,10 +437,10 @@ const styles = StyleSheet.create({
 
   stopNumBadge: {
     width: 36, height: 36, borderRadius: 10,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.driverPrimary,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  stopNumText: { fontSize: 14, fontWeight: '900', color: Colors.onPrimary },
+  stopNumText: { fontSize: 14, fontWeight: '900', color: Colors.driverOnPrimary },
   restaurantName: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
   orderIdText: { fontSize: 11, color: Colors.textMuted },
 
@@ -448,10 +448,10 @@ const styles = StyleSheet.create({
   itemsStripContent: { paddingHorizontal: 16, gap: 6, flexDirection: 'row', alignItems: 'center' },
   itemsCountChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primaryLight, borderRadius: 8,
+    backgroundColor: Colors.driverPrimaryLight, borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 5,
   },
-  itemsCountText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
+  itemsCountText: { fontSize: 11, fontWeight: '700', color: Colors.driverPrimary },
   itemChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: Colors.surfaceContainerHigh,
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   itemName: { flex: 1, fontSize: 14, color: Colors.textPrimary },
-  itemQty: { fontSize: 14, fontWeight: '800', color: Colors.primary },
+  itemQty: { fontSize: 14, fontWeight: '800', color: Colors.driverPrimary },
   itemsUnavailableText: { fontSize: 12, color: Colors.textMuted, paddingVertical: 8 },
   notesRow: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 6,
@@ -484,10 +484,10 @@ const styles = StyleSheet.create({
   notesText: { flex: 1, fontSize: 12, color: Colors.textSecondary },
   arrivedMsg: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.driverPrimaryLight,
     borderRadius: 10, padding: 10, marginTop: 4,
   },
-  arrivedMsgText: { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.primary },
+  arrivedMsgText: { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.driverPrimary },
 
   actionsSection: { flexShrink: 0 },
   sheetDivider: { height: 1, backgroundColor: Colors.outlineVariant, marginHorizontal: 16 },
@@ -495,10 +495,10 @@ const styles = StyleSheet.create({
 
   primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary,
+    gap: 8, backgroundColor: Colors.driverPrimary,
     borderRadius: 14, paddingVertical: 14,
   },
-  primaryBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  primaryBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 15 },
 
   arrivedRow: { flexDirection: 'row', gap: 8 },
   failIconBtn: {
@@ -528,8 +528,8 @@ const styles = StyleSheet.create({
   backListBtnText: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
 
   backBtn: {
-    backgroundColor: Colors.primary, borderRadius: 12,
+    backgroundColor: Colors.driverPrimary, borderRadius: 12,
     paddingHorizontal: 24, paddingVertical: 12,
   },
-  backBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 14 },
+  backBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 14 },
 });

@@ -8,6 +8,7 @@ import type {
   DeliveryIssueType,
   DeliveryStatusUpdate,
   DriverRouteDto,
+  LoadingManifestDto,
   ProofOfDeliveryUploadSignature,
   ReportDeliveryIssueRequest,
   StartRouteResponseDto,
@@ -24,6 +25,20 @@ export const driverApi = {
   /** GET /api/v1/driver/routes/today — route(s) assigned to the driver for today. */
   async getTodayRoutes(): Promise<DriverRouteDto[]> {
     const { data } = await apiClient.get('/api/v1/driver/routes/today');
+    return data;
+  },
+
+  /** POST /api/v1/driver/routes/{routeId}/reorder — persist custom stop sequence on server. */
+  async reorderRoute(routeId: string, stopOrder: string[]): Promise<void> {
+    await apiClient.post(`/api/v1/driver/routes/${routeId}/reorder`, { stopOrder });
+  },
+
+  /**
+   * GET /api/v1/logistics/routes/{routeId}/loading-manifest — the real orderIds
+   * for this route's restaurant stops, needed to build the confirm-pickup checklist.
+   */
+  async getLoadingManifest(routeId: string): Promise<LoadingManifestDto> {
+    const { data } = await apiClient.get(`/api/v1/logistics/routes/${routeId}/loading-manifest`);
     return data;
   },
 

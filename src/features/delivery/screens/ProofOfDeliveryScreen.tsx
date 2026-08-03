@@ -224,7 +224,7 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
               <Ionicons
                 name={m.icon}
                 size={20}
-                color={method === m.id ? Colors.primary : Colors.textMuted}
+                color={method === m.id ? Colors.driverPrimary : Colors.textMuted}
               />
               <Text style={[styles.methodLabel, method === m.id && styles.methodLabelActive]}>
                 {m.label}
@@ -241,21 +241,21 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
                 <View style={styles.photoPreviewWrap}>
                   <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
                   <Pressable style={styles.retakeBtn} onPress={handleTakePhoto}>
-                    <Ionicons name="refresh" size={14} color={Colors.primary} />
+                    <Ionicons name="refresh" size={14} color={Colors.driverPrimary} />
                     <Text style={styles.retakeBtnText}>Chụp lại</Text>
                   </Pressable>
                 </View>
               ) : (
                 <Pressable style={styles.photoCapturePlaceholder} onPress={handleTakePhoto}>
                   <View style={styles.cameraIconWrap}>
-                    <Ionicons name="camera" size={40} color={Colors.primary} />
+                    <Ionicons name="camera" size={40} color={Colors.driverPrimary} />
                   </View>
                   <Text style={styles.placeholderTitle}>Chụp ảnh bằng chứng giao hàng</Text>
                   <Text style={styles.placeholderSub}>
                     Chụp ảnh gói hàng, chứng từ hoặc khu vực giao hàng để làm bằng chứng.
                   </Text>
                   <View style={styles.cameraBtn}>
-                    <Ionicons name="camera-outline" size={16} color={Colors.onPrimary} />
+                    <Ionicons name="camera-outline" size={16} color={Colors.driverOnPrimary} />
                     <Text style={styles.cameraBtnText}>Mở camera</Text>
                   </View>
                 </Pressable>
@@ -296,7 +296,7 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
             <Text style={styles.submitBtnText}>Đang xác nhận...</Text>
           ) : (
             <>
-              <Ionicons name="checkmark-circle" size={18} color={Colors.onPrimary} />
+              <Ionicons name="checkmark-circle" size={18} color={Colors.driverOnPrimary} />
               <Text style={styles.submitBtnText}>Xác nhận giao thành công</Text>
             </>
           )}
@@ -318,10 +318,10 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.outlineVariant,
   },
   stopNumBadge: {
-    backgroundColor: Colors.primary, borderRadius: 10,
+    backgroundColor: Colors.driverPrimary, borderRadius: 10,
     paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start',
   },
-  stopNumText: { fontSize: 12, fontWeight: '800', color: Colors.onPrimary },
+  stopNumText: { fontSize: 12, fontWeight: '800', color: Colors.driverOnPrimary },
   stopName: { fontSize: 14, fontWeight: '800', color: Colors.textPrimary, marginBottom: 3 },
   addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   stopAddress: { flex: 1, fontSize: 12, color: Colors.textMuted },
@@ -339,11 +339,11 @@ const styles = StyleSheet.create({
     borderRadius: 12, borderWidth: 1.5, borderColor: Colors.outlineVariant,
   },
   methodTabActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.driverPrimary,
+    backgroundColor: Colors.driverPrimaryLight,
   },
   methodLabel: { fontSize: 11, fontWeight: '600', color: Colors.textMuted },
-  methodLabelActive: { color: Colors.primary },
+  methodLabelActive: { color: Colors.driverPrimary },
 
   contentCard: {
     backgroundColor: Colors.surfaceContainerLowest,
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   },
   cameraIconWrap: {
     width: 80, height: 80, borderRadius: 40,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.driverPrimaryLight,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 4,
   },
@@ -365,10 +365,10 @@ const styles = StyleSheet.create({
   placeholderSub: { fontSize: 12, color: Colors.textMuted, textAlign: 'center', lineHeight: 17 },
   cameraBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
-    backgroundColor: Colors.primary, borderRadius: 12,
+    backgroundColor: Colors.driverPrimary, borderRadius: 12,
     paddingHorizontal: 20, paddingVertical: 10, marginTop: 4,
   },
-  cameraBtnText: { fontSize: 13, fontWeight: '700', color: Colors.onPrimary },
+  cameraBtnText: { fontSize: 13, fontWeight: '700', color: Colors.driverOnPrimary },
   photoPreviewWrap: { gap: 0 },
   photoPreview: { width: '100%', height: 240 },
   retakeBtn: {
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     gap: 6, padding: 12,
     borderTopWidth: 1, borderTopColor: Colors.outlineVariant,
   },
-  retakeBtnText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
+  retakeBtnText: { fontSize: 13, fontWeight: '600', color: Colors.driverPrimary },
 
   // Signature
   sigWrap: { gap: 0 },
@@ -404,11 +404,11 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary,
+    gap: 8, backgroundColor: Colors.driverPrimary,
     borderRadius: 14, paddingVertical: 14,
   },
   submitBtnDisabled: { opacity: 0.4 },
-  submitBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  submitBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 15 },
 
   // Success screen
   successScreen: {
@@ -439,9 +439,9 @@ const styles = StyleSheet.create({
   methodBadgeText: { fontSize: 12, fontWeight: '600', color: Colors.success },
   backNavBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary,
+    gap: 8, backgroundColor: Colors.driverPrimary,
     borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32,
     marginTop: 8, alignSelf: 'stretch',
   },
-  backNavBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  backNavBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 15 },
 });

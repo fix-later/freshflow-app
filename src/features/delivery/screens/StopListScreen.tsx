@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -18,29 +18,13 @@ const STATUS_CONFIG: Record<DeliveryStatus, { label: string; color: string; icon
   failed: { label: 'Không giao được', color: Colors.danger, icon: 'close-circle' },
 };
 
-function StopCard({
-  stop,
-  onPress,
-  reorderMode,
-  canMoveUp,
-  canMoveDown,
-  onMoveUp,
-  onMoveDown,
-}: {
-  stop: DeliveryStop;
-  onPress: () => void;
-  reorderMode?: boolean;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-}) {
+function StopCard({ stop, onPress }: { stop: DeliveryStop; onPress: () => void }) {
   const cfg = STATUS_CONFIG[stop.status];
   const isDone = stop.status === 'delivered' || stop.status === 'failed';
   return (
     <Pressable
       style={({ pressed }) => [styles.card, isDone && styles.cardDone, pressed && { opacity: 0.75 }]}
-      onPress={!reorderMode ? onPress : undefined}
+      onPress={onPress}
     >
       <View style={[styles.numBadge, { backgroundColor: cfg.color + '18', borderColor: cfg.color + '50' }]}>
         <Text style={[styles.numText, { color: cfg.color }]}>{stop.order}</Text>
@@ -59,37 +43,13 @@ function StopCard({
           <Ionicons name="receipt-outline" size={12} color={Colors.textMuted} />
           <Text style={styles.meta}>Đơn #{stop.orderId.slice(0, 8).toUpperCase()}</Text>
         </View>
-        {!isDone && !reorderMode && (
+        {!isDone && (
           <View style={styles.navBtn}>
-            <Ionicons name="navigate-outline" size={13} color={Colors.primary} />
+            <Ionicons name="navigate-outline" size={13} color={Colors.driverPrimary} />
             <Text style={styles.navBtnText}>Điều hướng</Text>
           </View>
         )}
       </View>
-      {/* Reorder arrows — only on moveable (non-done) stops */}
-      {reorderMode && !isDone && (
-        <View style={styles.reorderBtns}>
-          <TouchableOpacity
-            style={[styles.reorderArrow, !canMoveUp && styles.reorderArrowDisabled]}
-            onPress={canMoveUp ? onMoveUp : undefined}
-            activeOpacity={canMoveUp ? 0.6 : 1}
-          >
-            <Ionicons name="chevron-up" size={18} color={canMoveUp ? Colors.primary : Colors.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.reorderArrow, !canMoveDown && styles.reorderArrowDisabled]}
-            onPress={canMoveDown ? onMoveDown : undefined}
-            activeOpacity={canMoveDown ? 0.6 : 1}
-          >
-            <Ionicons name="chevron-down" size={18} color={canMoveDown ? Colors.primary : Colors.textMuted} />
-          </TouchableOpacity>
-        </View>
-      )}
-      {reorderMode && isDone && (
-        <View style={styles.reorderLockedBadge}>
-          <Ionicons name="lock-closed-outline" size={13} color={Colors.textMuted} />
-        </View>
-      )}
     </Pressable>
   );
 }
@@ -103,7 +63,7 @@ function RouteCompleteView({ delivered, failed, durationText, onGoHome }: {
   return (
     <View style={styles.completeView}>
       <View style={styles.completeCircle}>
-        <Ionicons name="flag" size={40} color={Colors.onPrimary} />
+        <Ionicons name="flag" size={40} color={Colors.driverOnPrimary} />
       </View>
       <Text style={styles.completeTitle}>Tuyến đường hoàn tất!</Text>
       <Text style={styles.completeSub}>Bạn đã hoàn thành ca giao hàng hôm nay.</Text>
@@ -121,7 +81,7 @@ function RouteCompleteView({ delivered, failed, durationText, onGoHome }: {
         </View>
         <View style={styles.completeStatDivider} />
         <View style={styles.completeStat}>
-          <Ionicons name="location" size={24} color={Colors.primary} />
+          <Ionicons name="location" size={24} color={Colors.driverPrimary} />
           <Text style={styles.completeStatVal}>{delivered + failed}</Text>
           <Text style={styles.completeStatLbl}>Tổng điểm</Text>
         </View>
@@ -134,7 +94,7 @@ function RouteCompleteView({ delivered, failed, durationText, onGoHome }: {
         </View>
       </View>
       <Pressable style={styles.goHomeBtn} onPress={onGoHome}>
-        <Ionicons name="home-outline" size={18} color={Colors.onPrimary} />
+        <Ionicons name="home-outline" size={18} color={Colors.driverOnPrimary} />
         <Text style={styles.goHomeBtnText}>Về trang chủ</Text>
       </Pressable>
     </View>
@@ -148,7 +108,6 @@ export function StopListScreen({ route, navigation }: Props) {
   const [stops, setStops] = useState<DeliveryStop[]>(driverRouteStore.getStops());
   const [routeCompleted, setRouteCompleted] = useState(false);
   const [durationText, setDurationText] = useState('');
-  const [reorderMode, setReorderMode] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -164,20 +123,6 @@ export function StopListScreen({ route, navigation }: Props) {
       }
     }, []),
   );
-
-  const moveStop = (deliveryId: string, dir: 'up' | 'down') => {
-    setStops(prev => {
-      const idx = prev.findIndex(s => s.deliveryId === deliveryId);
-      const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
-      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
-      const target = prev[targetIdx];
-      if (target.status === 'delivered' || target.status === 'failed') return prev;
-      const next = [...prev];
-      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
-      driverRouteStore.setStopOrder(next.map(s => s.deliveryId));
-      return driverRouteStore.getStops();
-    });
-  };
 
   const delivered = stops.filter(s => s.status === 'delivered').length;
   const failed = stops.filter(s => s.status === 'failed').length;
@@ -211,7 +156,7 @@ export function StopListScreen({ route, navigation }: Props) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={Colors.driverPrimary} />
         </View>
       </SafeAreaView>
     );
@@ -241,23 +186,12 @@ export function StopListScreen({ route, navigation }: Props) {
       <FlatList
         data={stops}
         keyExtractor={item => item.deliveryId}
-        renderItem={({ item, index }) => {
-          const isDone = item.status === 'delivered' || item.status === 'failed';
-          const prev = stops[index - 1];
-          const canMoveUp = !isDone && index > 0 && prev.status !== 'delivered' && prev.status !== 'failed';
-          const canMoveDown = !isDone && index < stops.length - 1;
-          return (
-            <StopCard
-              stop={item}
-              onPress={() => navigation.navigate('DriverNavigation', { deliveryId: item.deliveryId })}
-              reorderMode={reorderMode}
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              onMoveUp={() => moveStop(item.deliveryId, 'up')}
-              onMoveDown={() => moveStop(item.deliveryId, 'down')}
-            />
-          );
-        }}
+        renderItem={({ item }) => (
+          <StopCard
+            stop={item}
+            onPress={() => navigation.navigate('DriverNavigation', { deliveryId: item.deliveryId })}
+          />
+        )}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
@@ -288,30 +222,7 @@ export function StopListScreen({ route, navigation }: Props) {
                 </View>
               </View>
             </View>
-            <View style={styles.listLabelRow}>
-              <Text style={styles.listLabel}>Danh sách điểm giao</Text>
-              {!allDone && (
-                reorderMode ? (
-                  <TouchableOpacity style={styles.reorderDoneBtn} onPress={() => setReorderMode(false)}>
-                    <Ionicons name="checkmark" size={13} color={Colors.onPrimary} />
-                    <Text style={styles.reorderDoneBtnText}>Xong</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity style={styles.reorderToggleBtn} onPress={() => setReorderMode(true)}>
-                    <Ionicons name="swap-vertical-outline" size={13} color={Colors.primary} />
-                    <Text style={styles.reorderToggleBtnText}>Sắp xếp lại</Text>
-                  </TouchableOpacity>
-                )
-              )}
-            </View>
-            {reorderMode && (
-              <View style={styles.reorderBanner}>
-                <Ionicons name="information-circle-outline" size={15} color={Colors.primary} />
-                <Text style={styles.reorderBannerText}>
-                  Nhấn ↑ ↓ để điều chỉnh thứ tự giao hàng. Điểm đã xong không thể di chuyển.
-                </Text>
-              </View>
-            )}
+            <Text style={styles.listLabel}>Danh sách điểm giao</Text>
           </View>
         }
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
@@ -327,7 +238,7 @@ export function StopListScreen({ route, navigation }: Props) {
             style={({ pressed }) => [styles.completeBtn, pressed && { opacity: 0.85 }]}
             onPress={handleCompleteRoute}
           >
-            <Ionicons name="checkmark-done-circle" size={18} color={Colors.onPrimary} />
+            <Ionicons name="checkmark-done-circle" size={18} color={Colors.driverOnPrimary} />
             <Text style={styles.completeBtnText}>Hoàn tất tuyến đường</Text>
           </Pressable>
         </View>
@@ -352,13 +263,13 @@ const styles = StyleSheet.create({
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   progressTitle: { fontSize: 12, color: Colors.textMuted, marginBottom: 2 },
   progressFrac: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
-  progressPct: { fontSize: 28, fontWeight: '900', color: Colors.primary },
+  progressPct: { fontSize: 28, fontWeight: '900', color: Colors.driverPrimary },
   progressTrack: {
     height: 8, borderRadius: 4,
     backgroundColor: Colors.surfaceContainerHigh,
     overflow: 'hidden',
   },
-  progressFill: { height: '100%', borderRadius: 4, backgroundColor: Colors.primary },
+  progressFill: { height: '100%', borderRadius: 4, backgroundColor: Colors.driverPrimary },
   progressMeta: { flexDirection: 'row', gap: 12 },
   progressMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dot: { width: 8, height: 8, borderRadius: 4 },
@@ -396,9 +307,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 4,
     alignSelf: 'flex-start', marginTop: 4,
     paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 8, backgroundColor: Colors.primaryLight,
+    borderRadius: 8, backgroundColor: Colors.driverPrimaryLight,
   },
-  navBtnText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  navBtnText: { fontSize: 12, fontWeight: '700', color: Colors.driverPrimary },
   // Complete footer
   completeFooter: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -410,10 +321,10 @@ const styles = StyleSheet.create({
   completeFooterText: { fontSize: 13, fontWeight: '600', color: Colors.success },
   completeBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary,
+    gap: 8, backgroundColor: Colors.driverPrimary,
     borderRadius: 14, paddingVertical: 14,
   },
-  completeBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  completeBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 15 },
   // Route complete view
   completeView: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
@@ -421,7 +332,7 @@ const styles = StyleSheet.create({
   },
   completeCircle: {
     width: 88, height: 88, borderRadius: 44,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.driverPrimary,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 4,
   },
@@ -440,11 +351,11 @@ const styles = StyleSheet.create({
   completeStatDivider: { width: 1, backgroundColor: Colors.outlineVariant, marginHorizontal: 4 },
   goHomeBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Colors.primary,
+    gap: 8, backgroundColor: Colors.driverPrimary,
     borderRadius: 14, paddingVertical: 14,
     paddingHorizontal: 32, marginTop: 8,
   },
-  goHomeBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  goHomeBtnText: { color: Colors.driverOnPrimary, fontWeight: '700', fontSize: 15 },
   shiftCard: {
     flexDirection: 'row',
     backgroundColor: Colors.surfaceContainerLowest,
@@ -455,35 +366,4 @@ const styles = StyleSheet.create({
   shiftStat: { flex: 1, alignItems: 'center', gap: 6 },
   shiftStatVal: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
   shiftStatLbl: { fontSize: 11, color: Colors.textMuted, textAlign: 'center' },
-  // Reorder mode
-  listLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  reorderToggleBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 8, borderWidth: 1, borderColor: Colors.primary,
-  },
-  reorderToggleBtnText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
-  reorderDoneBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primary, borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 6,
-  },
-  reorderDoneBtnText: { fontSize: 12, fontWeight: '700', color: Colors.onPrimary },
-  reorderBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
-    marginTop: -4,
-  },
-  reorderBannerText: { flex: 1, fontSize: 12, color: Colors.primary, fontWeight: '600' },
-  reorderBtns: { justifyContent: 'center', gap: 2, flexShrink: 0 },
-  reorderArrow: {
-    width: 32, height: 32, borderRadius: 8,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: Colors.primaryLight,
-  },
-  reorderArrowDisabled: { backgroundColor: Colors.surfaceContainerHigh },
-  reorderLockedBadge: {
-    width: 32, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
 });
