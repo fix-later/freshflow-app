@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { apiClient, getCursorPaged, TOKEN_KEY } from '../../../services/api/client';
 import { ENV } from '../../../config/env';
+import { Colors } from '../../../constants/colors';
 import type {
   CreditDto,
   CreditTransactionDto,
@@ -28,10 +29,10 @@ export const TRANSACTION_TYPE_LABEL: Record<string, string> = {
 };
 
 export const TRANSACTION_TYPE_COLOR: Record<string, string> = {
-  charge: '#EF4444',
-  settlement: '#3B82F6',
-  refund: '#22C55E',
-  adjustment: '#F59E0B',
+  charge: Colors.danger,
+  settlement: Colors.secondary,
+  refund: Colors.success,
+  adjustment: Colors.warning,
 };
 
 export function getTransactionTypeLabel(type?: string | null): string {
@@ -41,9 +42,9 @@ export function getTransactionTypeLabel(type?: string | null): string {
 }
 
 export function getTransactionTypeColor(type?: string | null): string {
-  if (!type) return '#6B7280';
+  if (!type) return Colors.textMuted;
   const key = type.toLowerCase();
-  return TRANSACTION_TYPE_COLOR[key] ?? '#6B7280';
+  return TRANSACTION_TYPE_COLOR[key] ?? Colors.textMuted;
 }
 
 export const creditApi = {

@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'flex-start',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: Colors.surfaceContainerLow,
     borderRadius: 12,
     padding: 12,
   },
