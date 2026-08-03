@@ -109,12 +109,23 @@ apiClient.interceptors.response.use(
 
     const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
+    // Endpoints whose own 401 means something other than "our access token
+    // expired" — e.g. /auth/login's 401 is INVALID_CREDENTIALS (wrong email/
+    // password), not an expired session. Treating it as an expired-session
+    // signal made a plain login mistake throw "no_refresh_token" (no token was
+    // ever issued yet), which surfaced to the user as "Không có kết nối mạng"
+    // and wrongly flagged sessionExpired, instead of showing the real error.
+    const NEVER_REFRESH_ENDPOINTS = ['/auth/refresh', '/auth/login', '/auth/logout'];
+
     if (error.response?.status === 401 && !original._retry) {
-      // Never retry the refresh endpoint — prevents infinite loop
-      if (original.url?.includes('/auth/refresh')) {
-        await SecureStore.deleteItemAsync(TOKEN_KEY);
-        await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
-        _onSignOut?.();
+      if (NEVER_REFRESH_ENDPOINTS.some((endpoint) => original.url?.includes(endpoint))) {
+        // Only /auth/refresh's own 401 means the session is actually dead —
+        // login/logout 401s are just that request's own outcome.
+        if (original.url?.includes('/auth/refresh')) {
+          await SecureStore.deleteItemAsync(TOKEN_KEY);
+          await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+          _onSignOut?.();
+        }
         return Promise.reject(error);
       }
 
