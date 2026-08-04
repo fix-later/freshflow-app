@@ -19,6 +19,22 @@ import { Button } from "../../../components/ui/Button";
 import { Logo } from "../../../components/ui/Logo";
 import { authApi, UnsupportedRoleError } from "../api/authApi";
 
+// BE sends "Account locked until {ISO 8601 UTC}." (LoginCommandHandler.cs) —
+// pull just the timestamp out and render it in Vietnamese instead of echoing
+// the raw English/ISO string into the alert.
+function formatLockedUntil(message: string): string | null {
+  const match = message.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  if (!match) return null;
+  const date = new Date(`${match[0]}Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function LoginScreen() {
   const navigation = useNavigation();
   const { signIn, sessionExpired, clearSessionExpired } = useAuthStore();
@@ -50,7 +66,7 @@ export function LoginScreen() {
       }
 
       const code: string = err?.response?.data?.code ?? "";
-      const lockedUntil: string = err?.response?.data?.message ?? "";
+      const rawMessage: string = err?.response?.data?.message ?? "";
 
       let title = "Đăng nhập thất bại";
       let body = "Đã có lỗi xảy ra. Vui lòng thử lại.";
@@ -60,8 +76,11 @@ export function LoginScreen() {
         body =
           "Email/số điện thoại hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.";
       } else if (code === "ACCOUNT_LOCKED") {
+        const lockedUntil = formatLockedUntil(rawMessage);
         title = "Tài khoản bị khóa";
-        body = `Tài khoản tạm thời bị khóa do đăng nhập sai nhiều lần.\n${lockedUntil}`;
+        body = lockedUntil
+          ? `Tài khoản tạm thời bị khóa do đăng nhập sai nhiều lần.\nVui lòng thử lại sau ${lockedUntil}.`
+          : "Tài khoản tạm thời bị khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau.";
       } else if (code === "ACCOUNT_INACTIVE") {
         title = "Tài khoản bị vô hiệu hóa";
         body = "Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ hỗ trợ.";
