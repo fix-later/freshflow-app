@@ -12,6 +12,10 @@ export interface RestaurantProfileDto {
   pickupEnd: string;
   updatedAt: string;
   businessLicenseUrl: string | null;
+  taxCode: string;
+  invoiceLegalName: string;
+  invoiceAddress: string;
+  invoiceEmail: string;
 }
 
 export interface UpdateRestaurantProfilePayload {
@@ -21,6 +25,33 @@ export interface UpdateRestaurantProfilePayload {
   pickupStart: string | null;
   pickupEnd: string | null;
   businessLicenseUrl: string | null;
+}
+
+export interface UpdateTaxProfilePayload {
+  taxCode: string;
+  legalName: string;
+  address: string | null;
+  email: string | null;
+}
+
+// PUT .../tax-profile returns a narrower shape than the full profile DTO —
+// {id, taxCode, legalName, address, email, updatedAt} — not {restaurantId, name, ...}.
+interface TaxProfileApiDto {
+  id: string;
+  taxCode: string | null;
+  legalName: string | null;
+  address: string | null;
+  email: string | null;
+  updatedAt: string;
+}
+
+export interface TaxProfileDto {
+  restaurantId: string;
+  taxCode: string;
+  legalName: string;
+  address: string;
+  email: string;
+  updatedAt: string;
 }
 
 export interface ApprovalStatusDto {
@@ -39,6 +70,18 @@ interface RestaurantProfileApiDto {
   pickupEnd: string | null;
   updatedAt: string;
   businessLicenseUrl?: string | null;
+  taxCode?: string | null;
+  invoiceLegalName?: string | null;
+  invoiceAddress?: string | null;
+  invoiceEmail?: string | null;
+}
+
+// BE binds PickupStart/PickupEnd as TimeOnly? via System.Text.Json, whose default
+// converter rejects anything shorter than "HH:mm:ss" (throws on plain "HH:mm").
+// The UI only collects HH:MM, so pad the seconds on the way out.
+function toHHMMSS(time: string | null | undefined): string | null {
+  if (!time) return null;
+  return time.length === 5 ? `${time}:00` : time;
 }
 
 function toHHMM(time: string | null | undefined): string {
@@ -57,6 +100,10 @@ function normalizeDto(data: RestaurantProfileApiDto): RestaurantProfileDto {
     pickupEnd: toHHMM(data.pickupEnd),
     updatedAt: data.updatedAt,
     businessLicenseUrl: data.businessLicenseUrl ?? null,
+    taxCode: data.taxCode ?? '',
+    invoiceLegalName: data.invoiceLegalName ?? '',
+    invoiceAddress: data.invoiceAddress ?? '',
+    invoiceEmail: data.invoiceEmail ?? '',
   };
 }
 
@@ -94,9 +141,28 @@ export const restaurantApi = {
   ): Promise<RestaurantProfileDto> {
     const { data } = await apiClient.put<RestaurantProfileApiDto>(
       '/api/v1/restaurants/me/profile',
-      payload,
+      {
+        ...payload,
+        pickupStart: toHHMMSS(payload.pickupStart),
+        pickupEnd: toHHMMSS(payload.pickupEnd),
+      },
     );
     return normalizeDto(data);
+  },
+
+  async updateTaxProfile(payload: UpdateTaxProfilePayload): Promise<TaxProfileDto> {
+    const { data } = await apiClient.put<TaxProfileApiDto>(
+      '/api/v1/restaurants/me/tax-profile',
+      payload,
+    );
+    return {
+      restaurantId: data.id,
+      taxCode: data.taxCode ?? '',
+      legalName: data.legalName ?? '',
+      address: data.address ?? '',
+      email: data.email ?? '',
+      updatedAt: data.updatedAt,
+    };
   },
 
   async getApprovalStatus(): Promise<ApprovalStatusDto> {

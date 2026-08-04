@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,33 +18,11 @@ import { theme } from '../../../config/theme';
 import { Button } from '../../../components/ui/Button';
 import { Logo } from '../../../components/ui/Logo';
 import { authApi } from '../api/authApi';
+import { fetchTaxInfo } from '../../../services/taxLookup';
 
 // Password must match backend: min 8 chars, 1 uppercase, 1 digit, 1 special char
 function isPasswordStrong(pw: string): boolean {
   return pw.length >= 8 && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^a-zA-Z0-9]/.test(pw);
-}
-
-interface TaxInfo {
-  name: string;
-  address: string;
-  shortName?: string;
-}
-
-async function fetchTaxInfo(code: string): Promise<TaxInfo | null> {
-  try {
-    const res = await fetch(`https://api.vietqr.io/v2/business/${code.trim()}`);
-    const json = await res.json();
-    if (json?.code === '00' && json?.data) {
-      return {
-        name: json.data.name ?? '',
-        address: json.data.address ?? '',
-        shortName: json.data.shortName ?? '',
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 export function RegisterScreen({ navigation }: { navigation: any }) {
@@ -64,15 +42,22 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
   const [taxLookupError, setTaxLookupError] = useState('');
 
   // ─── Tax lookup ──────────────────────────
+  // Guards against a slow/stale lookup response landing after the user has already
+  // changed the MST again — without this it could silently overwrite restaurantName/
+  // Address with data for a tax code that's no longer in the field.
+  const taxCodeRequestRef = useRef('');
+
   const handleTaxCodeChange = async (code: string) => {
     setTaxCode(code);
     setTaxVerified(false);
     setTaxLookupError('');
+    taxCodeRequestRef.current = code;
     // MST cá nhân: 10 số, MST chi nhánh: 13 số
     if (code.length === 10 || code.length === 13) {
       setTaxLookupLoading(true);
       const info = await fetchTaxInfo(code);
       setTaxLookupLoading(false);
+      if (taxCodeRequestRef.current !== code) return; // superseded by a newer edit — discard
       if (info) {
         setRestaurantName(info.name);
         setRestaurantAddress(info.address);
@@ -107,6 +92,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
     restaurantName.trim().length > 0 &&
     restaurantAddress.trim().length > 0 &&
     taxCode.trim().length > 0 &&
+    !taxLookupLoading &&
     Object.values(passwordChecks).every(Boolean) &&
     password === confirmPassword &&
     agreeTerms;

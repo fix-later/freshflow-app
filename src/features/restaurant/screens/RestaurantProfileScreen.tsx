@@ -1,7 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -9,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,11 +22,15 @@ import {
   TextInput,
 } from '../../../components/ui/Text';
 import { BrandButton as Button } from '../../../components/ui/BrandButton';
+import { uploadImageToCloudinary } from '../../../services/cloudinaryUpload';
+import { fetchTaxInfo } from '../../../services/taxLookup';
 import {
   restaurantApi,
   type RestaurantProfileDto,
   type ApprovalStatusDto,
 } from '../api/restaurantApi';
+
+const LICENSE_FOLDER = 'freshflow/licenses';
 
 type Nav = NativeStackNavigationProp<RestaurantProfileStackParamList>;
 
@@ -56,6 +63,20 @@ function formatTimeInput(raw: string): string {
   return digits;
 }
 
+// Mirrors UpdateMyTaxProfileCommandValidator.cs exactly (10-digit MST, optional -3-digit branch suffix).
+const TAX_CODE_REGEX = /^\d{10}(-\d{3})?$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateTaxCode(v: string): string | null {
+  if (!v) return 'Bắt buộc nhập';
+  return TAX_CODE_REGEX.test(v) ? null : 'MST gồm 10 chữ số (có thể thêm -XXX cho chi nhánh)';
+}
+
+function validateTaxEmail(v: string): string | null {
+  if (!v) return null;
+  return EMAIL_REGEX.test(v) ? null : 'Email không hợp lệ';
+}
+
 function getErrorMessage(error: unknown, fallback: string): string {
   return (
     (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -86,6 +107,7 @@ function FormField({
   autoCapitalize = 'sentences',
   error,
   hint,
+  rightElement,
 }: {
   label: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -96,6 +118,7 @@ function FormField({
   autoCapitalize?: 'none' | 'sentences' | 'words';
   error?: string | null;
   hint?: string;
+  rightElement?: React.ReactNode;
 }) {
   return (
     <View style={field.container}>
@@ -111,6 +134,7 @@ function FormField({
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
         />
+        {rightElement}
       </View>
       {error ? (
         <Text style={field.errorText}>{error}</Text>
@@ -182,6 +206,29 @@ function toForm(profile: RestaurantProfileDto): RestaurantProfileForm {
   };
 }
 
+type TaxProfileForm = {
+  taxCode: string;
+  legalName: string;
+  invoiceAddress: string;
+  invoiceEmail: string;
+};
+
+const EMPTY_TAX_FORM: TaxProfileForm = {
+  taxCode: '',
+  legalName: '',
+  invoiceAddress: '',
+  invoiceEmail: '',
+};
+
+function toTaxForm(profile: RestaurantProfileDto): TaxProfileForm {
+  return {
+    taxCode: profile.taxCode,
+    legalName: profile.invoiceLegalName,
+    invoiceAddress: profile.invoiceAddress,
+    invoiceEmail: profile.invoiceEmail,
+  };
+}
+
 export function RestaurantProfileScreen() {
   const navigation = useNavigation<Nav>();
   const [form, setForm] = useState<RestaurantProfileForm>(EMPTY_FORM);
@@ -195,6 +242,21 @@ export function RestaurantProfileScreen() {
   const [savedOk, setSavedOk] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusDto['status'] | null>(null);
 
+  // ─── Tax profile ────────────────────────────────────────────────────────
+  const [taxForm, setTaxForm] = useState<TaxProfileForm>(EMPTY_TAX_FORM);
+  const [taxOriginal, setTaxOriginal] = useState<TaxProfileForm>(EMPTY_TAX_FORM);
+  const [isEditingTax, setIsEditingTax] = useState(false);
+  const [taxSaveLoading, setTaxSaveLoading] = useState(false);
+  const [taxSaveError, setTaxSaveError] = useState<string | null>(null);
+  const [taxSavedOk, setTaxSavedOk] = useState(false);
+  const [taxLookupLoading, setTaxLookupLoading] = useState(false);
+  const [taxVerified, setTaxVerified] = useState(false);
+  const [taxLookupError, setTaxLookupError] = useState('');
+
+  // ─── Business license ───────────────────────────────────────────────────
+  const [licenseUploading, setLicenseUploading] = useState(false);
+  const [licenseError, setLicenseError] = useState<string | null>(null);
+
   const loadProfile = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -204,9 +266,12 @@ export function RestaurantProfileScreen() {
         restaurantApi.getApprovalStatus().catch(() => null),
       ]);
       const nextForm = toForm(profileData);
+      const nextTaxForm = toTaxForm(profileData);
       setProfile(profileData);
       setForm(nextForm);
       setOriginal(nextForm);
+      setTaxForm(nextTaxForm);
+      setTaxOriginal(nextTaxForm);
       setApprovalStatus(statusData?.status ?? profileData.status);
     } catch (error) {
       setLoadError(
@@ -276,11 +341,18 @@ export function RestaurantProfileScreen() {
         businessLicenseUrl: profile?.businessLicenseUrl ?? null,
       });
       const nextForm = toForm(updated);
+      // UpdateRestaurantProfileResponse (unlike GetRestaurantProfileResponse) doesn't carry
+      // status or the tax-profile fields, so `updated` has them defaulted to null/'' —
+      // preserve whatever was already loaded instead of blanking them out.
       setProfile((previous) => ({
         ...updated,
         status: previous?.status ?? approvalStatus,
         businessLicenseUrl:
           updated.businessLicenseUrl ?? previous?.businessLicenseUrl ?? null,
+        taxCode: previous?.taxCode ?? '',
+        invoiceLegalName: previous?.invoiceLegalName ?? '',
+        invoiceAddress: previous?.invoiceAddress ?? '',
+        invoiceEmail: previous?.invoiceEmail ?? '',
       }));
       setForm(nextForm);
       setOriginal(nextForm);
@@ -295,6 +367,154 @@ export function RestaurantProfileScreen() {
       setSaveLoading(false);
     }
   }, [approvalStatus, canSave, form, profile?.businessLicenseUrl]);
+
+  // ─── Tax profile handlers ───────────────────────────────────────────────
+
+  const taxCodeError = isEditingTax ? validateTaxCode(taxForm.taxCode) : null;
+  const taxEmailError = isEditingTax ? validateTaxEmail(taxForm.invoiceEmail) : null;
+  const canSaveTax =
+    !taxSaveLoading &&
+    !taxLookupLoading &&
+    !validateTaxCode(taxForm.taxCode) &&
+    !!taxForm.legalName.trim() &&
+    !!taxForm.invoiceAddress.trim() &&
+    !validateTaxEmail(taxForm.invoiceEmail);
+
+  const setTaxField = useCallback(<K extends keyof TaxProfileForm>(
+    key: K,
+    value: TaxProfileForm[K],
+  ) => {
+    setTaxForm((prev) => ({ ...prev, [key]: value }));
+    setTaxSaveError(null);
+    setTaxSavedOk(false);
+  }, []);
+
+  // Guards against a race where the user keeps editing the MST after a lookup request
+  // is already in flight — without this, a slow/stale response could land after a newer
+  // edit and silently overwrite legalName/address for a tax code that's no longer current.
+  const taxCodeRequestRef = useRef('');
+
+  // Mirrors RegisterScreen.tsx's lookup: auto-fills legal name + address from a public
+  // business registry once a full 10-digit MST is entered. Best-effort only — a failed
+  // or unmatched lookup never blocks manual entry, it just skips the auto-fill.
+  const handleTaxCodeChange = useCallback(async (raw: string) => {
+    const code = raw.replace(/[^0-9-]/g, '');
+    setTaxField('taxCode', code);
+    setTaxVerified(false);
+    setTaxLookupError('');
+    taxCodeRequestRef.current = code;
+    if (code.length === 10) {
+      setTaxLookupLoading(true);
+      const info = await fetchTaxInfo(code);
+      setTaxLookupLoading(false);
+      if (taxCodeRequestRef.current !== code) return; // superseded by a newer edit — discard
+      if (info) {
+        setTaxForm((prev) => ({ ...prev, legalName: info.name, invoiceAddress: info.address }));
+        setTaxVerified(true);
+      } else {
+        setTaxLookupError('Không tìm thấy thông tin doanh nghiệp với mã số thuế này.');
+      }
+    }
+  }, [setTaxField]);
+
+  const enterEditTax = useCallback(() => {
+    setIsEditingTax(true);
+    setTaxSaveError(null);
+    setTaxSavedOk(false);
+    setTaxVerified(false);
+    setTaxLookupError('');
+  }, []);
+
+  const cancelEditTax = useCallback(() => {
+    setTaxForm(taxOriginal);
+    setIsEditingTax(false);
+    setTaxSaveError(null);
+    setTaxVerified(false);
+    setTaxLookupError('');
+  }, [taxOriginal]);
+
+  const handleSaveTax = useCallback(async () => {
+    if (!canSaveTax) return;
+    setTaxSaveLoading(true);
+    setTaxSaveError(null);
+    setTaxSavedOk(false);
+    try {
+      const updated = await restaurantApi.updateTaxProfile({
+        taxCode: taxForm.taxCode.trim(),
+        legalName: taxForm.legalName.trim(),
+        address: taxForm.invoiceAddress.trim() || null,
+        email: taxForm.invoiceEmail.trim() || null,
+      });
+      const nextTaxForm: TaxProfileForm = {
+        taxCode: updated.taxCode,
+        legalName: updated.legalName,
+        invoiceAddress: updated.address,
+        invoiceEmail: updated.email,
+      };
+      setProfile((previous) =>
+        previous
+          ? {
+              ...previous,
+              taxCode: updated.taxCode,
+              invoiceLegalName: updated.legalName,
+              invoiceAddress: updated.address,
+              invoiceEmail: updated.email,
+            }
+          : previous,
+      );
+      setTaxForm(nextTaxForm);
+      setTaxOriginal(nextTaxForm);
+      setIsEditingTax(false);
+      setTaxSavedOk(true);
+    } catch (err: unknown) {
+      setTaxSaveError(getErrorMessage(err, 'Cập nhật hồ sơ thuế thất bại. Vui lòng thử lại.'));
+    } finally {
+      setTaxSaveLoading(false);
+    }
+  }, [canSaveTax, taxForm]);
+
+  // ─── Business license handler ───────────────────────────────────────────
+
+  const handleUploadLicense = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Cần quyền truy cập', 'Vui lòng cho phép truy cập thư viện ảnh trong Cài đặt.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    setLicenseUploading(true);
+    setLicenseError(null);
+    try {
+      const url = await uploadImageToCloudinary(result.assets[0].uri, LICENSE_FOLDER);
+      const updated = await restaurantApi.updateRestaurantProfile({
+        name: profile?.name ?? '',
+        address: profile?.address || null,
+        contactPerson: profile?.contactPerson || null,
+        pickupStart: profile?.pickupStart || null,
+        pickupEnd: profile?.pickupEnd || null,
+        businessLicenseUrl: url,
+      });
+      setProfile((previous) =>
+        previous ? { ...previous, businessLicenseUrl: updated.businessLicenseUrl } : previous,
+      );
+    } catch (err: unknown) {
+      setLicenseError(getErrorMessage(err, 'Tải giấy phép lên thất bại. Vui lòng thử lại.'));
+    } finally {
+      setLicenseUploading(false);
+    }
+  }, [profile]);
+
+  const handleViewLicense = useCallback(() => {
+    if (profile?.businessLicenseUrl) {
+      Linking.openURL(profile.businessLicenseUrl).catch(() => {});
+    }
+  }, [profile?.businessLicenseUrl]);
 
   if (loading) {
     return (
@@ -517,7 +737,26 @@ export function RestaurantProfileScreen() {
             </View>
           </Pressable>
 
-          {/* ─── Action buttons ─────────────────── */}
+          {/* ─── Invoices card ───────────────────── */}
+          <Pressable
+            style={styles.card}
+            onPress={() => navigation.navigate('Invoices')}
+          >
+            <View style={styles.navRow}>
+              <View style={styles.navRowLeft}>
+                <View style={styles.navIcon}>
+                  <Ionicons name="receipt-outline" size={18} color={Colors.primary} />
+                </View>
+                <View style={{ gap: 1 }}>
+                  <Text style={styles.navRowTitle}>Hóa đơn VAT</Text>
+                  <Text style={styles.navRowSub}>Xem hóa đơn điện tử đã phát hành</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            </View>
+          </Pressable>
+
+          {/* ─── Business license card ───────────── */}
           <View style={styles.card}>
             <Text style={styles.cardSection}>Hồ sơ pháp lý</Text>
             <InfoView
@@ -526,6 +765,153 @@ export function RestaurantProfileScreen() {
               value={profile?.businessLicenseUrl ? 'Đã cập nhật' : 'Chưa cập nhật'}
               valueColor={profile?.businessLicenseUrl ? Colors.success : Colors.textMuted}
             />
+            {licenseError && (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle-outline" size={16} color="#EF4444" />
+                <Text style={styles.errorBannerText}>{licenseError}</Text>
+              </View>
+            )}
+            <View style={styles.licenseActionRow}>
+              {profile?.businessLicenseUrl && (
+                <Pressable
+                  style={[styles.licenseBtn, styles.licenseBtnSecondary]}
+                  onPress={handleViewLicense}
+                  disabled={licenseUploading}
+                >
+                  <Ionicons name="eye-outline" size={16} color={Colors.primaryText} />
+                  <Text style={styles.licenseBtnSecondaryText}>Xem</Text>
+                </Pressable>
+              )}
+              <Pressable
+                style={[styles.licenseBtn, styles.licenseBtnPrimary]}
+                onPress={handleUploadLicense}
+                disabled={licenseUploading}
+              >
+                {licenseUploading ? (
+                  <ActivityIndicator size="small" color={Colors.onPrimary} />
+                ) : (
+                  <>
+                    <Ionicons name="cloud-upload-outline" size={16} color={Colors.onPrimary} />
+                    <Text style={styles.licenseBtnPrimaryText}>
+                      {profile?.businessLicenseUrl ? 'Cập nhật ảnh' : 'Tải ảnh lên'}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+
+          {/* ─── Tax profile card ────────────────── */}
+          <View style={styles.card}>
+            <View style={styles.taxHeaderRow}>
+              <Text style={[styles.cardSection, styles.taxHeaderTitle]}>Hồ sơ thuế</Text>
+              {!isEditingTax && (
+                <Pressable style={styles.editBtn} onPress={enterEditTax}>
+                  <Ionicons name="pencil" size={14} color={Colors.primaryText} />
+                  <Text style={styles.editBtnText}>Chỉnh sửa</Text>
+                </Pressable>
+              )}
+            </View>
+            <Text style={styles.taxHint}>
+              Bắt buộc để hệ thống phát hành hóa đơn VAT tự động sau khi đơn hàng được giao.
+            </Text>
+
+            {taxSavedOk && (
+              <View style={styles.successBanner}>
+                <Ionicons name="checkmark-circle" size={18} color={Colors.primaryText} />
+                <Text style={styles.successText}>Hồ sơ thuế đã được cập nhật.</Text>
+              </View>
+            )}
+            {taxSaveError && (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle-outline" size={16} color="#EF4444" />
+                <Text style={styles.errorBannerText}>{taxSaveError}</Text>
+              </View>
+            )}
+
+            {isEditingTax ? (
+              <>
+                <FormField
+                  label="Mã số thuế (MST)"
+                  icon="card-outline"
+                  value={taxForm.taxCode}
+                  onChangeText={handleTaxCodeChange}
+                  placeholder="0123456789"
+                  keyboardType="numeric"
+                  error={taxCodeError}
+                  rightElement={
+                    taxLookupLoading ? (
+                      <ActivityIndicator size="small" color={Colors.primary} />
+                    ) : taxVerified ? (
+                      <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                    ) : null
+                  }
+                />
+                {!taxCodeError && (taxLookupError || taxVerified) && (
+                  <Text
+                    style={[
+                      styles.taxLookupHint,
+                      { color: taxVerified ? Colors.success : Colors.textMuted },
+                    ]}
+                  >
+                    {taxVerified ? 'Đã xác thực thông tin doanh nghiệp ✓' : taxLookupError}
+                  </Text>
+                )}
+                <FormField
+                  label="Tên pháp lý"
+                  icon="business-outline"
+                  value={taxForm.legalName}
+                  onChangeText={(v) => setTaxField('legalName', v)}
+                  placeholder="Tên công ty/hộ kinh doanh trên hóa đơn"
+                  autoCapitalize="words"
+                />
+                <FormField
+                  label="Địa chỉ hóa đơn"
+                  icon="location-outline"
+                  value={taxForm.invoiceAddress}
+                  onChangeText={(v) => setTaxField('invoiceAddress', v)}
+                  placeholder="Địa chỉ đăng ký kinh doanh"
+                />
+                <FormField
+                  label="Email nhận hóa đơn"
+                  icon="mail-outline"
+                  value={taxForm.invoiceEmail}
+                  onChangeText={(v) => setTaxField('invoiceEmail', v)}
+                  placeholder="ketoan@nhahang.com (không bắt buộc)"
+                  keyboardType="default"
+                  autoCapitalize="none"
+                  error={taxEmailError}
+                />
+                <View style={styles.actionRow}>
+                  <Button
+                    title="Huỷ"
+                    variant="secondary"
+                    size="md"
+                    onPress={cancelEditTax}
+                    style={styles.actionBtn}
+                  />
+                  <Button
+                    title="LƯU"
+                    variant="primary"
+                    size="md"
+                    loading={taxSaveLoading}
+                    onPress={handleSaveTax}
+                    disabled={!canSaveTax}
+                    style={styles.actionBtn}
+                  />
+                </View>
+              </>
+            ) : (
+              <>
+                <InfoView icon="card-outline" label="Mã số thuế" value={taxForm.taxCode || '—'} />
+                <View style={styles.separator} />
+                <InfoView icon="business-outline" label="Tên pháp lý" value={taxForm.legalName || '—'} />
+                <View style={styles.separator} />
+                <InfoView icon="location-outline" label="Địa chỉ hóa đơn" value={taxForm.invoiceAddress || '—'} />
+                <View style={styles.separator} />
+                <InfoView icon="mail-outline" label="Email nhận hóa đơn" value={taxForm.invoiceEmail || '—'} />
+              </>
+            )}
           </View>
 
           {isEditing && (
@@ -734,4 +1120,47 @@ const styles = StyleSheet.create({
   },
   navRowTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
   navRowSub: { fontSize: 12, color: Colors.textMuted },
+
+  // ─── Business license ─────────────────────────
+  licenseActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+    marginBottom: 14,
+  },
+  licenseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  licenseBtnPrimary: { flex: 1, backgroundColor: Colors.primary },
+  licenseBtnPrimaryText: { fontSize: 13, fontWeight: '700', color: Colors.onPrimary },
+  licenseBtnSecondary: { backgroundColor: Colors.primaryLight },
+  licenseBtnSecondaryText: { fontSize: 13, fontWeight: '700', color: Colors.primaryText },
+
+  // ─── Tax profile ───────────────────────────────
+  taxHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  taxHeaderTitle: { flex: 1, paddingBottom: 0 },
+  taxHint: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    lineHeight: 17,
+    marginBottom: 12,
+  },
+  taxLookupHint: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: -12,
+    marginBottom: 16,
+    marginLeft: 2,
+  },
 });

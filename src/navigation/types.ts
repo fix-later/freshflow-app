@@ -42,6 +42,8 @@ export type RestaurantProfileStackParamList = {
   DeliveryAddresses: undefined;
   CreditOverview: undefined;
   CreditStatements: { restaurantId: string };
+  Invoices: undefined;
+  InvoiceDetail: { invoiceId: string };
 };
 
 export type CreateOrderItem = {
