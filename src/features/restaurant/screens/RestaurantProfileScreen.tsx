@@ -9,10 +9,15 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker, {
+  DateTimePickerAndroid,
+  type DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -56,10 +61,19 @@ function validateTime(t: string): string | null {
   return TIME_REGEX.test(t) ? null : 'Định dạng HH:MM (ví dụ 08:00)';
 }
 
-function formatTimeInput(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 4);
-  if (digits.length > 2) return digits.slice(0, 2) + ':' + digits.slice(2);
-  return digits;
+function timeStringToDate(hhmm: string): Date {
+  const d = new Date();
+  const match = TIME_REGEX.exec(hhmm);
+  if (match) {
+    d.setHours(Number(hhmm.slice(0, 2)), Number(hhmm.slice(3, 5)), 0, 0);
+  } else {
+    d.setHours(8, 0, 0, 0);
+  }
+  return d;
+}
+
+function dateToTimeString(d: Date): string {
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
 // Mirrors UpdateMyTaxProfileCommandValidator.cs exactly (10-digit MST, optional -3-digit branch suffix).
@@ -144,6 +158,32 @@ function FormField({
   );
 }
 
+function TimeField({
+  label,
+  value,
+  onPress,
+  error,
+}: {
+  label: string;
+  value: string;
+  onPress: () => void;
+  error?: string | null;
+}) {
+  return (
+    <View style={field.container}>
+      <Text style={field.label}>{label}</Text>
+      <Pressable style={[field.inputWrapper, error ? field.inputError : null]} onPress={onPress}>
+        <Ionicons name="time-outline" size={18} color={Colors.textMuted} />
+        <Text style={[field.timeValue, !value && { color: Colors.textMuted }]}>
+          {value || 'Chọn giờ'}
+        </Text>
+        <Ionicons name="chevron-down" size={16} color={Colors.textMuted} />
+      </Pressable>
+      {error ? <Text style={field.errorText}>{error}</Text> : null}
+    </View>
+  );
+}
+
 const field = StyleSheet.create({
   container: { marginBottom: 16 },
   label: {
@@ -175,6 +215,13 @@ const field = StyleSheet.create({
     color: Colors.textPrimary,
     height: '100%',
     padding: 0,
+  },
+  // Plain Text, unlike TextInput, doesn't auto-center vertically within a fixed-height
+  // box — no `height` here so the row's `alignItems: 'center'` can center it properly.
+  timeValue: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.textPrimary,
   },
   errorText: { fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 2 },
   hintText: { fontSize: 12, color: Colors.textMuted, marginTop: 4, marginLeft: 2 },
@@ -258,6 +305,12 @@ export function RestaurantProfileScreen() {
   const [licensePreviewVisible, setLicensePreviewVisible] = useState(false);
   const [licensePreviewFailed, setLicensePreviewFailed] = useState(false);
 
+  // ─── Pickup time pickers ─────────────────────────────────────────────────
+  // Android: DateTimePickerAndroid.open() shows the system dialog imperatively.
+  // iOS: 'default'/'compact' display renders an inline chip in-place instead of a
+  // popup, so it's driven through this state + a Modal (see pickerBackdrop below).
+  const [pickupPickerField, setPickupPickerField] = useState<'start' | 'end' | null>(null);
+
   const loadProfile = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -309,6 +362,32 @@ export function RestaurantProfileScreen() {
     setIsEditing(false);
     setSaveError(null);
   }, [original]);
+
+  const applyPickupTime = useCallback((fieldName: 'start' | 'end', date: Date) => {
+    setField(fieldName === 'start' ? 'pickupStart' : 'pickupEnd', dateToTimeString(date));
+  }, [setField]);
+
+  const openPickupPicker = useCallback((fieldName: 'start' | 'end') => {
+    const current = fieldName === 'start' ? form.pickupStart : form.pickupEnd;
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: timeStringToDate(current),
+        mode: 'time',
+        is24Hour: true,
+        onChange: (event: DateTimePickerEvent, date?: Date) => {
+          if (event.type !== 'dismissed' && date) applyPickupTime(fieldName, date);
+        },
+      });
+      return;
+    }
+    setPickupPickerField(fieldName);
+  }, [form.pickupStart, form.pickupEnd, applyPickupTime]);
+
+  // iOS inline spinner fires onChange continuously while scrolling — just apply live, the
+  // modal stays open until the user taps "Xong".
+  const handleInlinePickupChange = useCallback((_event: DateTimePickerEvent, date?: Date) => {
+    if (pickupPickerField && date) applyPickupTime(pickupPickerField, date);
+  }, [pickupPickerField, applyPickupTime]);
 
   const pickupStartError = validateTime(form.pickupStart);
   const pickupEndError = validateTime(form.pickupEnd);
@@ -370,6 +449,10 @@ export function RestaurantProfileScreen() {
   }, [approvalStatus, canSave, form, profile?.businessLicenseUrl]);
 
   // ─── Tax profile handlers ───────────────────────────────────────────────
+
+  // Mirrors InvoiceIssuanceService.IsBuyerComplete (BE) — email is optional there too.
+  const isTaxProfileComplete =
+    !!profile?.taxCode && !!profile?.invoiceLegalName && !!profile?.invoiceAddress;
 
   const taxCodeError = isEditingTax ? validateTaxCode(taxForm.taxCode) : null;
   const taxEmailError = isEditingTax ? validateTaxEmail(taxForm.invoiceEmail) : null;
@@ -679,32 +762,22 @@ export function RestaurantProfileScreen() {
             {isEditing ? (
               <View style={styles.timeRow}>
                 <View style={styles.timeHalf}>
-                  <FormField
+                  <TimeField
                     label="Từ"
-                    icon="time-outline"
                     value={form.pickupStart}
-                    onChangeText={(v) => setField('pickupStart', formatTimeInput(v))}
-                    placeholder="08:00"
-                    keyboardType="numeric"
-                    autoCapitalize="none"
+                    onPress={() => openPickupPicker('start')}
                     error={pickupStartError}
-                    hint="HH:MM"
                   />
                 </View>
                 <View style={styles.timeDivider}>
                   <Text style={styles.timeDash}>–</Text>
                 </View>
                 <View style={styles.timeHalf}>
-                  <FormField
+                  <TimeField
                     label="Đến"
-                    icon="time-outline"
                     value={form.pickupEnd}
-                    onChangeText={(v) => setField('pickupEnd', formatTimeInput(v))}
-                    placeholder="17:00"
-                    keyboardType="numeric"
-                    autoCapitalize="none"
+                    onPress={() => openPickupPicker('end')}
                     error={pickupEndError || pickupRangeError}
-                    hint="HH:MM"
                   />
                 </View>
               </View>
@@ -762,46 +835,52 @@ export function RestaurantProfileScreen() {
           {/* ─── Business license card ───────────── */}
           <View style={styles.card}>
             <Text style={styles.cardSection}>Hồ sơ pháp lý</Text>
-            <InfoView
-              icon="document-text-outline"
-              label="Giấy phép kinh doanh"
-              value={profile?.businessLicenseUrl ? 'Đã cập nhật' : 'Chưa cập nhật'}
-              valueColor={profile?.businessLicenseUrl ? Colors.success : Colors.textMuted}
-            />
+            <Pressable
+              style={styles.licenseRow}
+              onPress={profile?.businessLicenseUrl ? handleViewLicense : undefined}
+              disabled={!profile?.businessLicenseUrl}
+            >
+              {profile?.businessLicenseUrl ? (
+                <Image source={{ uri: profile.businessLicenseUrl }} style={styles.licenseThumb} />
+              ) : (
+                <View style={[styles.licenseThumb, styles.licenseThumbEmpty]}>
+                  <Ionicons name="document-text-outline" size={22} color={Colors.textMuted} />
+                </View>
+              )}
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.licenseRowLabel}>Giấy phép kinh doanh</Text>
+                <Text
+                  style={[
+                    styles.licenseRowStatus,
+                    { color: profile?.businessLicenseUrl ? Colors.success : Colors.warning },
+                  ]}
+                >
+                  {profile?.businessLicenseUrl ? 'Đã cập nhật · Chạm để xem' : 'Chưa cập nhật'}
+                </Text>
+              </View>
+            </Pressable>
             {licenseError && (
               <View style={styles.errorBanner}>
                 <Ionicons name="alert-circle-outline" size={16} color="#EF4444" />
                 <Text style={styles.errorBannerText}>{licenseError}</Text>
               </View>
             )}
-            <View style={styles.licenseActionRow}>
-              {profile?.businessLicenseUrl && (
-                <Pressable
-                  style={[styles.licenseBtn, styles.licenseBtnSecondary]}
-                  onPress={handleViewLicense}
-                  disabled={licenseUploading}
-                >
-                  <Ionicons name="eye-outline" size={16} color={Colors.primaryText} />
-                  <Text style={styles.licenseBtnSecondaryText}>Xem</Text>
-                </Pressable>
+            <Pressable
+              style={[styles.licenseBtn, styles.licenseBtnFull]}
+              onPress={handleUploadLicense}
+              disabled={licenseUploading}
+            >
+              {licenseUploading ? (
+                <ActivityIndicator size="small" color={Colors.onPrimary} />
+              ) : (
+                <>
+                  <Ionicons name="cloud-upload-outline" size={16} color={Colors.onPrimary} />
+                  <Text style={styles.licenseBtnPrimaryText}>
+                    {profile?.businessLicenseUrl ? 'Cập nhật ảnh' : 'Tải ảnh lên'}
+                  </Text>
+                </>
               )}
-              <Pressable
-                style={[styles.licenseBtn, styles.licenseBtnPrimary]}
-                onPress={handleUploadLicense}
-                disabled={licenseUploading}
-              >
-                {licenseUploading ? (
-                  <ActivityIndicator size="small" color={Colors.onPrimary} />
-                ) : (
-                  <>
-                    <Ionicons name="cloud-upload-outline" size={16} color={Colors.onPrimary} />
-                    <Text style={styles.licenseBtnPrimaryText}>
-                      {profile?.businessLicenseUrl ? 'Cập nhật ảnh' : 'Tải ảnh lên'}
-                    </Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
+            </Pressable>
           </View>
 
           {/* ─── Tax profile card ────────────────── */}
@@ -809,15 +888,28 @@ export function RestaurantProfileScreen() {
             <View style={styles.taxHeaderRow}>
               <Text style={[styles.cardSection, styles.taxHeaderTitle]}>Hồ sơ thuế</Text>
               {!isEditingTax && (
-                <Pressable style={styles.editBtn} onPress={enterEditTax}>
-                  <Ionicons name="pencil" size={14} color={Colors.primaryText} />
-                  <Text style={styles.editBtnText}>Chỉnh sửa</Text>
+                <Pressable style={styles.taxEditIconBtn} onPress={enterEditTax} hitSlop={8}>
+                  <Ionicons name="pencil" size={16} color={Colors.primaryText} />
                 </Pressable>
               )}
             </View>
-            <Text style={styles.taxHint}>
-              Bắt buộc để hệ thống phát hành hóa đơn VAT tự động sau khi đơn hàng được giao.
-            </Text>
+            <View style={styles.taxStatusRow}>
+              <Ionicons
+                name={isTaxProfileComplete ? 'checkmark-circle' : 'alert-circle'}
+                size={16}
+                color={isTaxProfileComplete ? Colors.success : Colors.warning}
+              />
+              <Text
+                style={[
+                  styles.taxStatusText,
+                  { color: isTaxProfileComplete ? Colors.success : Colors.warning },
+                ]}
+              >
+                {isTaxProfileComplete
+                  ? 'Đã thiết lập'
+                  : 'Chưa thiết lập — bắt buộc để xuất hóa đơn VAT'}
+              </Text>
+            </View>
 
             {taxSavedOk && (
               <View style={styles.successBanner}>
@@ -968,6 +1060,41 @@ export function RestaurantProfileScreen() {
               <Text style={styles.previewErrorText}>Không thể hiển thị ảnh giấy phép.</Text>
             </View>
           )}
+        </View>
+      </Modal>
+
+      {/* ─── Pickup time picker (iOS only — Android uses DateTimePickerAndroid.open) ──── */}
+      <Modal
+        visible={pickupPickerField !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickupPickerField(null)}
+      >
+        <View style={styles.pickerBackdrop}>
+          <TouchableWithoutFeedback onPress={() => setPickupPickerField(null)}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <View style={styles.pickerSheet}>
+            <View style={styles.pickerSheetHeader}>
+              <Text style={styles.pickerSheetTitle}>
+                {pickupPickerField === 'start' ? 'Giờ bắt đầu' : 'Giờ kết thúc'}
+              </Text>
+              <Pressable onPress={() => setPickupPickerField(null)}>
+                <Text style={styles.pickerDoneText}>Xong</Text>
+              </Pressable>
+            </View>
+            {pickupPickerField && (
+              <DateTimePicker
+                value={timeStringToDate(
+                  pickupPickerField === 'start' ? form.pickupStart : form.pickupEnd,
+                )}
+                mode="time"
+                display="spinner"
+                is24Hour
+                onChange={handleInlinePickupChange}
+              />
+            )}
+          </View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -1156,12 +1283,27 @@ const styles = StyleSheet.create({
   navRowSub: { fontSize: 12, color: Colors.textMuted },
 
   // ─── Business license ─────────────────────────
-  licenseActionRow: {
+  licenseRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
-    marginBottom: 14,
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
   },
+  licenseThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  licenseThumbEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    borderStyle: 'dashed',
+  },
+  licenseRowLabel: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
+  licenseRowStatus: { fontSize: 12, fontWeight: '600' },
   licenseBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1170,11 +1312,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 12,
+    marginTop: 8,
+    marginBottom: 4,
   },
-  licenseBtnPrimary: { flex: 1, backgroundColor: Colors.primary },
+  licenseBtnFull: { backgroundColor: Colors.primary },
   licenseBtnPrimaryText: { fontSize: 13, fontWeight: '700', color: Colors.onPrimary },
-  licenseBtnSecondary: { backgroundColor: Colors.primaryLight },
-  licenseBtnSecondaryText: { fontSize: 13, fontWeight: '700', color: Colors.primaryText },
 
   // ─── Tax profile ───────────────────────────────
   taxHeaderRow: {
@@ -1184,12 +1326,21 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   taxHeaderTitle: { flex: 1, paddingBottom: 0 },
-  taxHint: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    lineHeight: 17,
+  taxEditIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
+  },
+  taxStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginBottom: 12,
   },
+  taxStatusText: { fontSize: 12, fontWeight: '600', flex: 1 },
   taxLookupHint: {
     fontSize: 12,
     fontWeight: '500',
@@ -1220,4 +1371,31 @@ const styles = StyleSheet.create({
   previewImage: { width: '100%', height: '80%' },
   previewErrorBox: { alignItems: 'center', gap: 10, paddingHorizontal: 32 },
   previewErrorText: { fontSize: 14, color: '#FFFFFF', textAlign: 'center' },
+
+  // ─── Pickup time picker sheet (iOS) ───────────
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickerSheet: {
+    width: '88%',
+    maxWidth: 360,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 20,
+    overflow: 'hidden',
+    paddingBottom: 8,
+  },
+  pickerSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.outlineVariant,
+  },
+  pickerSheetTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
+  pickerDoneText: { fontSize: 15, fontWeight: '700', color: Colors.primaryText },
 });

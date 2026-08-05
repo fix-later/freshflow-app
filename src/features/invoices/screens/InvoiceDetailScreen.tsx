@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -55,14 +63,14 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function InvoiceDetailScreen({ route }: Props) {
+export function InvoiceDetailScreen({ route, navigation }: Props) {
   const { invoiceId } = route.params;
   const [invoice, setInvoice] = useState<InvoiceDto | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
       const data = await invoiceApi.getInvoiceById(invoiceId);
@@ -71,12 +79,25 @@ export function InvoiceDetailScreen({ route }: Props) {
       setError('Không thể tải chi tiết hóa đơn.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [invoiceId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    void load();
+  };
+
+  const openOrder = () => {
+    navigation.getParent<any>()?.navigate('RestaurantTracking', {
+      screen: 'OrderDetail',
+      params: { orderId: invoice!.orderId },
+    });
+  };
 
   if (loading) {
     return (
@@ -95,7 +116,7 @@ export function InvoiceDetailScreen({ route }: Props) {
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={48} color={Colors.error} />
           <Text style={styles.errorText}>{error ?? 'Không tìm thấy hóa đơn.'}</Text>
-          <Pressable style={styles.retryBtn} onPress={() => void load()}>
+          <Pressable style={styles.retryBtn} onPress={() => { setLoading(true); void load(); }}>
             <Text style={styles.retryText}>Thử lại</Text>
           </Pressable>
         </View>
@@ -107,7 +128,13 @@ export function InvoiceDetailScreen({ route }: Props) {
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[Colors.primary]} />
+        }
+      >
         {/* ─── Header ─────────────────────────── */}
         <View style={styles.card}>
           <View style={styles.headerRow}>
@@ -132,15 +159,21 @@ export function InvoiceDetailScreen({ route }: Props) {
           <Row label="Ngày phát hành" value={formatDate(invoice.issuedAt)} />
           {invoice.taxAuthorityCode && <Row label="Mã cơ quan thuế" value={invoice.taxAuthorityCode} />}
 
-          {invoice.lookupUrl && (
-            <Pressable
-              style={styles.lookupBtn}
-              onPress={() => Linking.openURL(invoice.lookupUrl!).catch(() => {})}
-            >
-              <Ionicons name="open-outline" size={16} color={Colors.primaryText} />
-              <Text style={styles.lookupBtnText}>Tra cứu trên cổng thuế</Text>
+          <View style={styles.actionRow}>
+            <Pressable style={[styles.lookupBtn, styles.actionBtn]} onPress={openOrder}>
+              <Ionicons name="receipt-outline" size={16} color={Colors.primaryText} />
+              <Text style={styles.lookupBtnText}>Xem đơn hàng</Text>
             </Pressable>
-          )}
+            {invoice.lookupUrl && (
+              <Pressable
+                style={[styles.lookupBtn, styles.actionBtn]}
+                onPress={() => Linking.openURL(invoice.lookupUrl!).catch(() => {})}
+              >
+                <Ionicons name="open-outline" size={16} color={Colors.primaryText} />
+                <Text style={styles.lookupBtnText}>Tra cứu thuế</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* ─── Buyer info ─────────────────────── */}
@@ -237,12 +270,13 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 13, color: Colors.textSecondary },
   rowValue: { fontSize: 13, fontWeight: '600', color: Colors.textPrimary, maxWidth: '60%', textAlign: 'right' },
 
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  actionBtn: { flex: 1 },
   lookupBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 12,
     paddingVertical: 10,
     borderRadius: 12,
     backgroundColor: Colors.primaryLight,

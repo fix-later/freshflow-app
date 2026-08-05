@@ -17,6 +17,15 @@ type Props = NativeStackScreenProps<RestaurantProfileStackParamList, 'Invoices'>
 
 const PAGE_SIZE = 20;
 
+type StatusFilter = InvoiceStatus | 'all';
+
+const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
+  { id: 'all', label: 'Tất cả' },
+  { id: 'Issued', label: 'Đã phát hành' },
+  { id: 'PendingIssuance', label: 'Chờ phát hành' },
+  { id: 'Failed', label: 'Thất bại' },
+];
+
 const STATUS_COLOR: Record<InvoiceStatus, string> = {
   Draft: Colors.textMuted,
   PendingIssuance: Colors.warning,
@@ -65,6 +74,7 @@ function InvoiceCard({ item, onPress }: { item: InvoiceSummaryDto; onPress: () =
 }
 
 export function InvoiceListScreen({ navigation }: Props) {
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [items, setItems] = useState<InvoiceSummaryDto[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -76,7 +86,11 @@ export function InvoiceListScreen({ navigation }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const res = await invoiceApi.getInvoices({ page: 1, pageSize: PAGE_SIZE });
+      const res = await invoiceApi.getInvoices({
+        page: 1,
+        pageSize: PAGE_SIZE,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+      });
       setItems(res.items);
       setTotal(res.total);
       setPage(1);
@@ -87,9 +101,10 @@ export function InvoiceListScreen({ navigation }: Props) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
+    setLoading(true);
     void load();
   }, [load]);
 
@@ -98,13 +113,22 @@ export function InvoiceListScreen({ navigation }: Props) {
     void load();
   };
 
+  const handleSelectStatus = (status: StatusFilter) => {
+    if (status === statusFilter) return;
+    setStatusFilter(status);
+  };
+
   const loadMore = useCallback(async () => {
     if (loadingMore || items.length >= total) return;
     setLoadingMore(true);
     setLoadMoreError(false);
     try {
       const nextPage = page + 1;
-      const res = await invoiceApi.getInvoices({ page: nextPage, pageSize: PAGE_SIZE });
+      const res = await invoiceApi.getInvoices({
+        page: nextPage,
+        pageSize: PAGE_SIZE,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+      });
       setItems((current) => {
         const existingIds = new Set(current.map((i) => i.id));
         return [...current, ...res.items.filter((i) => !existingIds.has(i.id))];
@@ -116,11 +140,31 @@ export function InvoiceListScreen({ navigation }: Props) {
     } finally {
       setLoadingMore(false);
     }
-  }, [items.length, loadingMore, page, total]);
+  }, [items.length, loadingMore, page, statusFilter, total]);
+
+  const filterRow = (
+    <View style={styles.filterRow}>
+      {STATUS_FILTERS.map((f) => {
+        const active = f.id === statusFilter;
+        return (
+          <Pressable
+            key={f.id}
+            style={[styles.filterChip, active && styles.filterChipActive]}
+            onPress={() => handleSelectStatus(f.id)}
+          >
+            <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+              {f.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 
   if (loading) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
+        {filterRow}
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>Đang tải...</Text>
@@ -132,6 +176,7 @@ export function InvoiceListScreen({ navigation }: Props) {
   if (error) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
+        {filterRow}
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={48} color={Colors.error} />
           <Text style={styles.errorText}>{error}</Text>
@@ -145,6 +190,7 @@ export function InvoiceListScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
+      {filterRow}
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
@@ -162,7 +208,9 @@ export function InvoiceListScreen({ navigation }: Props) {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="receipt-outline" size={52} color={Colors.outline} />
-            <Text style={styles.emptyTitle}>Chưa có hóa đơn</Text>
+            <Text style={styles.emptyTitle}>
+              {statusFilter === 'all' ? 'Chưa có hóa đơn' : 'Không có hóa đơn nào ở trạng thái này'}
+            </Text>
             <Text style={styles.emptySub}>
               Hóa đơn VAT sẽ tự động phát hành sau khi đơn hàng được giao thành công.
             </Text>
@@ -200,6 +248,28 @@ const styles = StyleSheet.create({
   retryText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 14 },
 
   list: { padding: 16, gap: 12 },
+
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  filterChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  filterChipTextActive: { color: Colors.onPrimary },
 
   card: {
     backgroundColor: Colors.surfaceContainerLowest,

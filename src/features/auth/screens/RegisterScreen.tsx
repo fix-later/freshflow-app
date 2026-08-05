@@ -100,12 +100,15 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
   const handleRegister = async () => {
     if (!isFormValid) return;
     setIsLoading(true);
+    // BE's phone regex (^\+?[0-9]{7,15}$) rejects spaces — the placeholder shows
+    // "090 123 45 67" so users naturally type spaces; strip them, not just trim.
+    const normalizedPhone = phone.replace(/\s+/g, '');
     try {
       await authApi.register(
         email.trim(),
         password,
         restaurantName.trim(),
-        phone.trim(),
+        normalizedPhone,
       );
       navigation.navigate('VerifyEmail' as never, { email: email.trim() } as never);
     } catch (err: any) {
@@ -120,7 +123,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
         body = `Địa chỉ email "${email.trim()}" đã có tài khoản.\nVui lòng dùng email khác hoặc đăng nhập.`;
       } else if (code === 'PHONE_ALREADY_EXISTS') {
         title = 'Số điện thoại đã được sử dụng';
-        body = `Số điện thoại "${phone.trim()}" đã được đăng ký.\nVui lòng dùng số điện thoại khác.`;
+        body = `Số điện thoại "${normalizedPhone}" đã được đăng ký.\nVui lòng dùng số điện thoại khác.`;
       } else if (code === 'ROLE_NOT_CONFIGURED') {
         title = 'Lỗi hệ thống';
         body = 'Hệ thống chưa cấu hình vai trò nhà hàng. Vui lòng liên hệ hỗ trợ.';

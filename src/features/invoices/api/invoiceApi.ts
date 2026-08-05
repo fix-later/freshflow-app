@@ -72,7 +72,9 @@ export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
 };
 
 export const invoiceApi = {
-  async getInvoices(params?: { page?: number; pageSize?: number }): Promise<InvoiceListResult> {
+  async getInvoices(
+    params?: { page?: number; pageSize?: number; status?: InvoiceStatus },
+  ): Promise<InvoiceListResult> {
     const { data } = await apiClient.get<InvoiceListResult>('/api/v1/invoices', { params });
     return data;
   },
