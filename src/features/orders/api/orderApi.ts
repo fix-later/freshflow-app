@@ -30,6 +30,22 @@ export interface OrderItemDto {
    * item, confirm, cancel, confirmReceipt, reorder) leaves this null.
    */
   imageUrl: string | null;
+  // Set once the hub records actual delivered quantity — may differ from unitPrice
+  // if pricing was re-locked at delivery time. Null until then.
+  actualUnitPrice: number | null;
+  vatRateCode: string | null;
+  vatRatePercent: number | null;
+  vatAmount: number | null;
+}
+
+/** Snapshot of the delivery address captured at order confirmation time — null on a draft. */
+export interface DeliveryAddressSnapshotDto {
+  addressId: string;
+  recipientName: string | null;
+  phone: string | null;
+  addressLine: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 /** GET /api/v1/orders/ordering-window — admin-configurable cutoff time + delivery window. */
@@ -57,6 +73,14 @@ export interface OrderDto {
   confirmedReceiptAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // Null until the order is confirmed (backend captures the snapshot at confirm time).
+  deliveryAddress: DeliveryAddressSnapshotDto | null;
+  // BE record fields have C# default values (= 0m), so these are always present as
+  // real numbers on the wire — never null/missing — regardless of order status.
+  subtotalAmount: number;
+  vatAmount: number;
+  deliveryFee: number;
+  deliveryDistanceKm: number;
 }
 
 export interface OrderListItemDto {
@@ -100,6 +124,12 @@ export interface OrderConfirmationPreviewDto {
   totalAmount: number;
   resolvedScheduledFor: string | null;
   remainingCreditAfter: number | null;
+  // BE record fields have C# default values (= 0m), so these are always present as
+  // real numbers on the wire — never null/missing — regardless of caller.
+  subtotalAmount: number;
+  vatAmount: number;
+  deliveryFee: number;
+  deliveryDistanceKm: number;
 }
 
 export type RecurrenceType = 'daily' | 'weekly';
@@ -217,14 +247,25 @@ export const orderApi = {
     return data;
   },
 
-  async confirm(orderId: string): Promise<OrderDto> {
-    const { data } = await apiClient.post<OrderDto>(`/api/v1/orders/${orderId}/confirm`);
+  // BE requires deliveryAddressId (ConfirmOrderRequest/ConfirmOrderCommandValidator both
+  // treat it as required, non-empty) — omitting it fails validation on every call.
+  async confirm(orderId: string, deliveryAddressId: string): Promise<OrderDto> {
+    const { data } = await apiClient.post<OrderDto>(`/api/v1/orders/${orderId}/confirm`, {
+      deliveryAddressId,
+    });
     return data;
   },
 
-  async previewConfirmation(orderId: string): Promise<OrderConfirmationPreviewDto> {
+  // BE requires deliveryAddressId as a query param ([FromQuery] Guid, non-nullable) — omitting
+  // it silently binds to Guid.Empty (missing query params on value types don't 400), so the
+  // handler's address lookup always fails with DELIVERY_ADDRESS_NOT_FOUND instead of a clear error.
+  async previewConfirmation(
+    orderId: string,
+    deliveryAddressId: string,
+  ): Promise<OrderConfirmationPreviewDto> {
     const { data } = await apiClient.get<OrderConfirmationPreviewDto>(
       `/api/v1/orders/${orderId}/confirm-preview`,
+      { params: { deliveryAddressId } },
     );
     return data;
   },

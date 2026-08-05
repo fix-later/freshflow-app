@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -34,6 +34,7 @@ import {
 } from '../api/orderApi';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 import { createOrderStatusConnection } from '../realtime/orderRealtime';
+import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'OrderDetail'>;
 
@@ -105,6 +106,14 @@ function ItemRow({
         {item.actualQuantity !== null && item.actualQuantity !== quantity ? (
           <Text style={styles.actualQuantity}>Thực nhận: {item.actualQuantity}</Text>
         ) : null}
+        {item.actualUnitPrice !== null && item.actualUnitPrice !== unitPrice ? (
+          <Text style={styles.actualQuantity}>Giá thực tế: {item.actualUnitPrice.toLocaleString('vi-VN')}đ</Text>
+        ) : null}
+        {item.vatRatePercent !== null && item.vatRatePercent > 0 ? (
+          <Text style={styles.itemVatText}>
+            VAT ({item.vatRatePercent}%){item.vatAmount !== null ? `: ${item.vatAmount.toLocaleString('vi-VN')}đ` : ''}
+          </Text>
+        ) : null}
         {editable ? (
           <View style={styles.draftItemActions}>
             <Pressable
@@ -153,6 +162,17 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [reordering, setReordering] = useState(false);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
+  const [deliveryAddresses, setDeliveryAddresses] = useState<DeliveryAddressDto[] | null>(null);
+
+  // BE returns addresses sorted default-first — the first entry is always the right preselect.
+  const selectedAddress = deliveryAddresses?.[0] ?? null;
+
+  useEffect(() => {
+    restaurantApi
+      .getDeliveryAddresses()
+      .then(setDeliveryAddresses)
+      .catch(() => setDeliveryAddresses([]));
+  }, []);
 
   const performReorder = async () => {
     if (!order) return;
@@ -331,16 +351,17 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   };
 
   const performConfirmOrder = async () => {
+    if (!selectedAddress) return; // guarded by handleConfirmOrder before this is ever wired up
     setConfirmingOrder(true);
     try {
-      const preview = await orderApi.previewConfirmation(orderId);
+      const preview = await orderApi.previewConfirmation(orderId, selectedAddress.id);
       if (!preview.wouldSucceed) {
         const issueText = preview.issues.map((issue) => `• ${issue.message}`).join('\n');
         Alert.alert('Chưa thể xác nhận đơn', issueText || 'Đơn hàng chưa đáp ứng điều kiện xác nhận.');
         return;
       }
 
-      const confirmed = await orderApi.confirm(orderId);
+      const confirmed = await orderApi.confirm(orderId, selectedAddress.id);
       await fetchOrder();
       Alert.alert(
         'Đã xác nhận đơn hàng',
@@ -355,9 +376,26 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   };
 
   const handleConfirmOrder = () => {
+    if (!selectedAddress) {
+      Alert.alert(
+        'Chưa có địa chỉ giao hàng',
+        'Vui lòng thêm địa chỉ giao hàng trước khi xác nhận đơn.',
+        [
+          {
+            text: 'Thêm địa chỉ',
+            onPress: () =>
+              navigation.getParent<any>()?.navigate('RestaurantProfile', {
+                screen: 'DeliveryAddresses',
+              }),
+          },
+          { text: 'Để sau', style: 'cancel' },
+        ],
+      );
+      return;
+    }
     Alert.alert(
       'Xác nhận đơn hàng',
-      'Hệ thống sẽ khóa giá và ghi nhận công nợ cho đơn này.',
+      `Giao tới: ${selectedAddress.addressLine}\nHệ thống sẽ khóa giá và ghi nhận công nợ cho đơn này.`,
       [
         { text: 'Chưa', style: 'cancel' },
         { text: 'Xác nhận', onPress: performConfirmOrder },
@@ -476,6 +514,27 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           </Pressable>
         ) : null}
 
+        {/* ── Delivery address (snapshot captured at confirmation) ── */}
+        {order.deliveryAddress ? (
+          <>
+            <Text style={styles.sectionTitle}>Địa chỉ giao hàng</Text>
+            <View style={styles.card}>
+              <View style={styles.infoRow}>
+                <Ionicons name="location-outline" size={16} color={Colors.primaryText} />
+                <View style={{ flex: 1 }}>
+                  {order.deliveryAddress.recipientName ? (
+                    <Text style={styles.addressRecipient}>
+                      {order.deliveryAddress.recipientName}
+                      {order.deliveryAddress.phone ? ` • ${order.deliveryAddress.phone}` : ''}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.infoText}>{order.deliveryAddress.addressLine}</Text>
+                </View>
+              </View>
+            </View>
+          </>
+        ) : null}
+
         {/* ── Notes ── */}
         {order.notes ? (
           <>
@@ -492,6 +551,32 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         {/* ── Summary ── */}
         <Text style={styles.sectionTitle}>Tóm tắt</Text>
         <View style={styles.card}>
+          {/*
+            SubtotalAmount is recalculated from item prices on every draft edit, so it's
+            already > 0 before confirmation — it alone can't gate this breakdown. VatAmount/
+            DeliveryFee/DeliveryDistanceKm stay locked at 0 until ApplyConfirmationPricing runs
+            at confirm time, so use deliveryAddress (also only set on confirm) as the real gate.
+          */}
+          {order.deliveryAddress ? (
+            <>
+              <View style={[styles.summaryRow, styles.summaryBreakdownRow]}>
+                <Text style={styles.summarySecondaryLabel}>Tạm tính</Text>
+                <Text style={styles.summaryBreakdownValue}>{order.subtotalAmount.toLocaleString('vi-VN')}đ</Text>
+              </View>
+              <View style={[styles.summaryRow, styles.summaryBreakdownRow]}>
+                <Text style={styles.summarySecondaryLabel}>
+                  Phí giao hàng{order.deliveryDistanceKm > 0 ? ` (${order.deliveryDistanceKm.toFixed(1)} km)` : ''}
+                </Text>
+                <Text style={styles.summaryBreakdownValue}>{order.deliveryFee.toLocaleString('vi-VN')}đ</Text>
+              </View>
+              {order.vatAmount > 0 ? (
+                <View style={[styles.summaryRow, styles.summaryBreakdownRow]}>
+                  <Text style={styles.summarySecondaryLabel}>VAT</Text>
+                  <Text style={styles.summaryBreakdownValue}>{order.vatAmount.toLocaleString('vi-VN')}đ</Text>
+                </View>
+              ) : null}
+            </>
+          ) : null}
           <View style={styles.summaryRow}>
             <Text style={styles.summaryTotalLabel}>Tổng tiền</Text>
             <Text style={styles.summaryTotalValue}>{(order.totalAmount ?? 0).toLocaleString('vi-VN')}đ</Text>
@@ -760,6 +845,7 @@ const styles = StyleSheet.create({
   emptyItems: { alignItems: 'center', gap: 7, padding: 20 },
   emptyItemsText: { fontSize: 12, color: Colors.textMuted },
   actualQuantity: { marginTop: 4, fontSize: 11, color: Colors.warning, fontWeight: '600' },
+  itemVatText: { marginTop: 4, fontSize: 11, color: Colors.textMuted },
   addDraftItemButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -796,6 +882,7 @@ const styles = StyleSheet.create({
   // Info rows (notes)
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 14, paddingVertical: 12 },
   infoText: { fontSize: 14, color: Colors.onSurface, flex: 1, lineHeight: 20 },
+  addressRecipient: { fontSize: 13, fontWeight: '700', color: Colors.onSurface, marginBottom: 3 },
 
   // Summary
   summaryRow: {
@@ -810,6 +897,8 @@ const styles = StyleSheet.create({
   summarySecondaryRow: { borderTopWidth: 1, borderTopColor: Colors.surfaceVariant },
   summarySecondaryLabel: { fontSize: 12, color: Colors.textMuted },
   summarySecondaryValue: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
+  summaryBreakdownRow: { paddingVertical: 8 },
+  summaryBreakdownValue: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
 
   // Cancel footer
   footer: {

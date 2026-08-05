@@ -5,13 +5,20 @@ import {
   Animated,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import DateTimePicker, {
+  DateTimePickerAndroid,
+  type DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -104,6 +111,7 @@ function StopOrderCard({
 export function DriverHomeScreen() {
   const navigation = useNavigation<Nav>();
 
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [routeStatus, setRouteStatus] = useState<RouteStatus | null>(null);
@@ -158,21 +166,21 @@ export function DriverHomeScreen() {
 
     const items: HomeStopItem[] = started
       ? driverRouteStore.getStops().map(s => ({
-          id: s.deliveryId,
-          title: s.restaurantName,
-          subtitle: `Đơn #${s.orderId.slice(0, 8).toUpperCase()}`,
-          lat: s.lat,
-          lng: s.lng,
-          status: s.status,
-        }))
+        id: s.deliveryId,
+        title: s.restaurantName,
+        subtitle: `Đơn #${s.orderId.slice(0, 8).toUpperCase()}`,
+        lat: s.lat,
+        lng: s.lng,
+        status: s.status,
+      }))
       : driverRouteStore.getPickupPreviewStops().map(s => ({
-          id: s.entityId,
-          title: s.restaurantName,
-          subtitle: null,
-          lat: s.lat,
-          lng: s.lng,
-          status: 'pending' as const,
-        }));
+        id: s.entityId,
+        title: s.restaurantName,
+        subtitle: null,
+        lat: s.lat,
+        lng: s.lng,
+        status: 'pending' as const,
+      }));
 
     setItemById(new Map(items.map(i => [i.id, i])));
     const ids = items.map(i => i.id);
@@ -180,23 +188,22 @@ export function DriverHomeScreen() {
     setMapOrderIds(ids);
   }, []);
 
-  const loadRoute = useCallback(async () => {
+  const loadRoute = useCallback(async (targetDate?: string) => {
     setLoading(true);
     setError(null);
     try {
-      await driverRouteStore.load();
+      const dateToFetch = targetDate ?? selectedDate;
+      await driverRouteStore.load(dateToFetch);
       syncFromStore();
     } catch {
-      setError('Không thể tải tuyến đường hôm nay. Vui lòng thử lại.');
+      setError('Không thể tải tuyến đường. Vui lòng kiểm tra lại ngày.');
     } finally {
       setLoading(false);
     }
-  }, [syncFromStore]);
+  }, [selectedDate, syncFromStore]);
 
   useFocusEffect(
     useCallback(() => {
-      // Only hit the network the first time — refetching on every focus would
-      // overwrite the driver's in-progress custom stop order with the server default.
       if (driverRouteStore.getRoute() === null) {
         loadRoute();
       } else {
@@ -204,6 +211,108 @@ export function DriverHomeScreen() {
         setLoading(false);
       }
     }, [loadRoute, syncFromStore]),
+  );
+
+  const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  const [tempDate, setTempDate] = useState<Date>(() => new Date());
+
+  const parseDateString = (str: string): Date => {
+    const [y, m, d] = str.split('-').map(Number);
+    if (y && m && d) {
+      return new Date(y, m - 1, d, 12, 0, 0);
+    }
+    return new Date();
+  };
+
+  const formatDateToString = (d: Date): string => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const handleDatePicked = (selected?: Date) => {
+    if (!selected) return;
+    const formatted = formatDateToString(selected);
+    setSelectedDate(formatted);
+    loadRoute(formatted);
+  };
+
+  const openDatePicker = () => {
+    const currentDate = parseDateString(selectedDate);
+    setTempDate(currentDate);
+    setShowDatePickerModal(true);
+  };
+
+  const renderDateSelector = () => (
+    <View style={styles.dateSelectorCard}>
+      <Pressable style={styles.datePickerBtn} onPress={openDatePicker}>
+        <Ionicons name="calendar-outline" size={18} color={Colors.driverPrimary} />
+        <Text style={styles.dateSelectorLabel}>Ngày:</Text>
+        <Text style={styles.datePickerBtnText}>{selectedDate}</Text>
+        <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
+      </Pressable>
+      <TouchableOpacity
+        style={styles.searchDateBtn}
+        onPress={() => loadRoute(selectedDate)}
+      >
+        <Ionicons name="search" size={15} color={Colors.driverOnPrimary} />
+        <Text style={styles.searchDateBtnText}>Xem tuyến</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderDatePickerModal = () => (
+    <Modal
+      visible={showDatePickerModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowDatePickerModal(false)}
+    >
+      <View style={styles.dateModalBackdrop}>
+        <TouchableWithoutFeedback onPress={() => setShowDatePickerModal(false)}>
+          <View style={StyleSheet.absoluteFill} />
+        </TouchableWithoutFeedback>
+
+        <View style={styles.dateModalCard}>
+          <View style={styles.dateModalHeader}>
+            <Text style={styles.dateModalTitle}>Chọn ngày giao hàng</Text>
+            <TouchableOpacity onPress={() => setShowDatePickerModal(false)} hitSlop={8}>
+              <Ionicons name="close" size={20} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          <DateTimePicker
+            value={tempDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'inline' : 'default'}
+            onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+              if (selected) {
+                setTempDate(selected);
+              }
+            }}
+          />
+
+          <View style={styles.dateModalFooter}>
+            <TouchableOpacity
+              style={styles.dateModalCancelBtn}
+              onPress={() => setShowDatePickerModal(false)}
+            >
+              <Text style={styles.dateModalCancelText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dateModalConfirmBtn}
+              onPress={() => {
+                setShowDatePickerModal(false);
+                handleDatePicked(tempDate);
+              }}
+            >
+              <Text style={styles.dateModalConfirmText}>Xác nhận</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 
   const listPanResponder = useRef(
@@ -285,22 +394,12 @@ export function DriverHomeScreen() {
     if (route && !hasPickupStarted && route.status === 'assigned') {
       const hubStop = driverRouteStore.getHubStop();
       const fullStopOrder = hubStop ? [hubStop.entityId, ...orderIds] : orderIds;
-      driverApi.reorderRoute(route.routeId, fullStopOrder).catch(() => {});
+      driverApi.reorderRoute(route.routeId, fullStopOrder).catch(() => { });
     }
   };
 
-  const handleShowMap = async () => {
+  const handleShowMap = () => {
     setShowRouteMap(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        setCurrentLat(pos.coords.latitude);
-        setCurrentLng(pos.coords.longitude);
-      }
-    } catch {
-      // show map without driver location
-    }
   };
 
   const handleMainAction = () => {
@@ -319,11 +418,30 @@ export function DriverHomeScreen() {
     }
   };
 
-  const buildMapStops = (ids: string[]): RouteStop[] =>
-    ids.map((id, idx) => {
+  const buildMapStops = (ids: string[]): RouteStop[] => {
+    const list: RouteStop[] = [];
+    const hubStop = driverRouteStore.getHubStop();
+    if (hubStop && hubStop.latitude && hubStop.longitude) {
+      list.push({
+        order: 0,
+        lat: hubStop.latitude,
+        lng: hubStop.longitude,
+        status: 'delivered',
+      });
+    }
+    ids.forEach((id, idx) => {
       const item = itemById.get(id);
-      return { order: idx + 1, lat: item?.lat ?? 0, lng: item?.lng ?? 0, status: item?.status ?? 'pending' };
+      if (item) {
+        list.push({
+          order: idx + 1,
+          lat: item.lat,
+          lng: item.lng,
+          status: item.status,
+        });
+      }
     });
+    return list;
+  };
 
   const mapStops = buildMapStops(mapOrderIds);
 
@@ -341,26 +459,57 @@ export function DriverHomeScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
-        <View style={styles.centered}>
-          <Ionicons name="cloud-offline-outline" size={52} color={Colors.error} />
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable style={styles.retryBtn} onPress={loadRoute}>
-            <Ionicons name="refresh" size={18} color={Colors.driverOnPrimary} />
-            <Text style={styles.retryBtnText}>Thử lại</Text>
-          </Pressable>
-        </View>
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <View style={styles.greetCard}>
+            <View style={{ gap: 2 }}>
+              <Text style={styles.greetTitle}>Xin chào, Tài xế!</Text>
+              <Text style={styles.greetSub}>Chúc bạn một ca làm việc thuận lợi.</Text>
+            </View>
+          </View>
+          {renderDateSelector()}
+          <View style={styles.emptyCard}>
+            <View style={[styles.emptyIconWrap, { backgroundColor: Colors.errorContainer }]}>
+              <Ionicons name="cloud-offline-outline" size={32} color={Colors.error} />
+            </View>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable style={styles.retryBtn} onPress={() => loadRoute()}>
+              <Ionicons name="refresh" size={18} color={Colors.driverOnPrimary} />
+              <Text style={styles.retryBtnText}>Thử lại</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+        {renderDatePickerModal()}
       </SafeAreaView>
     );
   }
 
   if (!routeStatus) {
+    const isToday = selectedDate === new Date().toISOString().slice(0, 10);
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
-        <View style={styles.centered}>
-          <Ionicons name="calendar-outline" size={52} color={Colors.textMuted} />
-          <Text style={styles.emptyTitle}>Chưa có tuyến đường</Text>
-          <Text style={styles.helperText}>Bạn chưa được phân công tuyến giao hàng nào cho hôm nay.</Text>
-        </View>
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <View style={styles.greetCard}>
+            <View style={{ gap: 2 }}>
+              <Text style={styles.greetTitle}>Xin chào, Tài xế!</Text>
+              <Text style={styles.greetSub}>Chúc bạn một ca làm việc thuận lợi.</Text>
+            </View>
+          </View>
+          {renderDateSelector()}
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="calendar-outline" size={32} color={Colors.driverPrimary} />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {isToday ? 'Hôm nay không có tuyến giao hàng' : 'Không có tuyến giao hàng'}
+            </Text>
+            <Text style={styles.helperText}>
+              {isToday
+                ? 'Bạn chưa được phân công tuyến giao hàng nào cho ngày hôm nay.'
+                : `Bạn chưa được phân công tuyến giao hàng nào cho ngày ${selectedDate}.`}
+            </Text>
+          </View>
+        </ScrollView>
+        {renderDatePickerModal()}
       </SafeAreaView>
     );
   }
@@ -379,6 +528,9 @@ export function DriverHomeScreen() {
             <Text style={styles.greetSub}>Chúc bạn một ca làm việc thuận lợi.</Text>
           </View>
         </View>
+
+        {/* ── Date Selector ── */}
+        {renderDateSelector()}
 
         {/* ── Route summary ── */}
         <Text style={styles.sectionLabel}>Tuyến đường hôm nay</Text>
@@ -548,6 +700,9 @@ export function DriverHomeScreen() {
           />
         </SafeAreaView>
       </Modal>
+
+      {/* ── Date Picker Modal ── */}
+      {renderDatePickerModal()}
     </SafeAreaView>
   );
 }
@@ -565,6 +720,28 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.driverPrimary,
   },
   retryBtnText: { fontSize: 14, fontWeight: '700', color: Colors.driverOnPrimary },
+
+  emptyCard: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 16,
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    marginTop: 4,
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.driverPrimaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
 
   greetCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -697,4 +874,149 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   fullMap: { flex: 1 },
+
+  dateSelectorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  dateSelectorLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  datePickerBtn: {
+    flex: 1,
+    height: 38,
+    backgroundColor: Colors.background,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  datePickerBtnText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  searchDateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.driverPrimary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  searchDateBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.driverOnPrimary,
+  },
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickerSheet: {
+    width: '88%',
+    maxWidth: 360,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 20,
+    overflow: 'hidden',
+    paddingBottom: 8,
+  },
+  pickerSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.outlineVariant,
+  },
+  pickerSheetTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
+  pickerDoneText: { fontSize: 15, fontWeight: '700', color: Colors.driverPrimary },
+
+  dateModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+  },
+  dateModalCard: {
+    width: '96%',
+    maxWidth: 380,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  dateModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.outlineVariant,
+  },
+  dateModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  dateModalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.outlineVariant,
+  },
+  dateModalCancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerHigh,
+  },
+  dateModalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  dateModalConfirmBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.driverPrimary,
+  },
+  dateModalConfirmText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.driverOnPrimary,
+  },
 });

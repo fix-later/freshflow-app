@@ -14,11 +14,15 @@ import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
 import { Text } from '../../../components/ui/Text';
-import { orderApi, DEFAULT_DELIVERY_WINDOW_DAYS } from '../api/orderApi';
+import {
+  orderApi,
+  DEFAULT_DELIVERY_WINDOW_DAYS,
+  type OrderConfirmationPreviewDto,
+} from '../api/orderApi';
 import { useCartStore } from '../../../store/cartStore';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';
 import { creditApi } from '../../credit/api/creditApi';
-import { restaurantApi } from '../../restaurant/api/restaurantApi';
+import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'ConfirmOrder'>;
 
@@ -129,7 +133,15 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
   const [creditRatio, setCreditRatio] = useState<number | null>(null);
   const [availableCredit, setAvailableCredit] = useState<number>(0);
   const [deliveryWindowDays, setDeliveryWindowDays] = useState(DEFAULT_DELIVERY_WINDOW_DAYS);
+  const [deliveryAddresses, setDeliveryAddresses] = useState<DeliveryAddressDto[] | null>(null);
+  const [preview, setPreview] = useState<OrderConfirmationPreviewDto | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const { clearCart } = useCartStore();
+
+  // BE returns addresses sorted default-first (OrderByDescending(IsDefault).ThenBy(CreatedAt)),
+  // so the first entry is always the right one to preselect.
+  const selectedAddress = deliveryAddresses?.[0] ?? null;
+  const addressesLoaded = deliveryAddresses !== null;
 
   useEffect(() => {
     (async () => {
@@ -152,6 +164,14 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
       .catch(() => {
         // non-critical — keep the default fallback, backend still validates for real at submit time
       });
+
+    // Required to confirm (BE's ConfirmOrderRequest.DeliveryAddressId is non-empty-validated) —
+    // unlike the other two calls above this one is NOT non-critical, so failures still leave
+    // deliveryAddresses as [] rather than null, which correctly blocks submit below.
+    restaurantApi
+      .getDeliveryAddresses()
+      .then(setDeliveryAddresses)
+      .catch(() => setDeliveryAddresses([]));
   }, []);
 
   const subtotal = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
@@ -164,30 +184,81 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
       });
   };
 
+  // Shared by refreshPreview (display-only quote) and handleSubmit (the real confirm) so the
+  // draft is created at most once — the confirm always reuses whatever draft the quote made.
+  const ensureDraftOrder = useCallback(async (): Promise<string> => {
+    if (draftOrderId) return draftOrderId;
+    const itemNotes = items
+      .filter((item) => item.note?.trim())
+      .map((item) => `${item.productName}: ${item.note!.trim()}`);
+    const apiNotes = [notes?.trim(), ...itemNotes].filter(Boolean).join('\n') || undefined;
+    const draft = await orderApi.create({
+      items: items.map((it) => ({ marketProductId: it.marketProductId, quantity: it.quantity })),
+      scheduledFor,
+      notes: apiNotes,
+    });
+    setDraftOrderId(draft.orderId);
+    return draft.orderId;
+  }, [draftOrderId, items, scheduledFor, notes]);
+
+  // Best-effort real-price quote (delivery fee is priced by distance to the address, so it can
+  // only come from the server) — shown in the summary before the user taps "Đặt hàng". A failed
+  // quote just falls back to the client-computed subtotal below; it never blocks checkout.
+  const refreshPreview = useCallback(async () => {
+    if (!selectedAddress) return;
+    setPreviewLoading(true);
+    try {
+      const currentDraftId = await ensureDraftOrder();
+      const result = await orderApi.previewConfirmation(currentDraftId, selectedAddress.id);
+      setPreview(result);
+    } catch {
+      setPreview(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [selectedAddress, ensureDraftOrder]);
+
+  useEffect(() => {
+    void refreshPreview();
+    // Only re-run when the selected address actually changes (e.g. once it finishes loading) —
+    // items/scheduledFor/notes are fixed route params on this screen, never edited here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAddress?.id]);
+
   const handleSubmit = async () => {
+    if (!selectedAddress) {
+      Alert.alert(
+        'Chưa có địa chỉ giao hàng',
+        'Vui lòng thêm địa chỉ giao hàng trước khi đặt đơn.',
+        [
+          {
+            text: 'Thêm địa chỉ',
+            onPress: () =>
+              navigation.getParent<any>()?.navigate('RestaurantProfile', {
+                screen: 'DeliveryAddresses',
+              }),
+          },
+          { text: 'Để sau', style: 'cancel' },
+        ],
+      );
+      return;
+    }
     setLoading(true);
     // Declared outside the try so the catch block can still offer "Xem bản nháp"
     // for a draft that was created successfully but failed at the confirm step —
     // otherwise the user loses track of it and re-submitting creates a duplicate.
     let currentDraftId = draftOrderId;
     try {
-      if (!currentDraftId) {
-        const itemNotes = items
-          .filter((item) => item.note?.trim())
-          .map((item) => `${item.productName}: ${item.note!.trim()}`);
-        const apiNotes = [notes?.trim(), ...itemNotes].filter(Boolean).join('\n') || undefined;
-        const draft = await orderApi.create({
-          items: items.map(it => ({ marketProductId: it.marketProductId, quantity: it.quantity })),
-          scheduledFor,
-          notes: apiNotes,
-        });
-        currentDraftId = draft.orderId;
-        setDraftOrderId(currentDraftId);
-      }
+      currentDraftId = await ensureDraftOrder();
 
-      const preview = await orderApi.previewConfirmation(currentDraftId);
-      if (!preview.wouldSucceed) {
-        const issues = preview.issues.map((issue) => `• ${issue.message}`).join('\n');
+      // Re-fetch right before confirming (not just reusing the summary's `preview` state) —
+      // price/cutoff can shift in the time the user spent looking at the screen, and this is
+      // the same check the server re-runs inside confirm, so a stale quote here would just
+      // mean a redundant round-trip, not a wrong result — but a fresh one catches a "would no
+      // longer succeed" case before wasting the actual confirm attempt.
+      const confirmPreview = await orderApi.previewConfirmation(currentDraftId, selectedAddress.id);
+      if (!confirmPreview.wouldSucceed) {
+        const issues = confirmPreview.issues.map((issue) => `• ${issue.message}`).join('\n');
         Alert.alert(
           'Chưa thể xác nhận đơn',
           `${issues || 'Đơn hàng chưa đáp ứng điều kiện xác nhận.'}\n\nBản nháp đã được lưu trong lịch sử đơn hàng.`,
@@ -196,7 +267,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         return;
       }
 
-      const confirmed = await orderApi.confirm(currentDraftId);
+      const confirmed = await orderApi.confirm(currentDraftId, selectedAddress.id);
 
       clearCart();
       setPlacedScheduledFor(confirmed.scheduledFor);
@@ -292,6 +363,34 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
           </View>
         </View>
 
+        {/* ── Delivery address ── */}
+        <Text style={styles.sectionTitle}>Địa chỉ giao hàng</Text>
+        <View style={styles.card}>
+          {selectedAddress ? (
+            <View style={styles.infoRow}>
+              <Ionicons name="location-outline" size={16} color={Colors.primaryText} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.infoText}>
+                  {selectedAddress.recipientName} · {selectedAddress.phone}
+                </Text>
+                <Text style={styles.addressLine}>{selectedAddress.addressLine}</Text>
+              </View>
+            </View>
+          ) : addressesLoaded ? (
+            <View style={styles.infoRow}>
+              <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+              <Text style={[styles.infoText, { color: Colors.danger }]}>
+                Chưa có địa chỉ giao hàng. Vui lòng thêm địa chỉ trước khi đặt đơn.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.infoRow}>
+              <ActivityIndicator size="small" color={Colors.textMuted} />
+              <Text style={[styles.infoText, { color: Colors.textMuted }]}>Đang tải địa chỉ...</Text>
+            </View>
+          )}
+        </View>
+
         {/* ── Notes ── */}
         {notes ? (
           <>
@@ -310,16 +409,35 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         <View style={styles.card}>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Tạm tính</Text>
-            <Text style={styles.summaryValue}>{subtotal.toLocaleString('vi-VN')}đ</Text>
+            <Text style={styles.summaryValue}>
+              {(preview?.subtotalAmount ?? subtotal).toLocaleString('vi-VN')}đ
+            </Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Phí vận chuyển</Text>
-            <Text style={styles.summaryNote}>Sẽ xác nhận sau</Text>
+            <Text style={styles.summaryLabel}>
+              Phí vận chuyển
+              {preview?.deliveryDistanceKm ? ` (${preview.deliveryDistanceKm.toFixed(1)} km)` : ''}
+            </Text>
+            {previewLoading ? (
+              <ActivityIndicator size="small" color={Colors.textMuted} />
+            ) : preview ? (
+              <Text style={styles.summaryValue}>{preview.deliveryFee.toLocaleString('vi-VN')}đ</Text>
+            ) : (
+              <Text style={styles.summaryNote}>Sẽ xác nhận sau</Text>
+            )}
           </View>
+          {preview && preview.vatAmount > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Thuế VAT</Text>
+              <Text style={styles.summaryValue}>{preview.vatAmount.toLocaleString('vi-VN')}đ</Text>
+            </View>
+          )}
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
             <Text style={styles.summaryTotalLabel}>Giá trị đơn hàng</Text>
-            <Text style={styles.summaryTotalValue}>{subtotal.toLocaleString('vi-VN')}đ</Text>
+            <Text style={styles.summaryTotalValue}>
+              {(preview?.totalAmount ?? subtotal).toLocaleString('vi-VN')}đ
+            </Text>
           </View>
         </View>
 
@@ -330,14 +448,16 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
       <View style={styles.footer}>
         <View>
           <Text style={styles.footerLabel}>Tổng tạm tính</Text>
-          <Text style={styles.footerTotal}>{subtotal.toLocaleString('vi-VN')}đ</Text>
+          <Text style={styles.footerTotal}>
+            {(preview?.totalAmount ?? subtotal).toLocaleString('vi-VN')}đ
+          </Text>
         </View>
         <Pressable
-          style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+          style={[styles.submitBtn, (loading || !addressesLoaded) && styles.submitBtnDisabled]}
           onPress={handleSubmit}
-          disabled={loading}
+          disabled={loading || !addressesLoaded}
         >
-          {loading
+          {loading || !addressesLoaded
             ? <ActivityIndicator color={Colors.onPrimary} size="small" />
             : <Text style={styles.submitBtnText}>Đặt hàng</Text>
           }
@@ -427,6 +547,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   infoText: { fontSize: 14, color: Colors.onSurface, flex: 1, lineHeight: 20 },
+  addressLine: { fontSize: 12, color: Colors.textMuted, marginTop: 2, lineHeight: 16 },
 
   // Summary
   summaryRow: {

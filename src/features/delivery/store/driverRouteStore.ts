@@ -1,5 +1,5 @@
 import { driverApi } from '../api/driverApi';
-import type { DeliveryStatus, DriverDeliveryDto, DriverRouteDto, RouteStatus } from '../types/delivery.types';
+import type { DeliveryStatus, DriverDeliveryDto, DriverRouteDto, LoadingLineDto, LoadingStopDto, RouteStatus } from '../types/delivery.types';
 
 // Module-level mutable store — same pattern as the old stopStatusStore/stopOrderStore,
 // now backed by the real API instead of mock data. Holds the driver's single active
@@ -46,48 +46,51 @@ export interface PickupPreviewStop {
 let _route: DriverRouteDto | null = null;
 let _stops: DeliveryStop[] = [];
 let _previewStops: PickupPreviewStop[] = [];
+let _currentDate: string | undefined = undefined;
+let _manifestLinesByOrder = new Map<string, LoadingLineDto[]>();
 
 function mergeStops(route: DriverRouteDto): DeliveryStop[] {
   const restaurantStops = route.stops.filter(s => s.entityType === 'restaurant');
 
-  // If driver arranged a custom preview order before pickup, preserve that custom order!
-  if (_previewStops.length > 0) {
-    const stopByEntityId = new Map(restaurantStops.map(s => [s.entityId, s]));
+  // Once pickup has started, route.deliveries contains the real Delivery rows created by BE.
+  if (route.deliveries.length > 0) {
+    const sortedRestaurantStops = [...restaurantStops].sort((a, b) => a.stopOrder - b.stopOrder);
+    const sortedDeliveries = [...route.deliveries].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
 
-    const deliveryByEntityId = new Map<string, DriverDeliveryDto>();
-    restaurantStops.forEach((stop, idx) => {
-      const delivery =
-        route.deliveries.find(d => d.sequenceNumber === stop.stopOrder) ?? route.deliveries[idx];
-      if (delivery) {
-        deliveryByEntityId.set(stop.entityId, delivery);
-      }
-    });
+    // If driver arranged a custom preview order before pickup, preserve that custom sequence
+    if (_previewStops.length > 0) {
+      const stopByEntityId = new Map(restaurantStops.map(s => [s.entityId, s]));
 
-    const orderedPreview = [..._previewStops].sort((a, b) => a.order - b.order);
+      const deliveryByEntityId = new Map<string, DriverDeliveryDto>();
+      sortedRestaurantStops.forEach((stop, idx) => {
+        const delivery = sortedDeliveries[idx];
+        if (delivery) {
+          deliveryByEntityId.set(stop.entityId, delivery);
+        }
+      });
 
-    return orderedPreview.map((ps, idx) => {
-      const stop = stopByEntityId.get(ps.entityId);
-      const delivery = deliveryByEntityId.get(ps.entityId);
-      return {
-        deliveryId: delivery?.deliveryId ?? `del-${ps.entityId}`,
-        orderId: delivery?.orderId ?? `ord-${ps.entityId}`,
-        order: idx + 1,
-        restaurantName: ps.restaurantName,
-        lat: ps.lat,
-        lng: ps.lng,
-        status: delivery?.status ?? 'pending',
-        estimatedArrival: delivery?.estimatedArrival ?? null,
-        actualArrival: delivery?.actualArrival ?? null,
-      };
-    });
-  }
+      const orderedPreview = [..._previewStops].sort((a, b) => a.order - b.order);
 
-  // Fallback to server default stopOrder
-  const sortedStops = restaurantStops.sort((a, b) => a.stopOrder - b.stopOrder);
-  return [...route.deliveries]
-    .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
-    .map((d, idx) => {
-      const stop = sortedStops[idx];
+      return orderedPreview.map((ps, idx) => {
+        const stop = stopByEntityId.get(ps.entityId);
+        const delivery = deliveryByEntityId.get(ps.entityId) ?? sortedDeliveries[idx] ?? sortedDeliveries[0];
+        return {
+          deliveryId: delivery.deliveryId, // Always a real GUID from BE!
+          orderId: delivery.orderId,
+          order: idx + 1,
+          restaurantName: ps.restaurantName,
+          lat: ps.lat,
+          lng: ps.lng,
+          status: delivery.status,
+          estimatedArrival: delivery.estimatedArrival ?? null,
+          actualArrival: delivery.actualArrival ?? null,
+        };
+      });
+    }
+
+    // Default: map directly from route.deliveries
+    return sortedDeliveries.map((d, idx) => {
+      const stop = sortedRestaurantStops[idx] ?? sortedRestaurantStops[0];
       return {
         deliveryId: d.deliveryId,
         orderId: d.orderId,
@@ -100,6 +103,9 @@ function mergeStops(route: DriverRouteDto): DeliveryStop[] {
         actualArrival: d.actualArrival,
       };
     });
+  }
+
+  return [];
 }
 
 function buildPreviewStops(route: DriverRouteDto): PickupPreviewStop[] {
@@ -116,12 +122,26 @@ function buildPreviewStops(route: DriverRouteDto): PickupPreviewStop[] {
 }
 
 export const driverRouteStore = {
-  /** Fetches today's route(s) and keeps the first one (a driver has at most one active route per day). */
-  async load(): Promise<DriverRouteDto | null> {
-    const routes = await driverApi.getTodayRoutes();
+  /** Fetches route(s) assigned to the driver (defaults to today, or accepts yyyy-MM-dd date). */
+  async load(date?: string): Promise<DriverRouteDto | null> {
+    const targetDate = date ?? _currentDate ?? _route?.serviceDate;
+    const routes = await driverApi.getTodayRoutes(targetDate);
     _route = routes[0] ?? null;
+    if (_route) {
+      _currentDate = _route.serviceDate;
+    }
     if (_route && _previewStops.length === 0) {
       _previewStops = buildPreviewStops(_route);
+    }
+    if (_route && _manifestLinesByOrder.size === 0) {
+      try {
+        const manifest = await driverApi.getLoadingManifest(_route.routeId);
+        if (manifest && manifest.stops && manifest.stops.length > 0) {
+          this.setManifestStops(manifest.stops);
+        }
+      } catch {
+        // Ignore if loading manifest fails
+      }
     }
     _stops = _route ? mergeStops(_route) : [];
     return _route;
@@ -140,7 +160,11 @@ export const driverRouteStore = {
   },
 
   getHubStop() {
-    return _route?.stops.find(s => s.entityType === 'market' || s.stopOrder === 0) ?? _route?.stops[0];
+    // Prefer an explicit hub/market stop; fall back to the stop with stopOrder=0 only if
+    // its entityType is actually hub/market (avoids returning a restaurant stop by mistake).
+    return _route?.stops.find(s => s.entityType === 'hub' || s.entityType === 'market')
+      ?? _route?.stops.find(s => s.stopOrder === 0 && s.entityType !== 'restaurant')
+      ?? null;
   },
 
   /** True once at least one Delivery exists for this route (pickup confirmed at least once). */
@@ -192,8 +216,27 @@ export const driverRouteStore = {
     return _stops.length > 0 && _stops.every(s => s.status === 'delivered' || s.status === 'failed');
   },
 
+  setManifestStops(stops: LoadingStopDto[]) {
+    const map = new Map<string, LoadingLineDto[]>();
+    stops.forEach(s => {
+      s.lines.forEach(l => {
+        const existing = map.get(l.orderId) ?? [];
+        existing.push(l);
+        map.set(l.orderId, existing);
+      });
+    });
+    _manifestLinesByOrder = map;
+  },
+
+  getManifestLinesForOrder(orderId: string): LoadingLineDto[] {
+    return _manifestLinesByOrder.get(orderId) ?? [];
+  },
+
   reset() {
     _route = null;
     _stops = [];
+    _previewStops = [];
+    _currentDate = undefined;
+    _manifestLinesByOrder.clear();
   },
 };

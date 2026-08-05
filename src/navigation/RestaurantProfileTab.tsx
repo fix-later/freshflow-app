@@ -9,6 +9,8 @@ import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
 import { CreditOverviewScreen } from '../features/credit/screens/CreditOverviewScreen';
 import { CreditStatementsScreen } from '../features/credit/screens/CreditStatementsScreen';
+import { InvoiceListScreen } from '../features/invoices/screens/InvoiceListScreen';
+import { InvoiceDetailScreen } from '../features/invoices/screens/InvoiceDetailScreen';
 import { type RestaurantProfileStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RestaurantProfileStackParamList>();
@@ -54,6 +56,16 @@ export function RestaurantProfileTab() {
         name="CreditStatements"
         component={CreditStatementsScreen}
         options={{ title: 'Sao kê tín dụng' }}
+      />
+      <Stack.Screen
+        name="Invoices"
+        component={InvoiceListScreen}
+        options={{ title: 'Hóa đơn VAT' }}
+      />
+      <Stack.Screen
+        name="InvoiceDetail"
+        component={InvoiceDetailScreen}
+        options={{ title: 'Chi tiết hóa đơn' }}
       />
     </Stack.Navigator>
   );

@@ -33,7 +33,7 @@ export type RouteStatus =
   | 'cancelled';
 
 /** `StopEntityType` enum values — a stop is a physical waypoint, not a per-order delivery. */
-export type StopEntityType = 'market' | 'restaurant';
+export type StopEntityType = 'market' | 'restaurant' | 'hub';
 
 /** Allowed `issueType` values (`DeliveryIssue.Type*` constants), matched case-insensitively. */
 export type DeliveryIssueType = 'undeliverable' | 'damaged' | 'customer_rejected' | 'other';

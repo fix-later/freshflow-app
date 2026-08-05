@@ -94,20 +94,72 @@ export function NavigationScreen({ route, navigation }: Props) {
     }, [stop]),
   );
 
-  // ── Order detail (items/notes) — best-effort, hide section if unavailable ──
+  // ── Goods list for stop — uses driver-authorized loading manifest API ──
   useEffect(() => {
     if (!stop) return;
     let cancelled = false;
-    orderApi.getById(stop.orderId)
-      .then(order => {
+
+    const loadItems = async () => {
+      // 1. Check cached lines in driverRouteStore
+      const cachedLines = driverRouteStore.getManifestLinesForOrder(stop.orderId);
+      if (cachedLines.length > 0) {
+        setItems(
+          cachedLines.map(l => ({
+            orderItemId: l.orderItemId,
+            marketProductId: '',
+            productNameSnapshot: l.productName,
+            unitPriceSnapshot: 0,
+            quantity: l.quantity,
+            lineSubtotal: 0,
+          } as any)),
+        );
+        return;
+      }
+
+      // 2. Try loading manifest from API
+      try {
+        const route = driverRouteStore.getRoute();
+        if (route) {
+          const manifest = await driverApi.getLoadingManifest(route.routeId);
+          if (cancelled) return;
+          if (manifest && manifest.stops && manifest.stops.length > 0) {
+            driverRouteStore.setManifestStops(manifest.stops);
+            const stopLines = driverRouteStore.getManifestLinesForOrder(stop.orderId);
+            if (stopLines.length > 0) {
+              setItems(
+                stopLines.map(l => ({
+                  orderItemId: l.orderItemId,
+                  marketProductId: '',
+                  productNameSnapshot: l.productName,
+                  unitPriceSnapshot: 0,
+                  quantity: l.quantity,
+                  lineSubtotal: 0,
+                } as any)),
+              );
+              return;
+            }
+          }
+        }
+      } catch {
+        // loading manifest failed, try order detail
+      }
+
+      // 3. Fallback to order detail
+      try {
+        const order = await orderApi.getById(stop.orderId);
         if (cancelled) return;
         setItems(order.items);
         setNotes(order.notes);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setItemsUnavailable(true);
-      });
-    return () => { cancelled = true; };
+      }
+    };
+
+    loadItems();
+
+    return () => {
+      cancelled = true;
+    };
   }, [stop]);
 
   // ── GPS ────────────────────────────────────────────────────────────────────

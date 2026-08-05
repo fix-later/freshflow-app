@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -50,10 +50,14 @@ function AddressCard({
   item,
   onEdit,
   onDelete,
+  onSetDefault,
+  settingDefault,
 }: {
   item: DeliveryAddressDto;
   onEdit: () => void;
   onDelete: () => void;
+  onSetDefault: () => void;
+  settingDefault: boolean;
 }) {
   return (
     <View style={styles.card}>
@@ -83,6 +87,21 @@ function AddressCard({
         </View>
       </View>
       <View style={styles.cardActions}>
+        {!item.isDefault && (
+          <>
+            <Pressable style={styles.cardActionBtn} onPress={onSetDefault} disabled={settingDefault}>
+              {settingDefault ? (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              ) : (
+                <>
+                  <Ionicons name="star-outline" size={15} color={Colors.primary} />
+                  <Text style={styles.cardActionText}>Đặt mặc định</Text>
+                </>
+              )}
+            </Pressable>
+            <View style={styles.cardActionDivider} />
+          </>
+        )}
         <Pressable style={styles.cardActionBtn} onPress={onEdit}>
           <Ionicons name="pencil-outline" size={15} color={Colors.primary} />
           <Text style={styles.cardActionText}>Sửa</Text>
@@ -113,6 +132,16 @@ export function DeliveryAddressesScreen() {
 
   // Map picker step
   const [showMap, setShowMap] = useState(false);
+
+  // Success banner + quick "set default" action
+  const [savedOk, setSavedOk] = useState(false);
+  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!savedOk) return;
+    const timer = setTimeout(() => setSavedOk(false), 2500);
+    return () => clearTimeout(timer);
+  }, [savedOk]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -185,22 +214,30 @@ export function DeliveryAddressesScreen() {
     const payload: CreateDeliveryAddressPayload = {
       addressLine: form.addressLine.trim(),
       recipientName: form.recipientName.trim(),
-      phone: form.phone.trim(),
+      // BE's phone regex (^\+?[0-9]{7,15}$) rejects spaces — the placeholder shows
+      // "0901 234 567" so users naturally type spaces; strip them, not just trim.
+      phone: form.phone.replace(/\s+/g, ''),
       latitude: form.latitude,
       longitude: form.longitude,
       isDefault: form.isDefault,
     };
     try {
       if (editingId) {
-        const updated = await restaurantApi.updateDeliveryAddress(editingId, payload);
-        setAddresses(prev => prev.map(a => a.id === editingId ? updated : a));
+        await restaurantApi.updateDeliveryAddress(editingId, payload);
       } else {
-        const created = await restaurantApi.createDeliveryAddress(payload);
-        setAddresses(prev => [...prev, created]);
+        await restaurantApi.createDeliveryAddress(payload);
       }
+      // Setting isDefault clears it on every other address server-side (in a single
+      // transaction) — reload the full list rather than patching one item locally,
+      // so the "Mặc định" badge stays correct across all cards, not just this one.
+      await load();
       closeForm();
-    } catch {
-      setSaveError('Lưu không thành công. Vui lòng thử lại.');
+      setSavedOk(true);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Lưu không thành công. Vui lòng thử lại.';
+      setSaveError(msg);
     } finally {
       setSaveLoading(false);
     }
@@ -228,6 +265,26 @@ export function DeliveryAddressesScreen() {
     );
   };
 
+  const handleSetDefault = async (item: DeliveryAddressDto) => {
+    setSettingDefaultId(item.id);
+    try {
+      await restaurantApi.updateDeliveryAddress(item.id, {
+        addressLine: item.addressLine,
+        recipientName: item.recipientName,
+        phone: item.phone,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        isDefault: true,
+      });
+      await load();
+      setSavedOk(true);
+    } catch {
+      Alert.alert('Lỗi', 'Không thể đặt làm địa chỉ mặc định. Vui lòng thử lại.');
+    } finally {
+      setSettingDefaultId(null);
+    }
+  };
+
   const canSave = form.addressLine.trim().length > 0
     && form.recipientName.trim().length > 0
     && form.phone.trim().length > 0;
@@ -252,6 +309,12 @@ export function DeliveryAddressesScreen() {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         >
+          {savedOk && (
+            <View style={styles.savedBanner}>
+              <Ionicons name="checkmark-circle" size={18} color={Colors.primaryText} />
+              <Text style={styles.savedBannerText}>Đã lưu địa chỉ.</Text>
+            </View>
+          )}
           {addresses.length === 0 ? (
             <View style={styles.emptyBox}>
               <Ionicons name="location-outline" size={52} color={Colors.outline} />
@@ -265,6 +328,8 @@ export function DeliveryAddressesScreen() {
                 item={item}
                 onEdit={() => openEdit(item)}
                 onDelete={() => handleDelete(item)}
+                onSetDefault={() => handleSetDefault(item)}
+                settingDefault={settingDefaultId === item.id}
               />
             ))
           )}
@@ -470,6 +535,14 @@ const styles = StyleSheet.create({
   retryBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 14 },
 
   listContent: { padding: 16, gap: 12, paddingBottom: 32 },
+
+  // Saved banner
+  savedBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.successLight,
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
+  },
+  savedBannerText: { fontSize: 13, color: Colors.primaryText, fontWeight: '500' },
 
   // Empty state
   emptyBox: {
