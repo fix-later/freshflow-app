@@ -17,6 +17,9 @@ export const assistantApi = {
     sessionId: string;
     message: string;
     marketId?: string | null;
+    // Required by BE's preview_confirmation/confirm_order tools (AssistantChatRequest.DeliveryAddressId) —
+    // never accepted from the LLM, so the client must supply it whenever an address is known.
+    deliveryAddressId?: string | null;
     confirmOrderId?: string;
   }): Promise<AssistantChatResponse> {
     // Overrides apiClient's global 10s timeout — the orchestrator can hop the LLM up to
