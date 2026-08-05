@@ -1,58 +1,25 @@
-import { apiClient, getCursorPaged } from '../../../services/api/client';
+import axios from 'axios';
+import * as SecureStore from 'expo-secure-store';
+import { apiClient, getCursorPaged, TOKEN_KEY } from '../../../services/api/client';
+import { ENV } from '../../../config/env';
+import { Colors } from '../../../constants/colors';
+import type {
+  CreditDto,
+  CreditTransactionDto,
+  CreditTransactionMeta,
+  CreditStatementSummaryDto,
+  CreditStatementDto,
+  CreditStatementLineDto,
+} from '../../../types/api.types';
 
-export interface CreditDto {
-  restaurantId: string;
-  creditLimit: number;
-  outstandingBalance: number;
-  availableCredit: number;
-  updatedAt: string;
-}
-
-export interface CreditTransactionDto {
-  id: string;
-  restaurantId: string;
-  orderId: string | null;
-  type: string;
-  amount: number;
-  balanceAfter: number;
-  note: string | null;
-  paymentMethod: string | null;
-  reference: string | null;
-  createdAt: string;
-}
-
-export interface CreditTransactionMeta {
-  nextCursor: string | null;
-  pageSize: number;
-}
-
-export interface CreditStatementSummaryDto {
-  id: string;
-  restaurantId: string;
-  periodStart: string;
-  periodEnd: string;
-  openingBalance: number;
-  closingBalance: number;
-  totalCharges: number;
-  totalSettlements: number;
-  totalRefunds: number;
-  generatedAt: string;
-}
-
-export interface CreditStatementLineDto {
-  transactionId: string;
-  type: string;
-  amount: number;
-  balanceAfter: number;
-  occurredAt: string;
-  note: string | null;
-  reference: string | null;
-}
-
-export interface CreditStatementDto extends CreditStatementSummaryDto {
-  dueDate: string;
-  lines: CreditStatementLineDto[];
-}
+export type {
+  CreditDto,
+  CreditTransactionDto,
+  CreditTransactionMeta,
+  CreditStatementSummaryDto,
+  CreditStatementDto,
+  CreditStatementLineDto,
+};
 
 export const TRANSACTION_TYPE_LABEL: Record<string, string> = {
   charge: 'Ghi nợ đơn hàng',
@@ -62,11 +29,23 @@ export const TRANSACTION_TYPE_LABEL: Record<string, string> = {
 };
 
 export const TRANSACTION_TYPE_COLOR: Record<string, string> = {
-  charge: '#EF4444',
-  settlement: '#3B82F6',
-  refund: '#22C55E',
-  adjustment: '#F59E0B',
+  charge: Colors.danger,
+  settlement: Colors.secondary,
+  refund: Colors.success,
+  adjustment: Colors.warning,
 };
+
+export function getTransactionTypeLabel(type?: string | null): string {
+  if (!type) return 'Khác';
+  const key = type.toLowerCase();
+  return TRANSACTION_TYPE_LABEL[key] ?? type;
+}
+
+export function getTransactionTypeColor(type?: string | null): string {
+  if (!type) return Colors.textMuted;
+  const key = type.toLowerCase();
+  return TRANSACTION_TYPE_COLOR[key] ?? Colors.textMuted;
+}
 
 export const creditApi = {
   async getCredit(restaurantId: string): Promise<CreditDto> {
@@ -122,9 +101,13 @@ export const creditApi = {
     restaurantId: string,
     statementId: string,
   ): Promise<ArrayBuffer> {
-    const { data } = await apiClient.get<ArrayBuffer>(
-      `/api/v1/restaurants/${restaurantId}/credit/statements/${statementId}/pdf`,
-      { responseType: 'arraybuffer' },
+    const token = await SecureStore.getItemAsync(TOKEN_KEY);
+    const { data } = await axios.get<ArrayBuffer>(
+      `${ENV.API_URL}/api/v1/restaurants/${restaurantId}/credit/statements/${statementId}/pdf`,
+      {
+        responseType: 'arraybuffer',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
     );
     return data;
   },

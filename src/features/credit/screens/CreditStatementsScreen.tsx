@@ -3,22 +3,39 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
+import { WebView } from 'react-native-webview';
 import { Colors } from '../../../constants/colors';
 import { Text } from '../../../components/ui/Text';
-import { creditApi, type CreditStatementSummaryDto } from '../api/creditApi';
+import {
+  creditApi,
+  getTransactionTypeColor,
+  getTransactionTypeLabel,
+  type CreditStatementDto,
+  type CreditStatementLineDto,
+  type CreditStatementSummaryDto,
+} from '../api/creditApi';
 import { type RestaurantProfileStackParamList } from '../../../navigation/types';
 
 type Props = NativeStackScreenProps<RestaurantProfileStackParamList, 'CreditStatements'>;
 
 const STATEMENT_PAGE_SIZE = 20;
+
+// Backend always renders statement periods/dates in Asia/Ho_Chi_Minh (see
+// StatementPdfRenderer), even though PeriodStart/PeriodEnd are stored as UTC
+// boundaries of a VN calendar month. Pin the same zone here so the on-screen
+// detail agrees with the PDF instead of drifting a day/month off on devices
+// that aren't set to VN time.
+const VN_TIMEZONE = 'Asia/Ho_Chi_Minh';
 
 function formatVnd(amount: number) {
   return amount.toLocaleString('vi-VN') + 'đ';
@@ -28,25 +45,74 @@ function formatPeriod(start: string, end: string) {
   const startDate = new Date(start);
   const endDate = new Date(end);
   const inclusiveEnd = new Date(endDate.getTime() - 1);
+  const opts: Intl.DateTimeFormatOptions = { timeZone: VN_TIMEZONE };
 
-  return `${startDate.toLocaleDateString('vi-VN')} – ${inclusiveEnd.toLocaleDateString('vi-VN')}`;
+  return `${startDate.toLocaleDateString('vi-VN', opts)} - ${inclusiveEnd.toLocaleDateString('vi-VN', opts)}`;
 }
 
-function StatementCard({ item }: { item: CreditStatementSummaryDto }) {
+function formatMonthTitle(periodStart: string) {
+  // formatToParts didn't reliably return 'month'/'year' parts here (returned
+  // empty, causing "Tháng /"). toLocaleDateString's plain D/M/YYYY output
+  // does work (see formatPeriod/generatedAt above), so parse the month/year
+  // out of that instead — confirmed working on-device.
+  const [, month, year] = new Date(periodStart)
+    .toLocaleDateString('vi-VN', { timeZone: VN_TIMEZONE })
+    .split('/');
+  return `Tháng ${(month ?? '').padStart(2, '0')}/${year ?? ''}`;
+}
+
+function base64ArrayBuffer(arrayBuffer: ArrayBuffer): string {
+  let base64 = '';
+  const encodings = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const bytes = new Uint8Array(arrayBuffer);
+  const byteLength = bytes.byteLength;
+  const byteRemainder = byteLength % 3;
+  const mainLength = byteLength - byteRemainder;
+
+  let a: number, b: number, c: number, d: number;
+  let chunk: number;
+
+  for (let i = 0; i < mainLength; i += 3) {
+    chunk = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+    a = (chunk & 16515072) >> 18;
+    b = (chunk & 258048) >> 12;
+    c = (chunk & 4032) >> 6;
+    d = chunk & 63;
+    base64 += encodings[a] + encodings[b] + encodings[c] + encodings[d];
+  }
+
+  if (byteRemainder === 1) {
+    chunk = bytes[mainLength];
+    a = (chunk & 252) >> 2;
+    b = (chunk & 3) << 4;
+    base64 += encodings[a] + encodings[b] + '==';
+  } else if (byteRemainder === 2) {
+    chunk = (bytes[mainLength] << 8) | bytes[mainLength + 1];
+    a = (chunk & 64512) >> 10;
+    b = (chunk & 1008) >> 4;
+    c = (chunk & 15) << 2;
+    base64 += encodings[a] + encodings[b] + encodings[c] + '=';
+  }
+
+  return base64;
+}
+
+function StatementCard({
+  item,
+  onPressDetail,
+}: {
+  item: CreditStatementSummaryDto;
+  onPressDetail: (item: CreditStatementSummaryDto) => void;
+}) {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
-          <Text style={styles.cardMonth}>
-            Tháng {new Date(item.periodStart).toLocaleDateString('vi-VN', {
-              month: '2-digit',
-              year: 'numeric',
-            })}
-          </Text>
+          <Text style={styles.cardMonth}>{formatMonthTitle(item.periodStart)}</Text>
           <Text style={styles.periodText}>{formatPeriod(item.periodStart, item.periodEnd)}</Text>
         </View>
         <Text style={styles.generatedDate}>
-          {new Date(item.generatedAt).toLocaleDateString('vi-VN')}
+          Chốt ngày {new Date(item.generatedAt).toLocaleDateString('vi-VN', { timeZone: VN_TIMEZONE })}
         </Text>
       </View>
 
@@ -62,9 +128,10 @@ function StatementCard({ item }: { item: CreditStatementSummaryDto }) {
           <Text style={styles.statValue}>{formatVnd(item.closingBalance)}</Text>
         </View>
       </View>
+
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Tổng đã dùng</Text>
+          <Text style={styles.statLabel}>Tổng nợ phát sinh</Text>
           <Text style={[styles.statValue, { color: Colors.danger }]}>
             –{formatVnd(item.totalCharges)}
           </Text>
@@ -76,6 +143,7 @@ function StatementCard({ item }: { item: CreditStatementSummaryDto }) {
           </Text>
         </View>
       </View>
+
       {item.totalRefunds > 0 ? (
         <View style={styles.refundRow}>
           <Text style={styles.statLabel}>Tổng hoàn tiền</Text>
@@ -84,6 +152,14 @@ function StatementCard({ item }: { item: CreditStatementSummaryDto }) {
           </Text>
         </View>
       ) : null}
+
+      <View style={styles.cardDivider} />
+
+      <Pressable style={styles.detailBtn} onPress={() => onPressDetail(item)}>
+        <Ionicons name="document-text-outline" size={17} color={Colors.primaryText} />
+        <Text style={styles.detailBtnText}>Xem chi tiết & PDF</Text>
+        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+      </Pressable>
     </View>
   );
 }
@@ -99,6 +175,20 @@ export function CreditStatementsScreen({ route }: Props) {
   const [loadMoreError, setLoadMoreError] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Statement Detail Modal state
+  const [selectedSummary, setSelectedSummary] = useState<CreditStatementSummaryDto | null>(null);
+  const [statementDetail, setStatementDetail] = useState<CreditStatementDto | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [modalTab, setModalTab] = useState<'detail' | 'pdf'>('detail');
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
+
+  // Compute default target month (previous month) for generating statement
+  const now = new Date();
+  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const defaultTargetYear = prevMonthDate.getFullYear();
+  const defaultTargetMonth = prevMonthDate.getMonth() + 1;
 
   const load = useCallback(async () => {
     try {
@@ -149,20 +239,21 @@ export function CreditStatementsScreen({ route }: Props) {
   }, [loadingMore, nextCursor, restaurantId]);
 
   const handleGenerate = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
     Alert.alert(
       'Tạo sao kê',
-      `Tạo sao kê tín dụng cho tháng ${month}/${year}?`,
+      `Tạo sao kê tín dụng cho Tháng ${defaultTargetMonth}/${defaultTargetYear} (tháng vừa kết thúc)?`,
       [
         { text: 'Huỷ', style: 'cancel' },
         {
-          text: 'Tạo sao kê',
+          text: `Tạo T${defaultTargetMonth}/${defaultTargetYear}`,
           onPress: async () => {
             setGenerating(true);
             try {
-              const newStatement = await creditApi.generateStatement(restaurantId, year, month);
+              const newStatement = await creditApi.generateStatement(
+                restaurantId,
+                defaultTargetYear,
+                defaultTargetMonth,
+              );
               setStatements((prev) => {
                 const exists = prev.findIndex((s) => s.id === newStatement.id);
                 if (exists >= 0) {
@@ -170,6 +261,7 @@ export function CreditStatementsScreen({ route }: Props) {
                 }
                 return [newStatement, ...prev];
               });
+              Alert.alert('Thành công', `Đã tạo sao kê Tháng ${defaultTargetMonth}/${defaultTargetYear}`);
             } catch (err: unknown) {
               const message =
                 (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -181,6 +273,40 @@ export function CreditStatementsScreen({ route }: Props) {
         },
       ],
     );
+  };
+
+  const handleOpenDetail = async (summaryItem: CreditStatementSummaryDto) => {
+    setSelectedSummary(summaryItem);
+    setModalTab('detail');
+    setPdfBase64(null);
+    setLoadingDetail(true);
+    setStatementDetail(null);
+    try {
+      const detail = await creditApi.getStatementById(restaurantId, summaryItem.id);
+      setStatementDetail(detail);
+    } catch {
+      Alert.alert('Lỗi', 'Không thể tải chi tiết sao kê. Vui lòng thử lại.');
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  const handleFetchAndShowPdf = async (statementId: string) => {
+    setDownloadingPdf(true);
+    try {
+      const buffer = await creditApi.getStatementPdf(restaurantId, statementId);
+      if (buffer && buffer.byteLength > 0) {
+        const b64 = base64ArrayBuffer(buffer);
+        setPdfBase64(b64);
+        setModalTab('pdf');
+      } else {
+        Alert.alert('Thông báo', 'File PDF sao kê chưa có dữ liệu.');
+      }
+    } catch {
+      Alert.alert('Lỗi', 'Không thể tải file PDF sao kê từ máy chủ.');
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   if (loading) {
@@ -200,7 +326,7 @@ export function CreditStatementsScreen({ route }: Props) {
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={48} color={Colors.error} />
           <Text style={styles.errorText}>{error}</Text>
-          <Pressable style={styles.retryBtn} onPress={() => { setLoading(true); load(); }}>
+          <Pressable style={styles.retryBtn} onPress={() => { setLoading(true); void load(); }}>
             <Text style={styles.retryText}>Thử lại</Text>
           </Pressable>
         </View>
@@ -213,7 +339,9 @@ export function CreditStatementsScreen({ route }: Props) {
       <FlatList
         data={statements}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <StatementCard item={item} />}
+        renderItem={({ item }) => (
+          <StatementCard item={item} onPressDetail={(st) => void handleOpenDetail(st)} />
+        )}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -230,7 +358,9 @@ export function CreditStatementsScreen({ route }: Props) {
             ) : (
               <>
                 <Ionicons name="add-circle-outline" size={20} color={Colors.onPrimary} />
-                <Text style={styles.generateBtnText}>Tạo sao kê tháng này</Text>
+                <Text style={styles.generateBtnText}>
+                  Tạo sao kê Tháng {defaultTargetMonth}/{defaultTargetYear}
+                </Text>
               </>
             )}
           </Pressable>
@@ -239,7 +369,9 @@ export function CreditStatementsScreen({ route }: Props) {
           <View style={styles.empty}>
             <Ionicons name="documents-outline" size={52} color={Colors.outline} />
             <Text style={styles.emptyTitle}>Chưa có sao kê</Text>
-            <Text style={styles.emptySub}>Nhấn "Tạo sao kê" để tạo sao kê tháng hiện tại</Text>
+            <Text style={styles.emptySub}>
+              Nhấn nút trên để tạo sao kê cho Tháng {defaultTargetMonth}/{defaultTargetYear} vừa kết thúc.
+            </Text>
           </View>
         }
         ListFooterComponent={
@@ -256,6 +388,199 @@ export function CreditStatementsScreen({ route }: Props) {
         onEndReached={() => void loadMore()}
         onEndReachedThreshold={0.25}
       />
+
+      {/* Statement Detail & PDF Modal */}
+      <Modal
+        visible={Boolean(selectedSummary)}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedSummary(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSelectedSummary(null)} />
+          <View style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+
+            {selectedSummary ? (
+              modalTab === 'pdf' ? (
+                <>
+                  <View style={styles.sheetHeader}>
+                    <Pressable
+                      style={styles.backTabBtn}
+                      onPress={() => setModalTab('detail')}
+                    >
+                      <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+                      <Text style={styles.backTabText}>Quay lại chi tiết</Text>
+                    </Pressable>
+                    <Pressable onPress={() => setSelectedSummary(null)}>
+                      <Ionicons name="close-circle" size={26} color={Colors.textMuted} />
+                    </Pressable>
+                  </View>
+
+                  {pdfBase64 ? (
+                    <View style={styles.webViewContainer}>
+                      <WebView
+                        originWhitelist={['*']}
+                        source={{
+                          html: `
+                            <!DOCTYPE html>
+                            <html>
+                              <head>
+                                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0">
+                                <style>
+                                  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #525659; }
+                                  embed, iframe, object { width: 100%; height: 100%; border: none; }
+                                </style>
+                              </head>
+                              <body>
+                                <embed src="data:application/pdf;base64,${pdfBase64}" type="application/pdf" />
+                              </body>
+                            </html>
+                          `,
+                        }}
+                        style={{ flex: 1 }}
+                      />
+                    </View>
+                  ) : (
+                    <View style={styles.modalCentered}>
+                      <ActivityIndicator size="large" color={Colors.primary} />
+                      <Text style={styles.loadingText}>Đang nạp file PDF...</Text>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <>
+                  <View style={styles.sheetHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.sheetTitle}>
+                        Chi tiết {formatMonthTitle(selectedSummary.periodStart)}
+                      </Text>
+                      <Text style={styles.sheetSubtitle}>
+                        {formatPeriod(selectedSummary.periodStart, selectedSummary.periodEnd)}
+                      </Text>
+                    </View>
+                    <Pressable onPress={() => setSelectedSummary(null)}>
+                      <Ionicons name="close-circle" size={26} color={Colors.textMuted} />
+                    </Pressable>
+                  </View>
+
+                  {loadingDetail ? (
+                    <View style={styles.modalCentered}>
+                      <ActivityIndicator size="large" color={Colors.primary} />
+                      <Text style={styles.loadingText}>Đang tải chi tiết sao kê...</Text>
+                    </View>
+                  ) : (
+                    <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: '75%' }}>
+                      <View style={styles.detailSummaryBox}>
+                        <View style={styles.statsRow}>
+                          <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Đầu kỳ</Text>
+                            <Text style={styles.statValue}>{formatVnd(selectedSummary.openingBalance)}</Text>
+                          </View>
+                          <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Cuối kỳ</Text>
+                            <Text style={styles.statValue}>{formatVnd(selectedSummary.closingBalance)}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.statsRow}>
+                          <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Nợ phát sinh</Text>
+                            <Text style={[styles.statValue, { color: Colors.danger }]}>
+                              –{formatVnd(selectedSummary.totalCharges)}
+                            </Text>
+                          </View>
+                          <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Đã thanh toán</Text>
+                            <Text style={[styles.statValue, { color: Colors.primaryText }]}>
+                              +{formatVnd(selectedSummary.totalSettlements)}
+                            </Text>
+                          </View>
+                        </View>
+                        {statementDetail?.dueDate ? (
+                          <View style={styles.dueDateRow}>
+                            <Ionicons name="calendar-outline" size={16} color={Colors.warning} />
+                            <Text style={styles.dueDateText}>
+                              Hạn thanh toán: {new Date(statementDetail.dueDate).toLocaleDateString('vi-VN', { timeZone: VN_TIMEZONE })}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      <Text style={styles.linesSectionTitle}>Danh sách giao dịch trong kỳ</Text>
+
+                      {statementDetail?.lines && statementDetail.lines.length > 0 ? (
+                        statementDetail.lines.map((line: CreditStatementLineDto, idx: number) => {
+                          const typeLower = (line.type || '').toLowerCase();
+                          const label = getTransactionTypeLabel(line.type);
+                          const color = getTransactionTypeColor(line.type);
+                          const isCharge = typeLower === 'charge';
+                          const sign = isCharge ? '−' : '+';
+
+                          return (
+                            <View key={line.transactionId || idx} style={styles.lineItem}>
+                              <View style={[styles.lineIcon, { backgroundColor: `${color}18` }]}>
+                                <Ionicons
+                                  name={isCharge ? 'remove-circle-outline' : 'add-circle-outline'}
+                                  size={20}
+                                  color={color}
+                                />
+                              </View>
+                              <View style={styles.lineInfo}>
+                                <Text style={styles.lineLabel}>{label}</Text>
+                                {line.note || line.reference ? (
+                                  <Text style={styles.lineNote} numberOfLines={1}>
+                                    {line.note || line.reference}
+                                  </Text>
+                                ) : null}
+                                <Text style={styles.lineDate}>
+                                  {new Date(line.occurredAt).toLocaleString('vi-VN', {
+                                    timeZone: VN_TIMEZONE,
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </Text>
+                              </View>
+                              <View style={styles.lineAmountWrap}>
+                                <Text numeric style={[styles.lineAmount, { color }]}>
+                                  {sign}{formatVnd(Math.abs(line.amount))}
+                                </Text>
+                                <Text numeric style={styles.lineBalance}>
+                                  Dư: {formatVnd(line.balanceAfter)}
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        })
+                      ) : (
+                        <Text style={styles.noLinesText}>Không có dòng giao dịch nào trong kỳ này</Text>
+                      )}
+                    </ScrollView>
+                  )}
+
+                  <View style={styles.modalActionRow}>
+                    <Pressable
+                      style={[styles.pdfBtn, downloadingPdf && styles.generateBtnDisabled]}
+                      disabled={downloadingPdf}
+                      onPress={() => void handleFetchAndShowPdf(selectedSummary.id)}
+                    >
+                      {downloadingPdf ? (
+                        <ActivityIndicator size="small" color={Colors.onPrimary} />
+                      ) : (
+                        <>
+                          <Ionicons name="document-text-outline" size={20} color={Colors.onPrimary} />
+                          <Text style={styles.pdfBtnText}>Xem file PDF sao kê</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
+                </>
+              )
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -318,6 +643,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
 
+  detailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+  },
+  detailBtnText: { flex: 1, marginLeft: 8, fontSize: 13, fontWeight: '600', color: Colors.textPrimary },
+
   empty: {
     alignItems: 'center',
     paddingVertical: 60,
@@ -328,4 +661,107 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 13, color: Colors.textMuted, textAlign: 'center', lineHeight: 18 },
   footer: { minHeight: 52, alignItems: 'center', justifyContent: 'center', padding: 12 },
   loadMoreError: { fontSize: 12, color: Colors.error, textAlign: 'center' },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '88%',
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.outlineVariant,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  sheetTitle: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary },
+  sheetSubtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  modalCentered: { padding: 40, alignItems: 'center', gap: 12 },
+  detailSummaryBox: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    gap: 10,
+    marginBottom: 16,
+  },
+  dueDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.surfaceContainerHigh,
+  },
+  dueDateText: { fontSize: 12, fontWeight: '600', color: Colors.warning },
+  linesSectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: 10 },
+  lineItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceContainerHigh,
+  },
+  lineIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lineInfo: { flex: 1 },
+  lineLabel: { fontSize: 13, fontWeight: '600', color: Colors.textPrimary },
+  lineNote: { fontSize: 11, color: Colors.textMuted },
+  lineDate: { fontSize: 10, color: Colors.textMuted, marginTop: 2 },
+  lineAmountWrap: { alignItems: 'flex-end' },
+  lineAmount: { fontSize: 13, fontWeight: '700' },
+  lineBalance: { fontSize: 10, color: Colors.textMuted },
+  noLinesText: { fontSize: 13, color: Colors.textMuted, fontStyle: 'italic', paddingVertical: 16 },
+  modalActionRow: { paddingTop: 16, marginTop: 8 },
+  pdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  pdfBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  backTabBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  backTabText: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  webViewContainer: { height: 480, borderRadius: 14, overflow: 'hidden', marginVertical: 8 },
+  pdfViewerContainer: { flex: 1, backgroundColor: Colors.background },
+  pdfViewerHeader: {
+    height: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.outlineVariant,
+    backgroundColor: Colors.surface,
+  },
+  pdfViewerTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
+  pdfCloseBtn: { padding: 4 },
+  pdfWebView: { flex: 1 },
 });
+

@@ -15,8 +15,8 @@ import { Colors } from '../../../constants/colors';
 import { Text } from '../../../components/ui/Text';
 import {
   creditApi,
-  TRANSACTION_TYPE_COLOR,
-  TRANSACTION_TYPE_LABEL,
+  getTransactionTypeColor,
+  getTransactionTypeLabel,
   type CreditDto,
   type CreditTransactionDto,
 } from '../api/creditApi';
@@ -27,12 +27,23 @@ type Nav = NativeStackNavigationProp<RestaurantProfileStackParamList>;
 
 const TRANSACTION_PAGE_SIZE = 20;
 
+// Backend always formats credit dates in Asia/Ho_Chi_Minh regardless of server
+// locale; pin the same zone here so the app doesn't drift a day/month off from
+// the PDF/notifications when the device's own timezone isn't set to VN.
+const VN_TIMEZONE = 'Asia/Ho_Chi_Minh';
+
+// Matches RestaurantCredit's Warning (>=80%) / Exceeded (>=100%) thresholds on
+// the backend, so the on-screen indicator agrees with what triggers BE alerts.
+const CREDIT_WARNING_RATIO = 0.8;
+const CREDIT_EXCEEDED_RATIO = 1;
+
 function formatVnd(amount: number | undefined | null) {
   return `${(amount ?? 0).toLocaleString('vi-VN')}đ`;
 }
 
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString('vi-VN', {
+    timeZone: VN_TIMEZONE,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -45,7 +56,11 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
   const ratio = limit > 0 ? Math.min(used / limit, 1) : 0;
   const percentage = Math.round(ratio * 100);
   const fillColor =
-    ratio >= 0.9 ? Colors.danger : ratio >= 0.7 ? Colors.warning : Colors.primary;
+    ratio >= CREDIT_EXCEEDED_RATIO
+      ? Colors.danger
+      : ratio >= CREDIT_WARNING_RATIO
+        ? Colors.warning
+        : Colors.onPrimary;
 
   return (
     <View style={styles.usageWrap}>
@@ -85,10 +100,11 @@ function StatCard({
 }
 
 function TransactionRow({ item }: { item: CreditTransactionDto }) {
-  const isCharge = item.type === 'charge';
-  const isAdjustment = item.type === 'adjustment';
-  const color = TRANSACTION_TYPE_COLOR[item.type] ?? Colors.textMuted;
-  const label = TRANSACTION_TYPE_LABEL[item.type] ?? item.type;
+  const typeLower = (item.type || '').toLowerCase();
+  const isCharge = typeLower === 'charge';
+  const isAdjustment = typeLower === 'adjustment';
+  const color = getTransactionTypeColor(item.type);
+  const label = getTransactionTypeLabel(item.type);
   const sign = isCharge ? '−' : isAdjustment ? '' : '+';
   const detail = item.orderId
     ? `Đơn #${item.orderId.slice(0, 8).toUpperCase()}`
@@ -356,7 +372,7 @@ const styles = StyleSheet.create({
   usageTrack: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.surfaceContainerHigh,
+    backgroundColor: 'rgba(6, 66, 85, 0.18)',
     overflow: 'hidden',
   },
   usageFill: { height: '100%', borderRadius: 4 },
@@ -402,7 +418,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'flex-start',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: Colors.surfaceContainerLow,
     borderRadius: 12,
     padding: 12,
   },

@@ -128,3 +128,60 @@ export interface LoginResponse {
   };
   approvalStatus: ApprovalStatus | null;
 }
+
+// ─── Credit & Statements ────────────────────────────────────────────────────────
+
+export interface CreditDto {
+  restaurantId: string;
+  creditLimit: number;
+  outstandingBalance: number;
+  availableCredit: number;
+  updatedAt: string;
+}
+
+export interface CreditTransactionDto {
+  id: string;
+  restaurantId: string;
+  orderId: string | null;
+  type: string;
+  amount: number;
+  balanceAfter: number;
+  note: string | null;
+  paymentMethod: string | null;
+  reference: string | null;
+  createdAt: string;
+}
+
+export interface CreditTransactionMeta {
+  nextCursor: string | null;
+  pageSize: number;
+}
+
+export interface CreditStatementSummaryDto {
+  id: string;
+  restaurantId: string;
+  periodStart: string;
+  periodEnd: string;
+  openingBalance: number;
+  closingBalance: number;
+  totalCharges: number;
+  totalSettlements: number;
+  totalRefunds: number;
+  generatedAt: string;
+}
+
+export interface CreditStatementLineDto {
+  transactionId: string;
+  type: string;
+  amount: number;
+  balanceAfter: number;
+  occurredAt: string;
+  note: string | null;
+  reference: string | null;
+}
+
+export interface CreditStatementDto extends CreditStatementSummaryDto {
+  dueDate: string;
+  lines: CreditStatementLineDto[];
+}
+
