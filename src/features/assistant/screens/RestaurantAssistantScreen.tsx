@@ -1,12 +1,15 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  type StyleProp,
+  type TextStyle,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +24,7 @@ import {
   type PendingAssistantConfirmation,
 } from '../api/assistantApi';
 import { useCartStore } from '../../../store/cartStore';
+import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
 
 interface ChatMessage {
   id: string;
@@ -53,6 +57,9 @@ function resolveErrorMessage(status?: number, code?: string): string {
   if (status === 401 || status === 403) {
     return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
   }
+  if (code === 'DELIVERY_ADDRESS_REQUIRED') {
+    return 'Nhà hàng chưa có địa chỉ giao hàng. Vui lòng thêm địa chỉ trong hồ sơ trước khi xác nhận đơn.';
+  }
   return 'Trợ lý đang bận. Vui lòng thử lại sau ít phút.';
 }
 
@@ -73,6 +80,135 @@ function parsePreview(previewJson: string): OrderPreview | null {
 
 function formatPrice(value: number) {
   return `${value.toLocaleString('vi-VN')}đ`;
+}
+
+// ── Lightweight GFM-table rendering for assistant replies ──────────────────────
+// The LLM often answers product lookups with a `| col | col |` markdown table; rendered as
+// plain <Text> those pipes/dashes show up literally. This detects table blocks inline with
+// regular text and renders just those as an actual table, leaving everything else untouched —
+// full markdown (bold/links/etc.) is out of scope, only tables were the reported readability issue.
+type ContentBlock =
+  | { type: 'text'; content: string }
+  | { type: 'table'; headers: string[]; rows: string[][] };
+
+function isTableSeparatorLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.includes('|')) return false;
+  return /^\|?(\s*:?-+:?\s*\|)*\s*:?-+:?\s*\|?$/.test(trimmed);
+}
+
+function parseTableRow(line: string): string[] {
+  let trimmed = line.trim();
+  if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith('|')) trimmed = trimmed.slice(0, -1);
+  return trimmed.split('|').map((cell) => cell.trim());
+}
+
+function parseMessageContent(content: string): ContentBlock[] {
+  const lines = content.split('\n');
+  const blocks: ContentBlock[] = [];
+  let textBuffer: string[] = [];
+  let i = 0;
+
+  const flushText = () => {
+    const text = textBuffer.join('\n').trim();
+    if (text) blocks.push({ type: 'text', content: text });
+    textBuffer = [];
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const nextLine = lines[i + 1];
+    if (line.trim().includes('|') && nextLine !== undefined && isTableSeparatorLine(nextLine)) {
+      flushText();
+      const headers = parseTableRow(line);
+      i += 2;
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].trim().includes('|')) {
+        rows.push(parseTableRow(lines[i]));
+        i += 1;
+      }
+      blocks.push({ type: 'table', headers, rows });
+      continue;
+    }
+    textBuffer.push(line);
+    i += 1;
+  }
+  flushText();
+  return blocks;
+}
+
+// Rough monospace-ish glyph width at fontSize 11 — each row lays out its cells independently
+// (they're separate flex-row Views), so without a shared per-column width, a short data cell
+// ("Bơ") and its longer header ("Tên sản phẩm") end up different widths and the columns drift
+// out of alignment across rows. Estimating width from content length keeps every cell in a
+// column the same size without needing an actual text-measurement pass.
+const TABLE_CHAR_WIDTH = 6.5;
+const TABLE_CELL_H_PADDING = 17; // paddingHorizontal 8 * 2 + ~1px border
+const TABLE_MIN_COL_WIDTH = 56;
+const TABLE_MAX_COL_WIDTH = 160;
+
+function computeColumnWidths(headers: string[], rows: string[][]): number[] {
+  return headers.map((header, columnIndex) => {
+    const longest = Math.max(
+      header.length,
+      ...rows.map((row) => (row[columnIndex] ?? '').length),
+    );
+    const estimated = Math.ceil(longest * TABLE_CHAR_WIDTH) + TABLE_CELL_H_PADDING;
+    return Math.min(TABLE_MAX_COL_WIDTH, Math.max(TABLE_MIN_COL_WIDTH, estimated));
+  });
+}
+
+function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
+  const columnWidths = useMemo(() => computeColumnWidths(headers, rows), [headers, rows]);
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View style={styles.table}>
+        <View style={[styles.tableRow, styles.tableHeaderRow]}>
+          {headers.map((header, index) => (
+            <View key={index} style={[styles.tableCell, { width: columnWidths[index] }]}>
+              <Text style={styles.tableHeaderText}>{header}</Text>
+            </View>
+          ))}
+        </View>
+        {rows.map((row, rowIndex) => (
+          <View
+            key={rowIndex}
+            style={[styles.tableRow, rowIndex % 2 === 1 && styles.tableRowAlt]}
+          >
+            {row.map((cell, cellIndex) => (
+              <View key={cellIndex} style={[styles.tableCell, { width: columnWidths[cellIndex] }]}>
+                <Text style={styles.tableCellText} numberOfLines={2}>{cell}</Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+function MessageContent({
+  content,
+  textStyle,
+}: {
+  content: string;
+  textStyle: StyleProp<TextStyle>;
+}) {
+  const blocks = useMemo(() => parseMessageContent(content), [content]);
+  return (
+    <>
+      {blocks.map((block, index) =>
+        block.type === 'table' ? (
+          <MarkdownTable key={index} headers={block.headers} rows={block.rows} />
+        ) : (
+          <Text key={index} style={textStyle}>
+            {block.content}
+          </Text>
+        ),
+      )}
+    </>
+  );
 }
 
 function formatScheduledDate(iso: string | null) {
@@ -104,6 +240,18 @@ export function RestaurantAssistantScreen() {
 
   const canSend = input.trim().length > 0 && !sending;
 
+  // Required by BE's preview_confirmation/confirm_order tools (see assistantApi.chat's
+  // deliveryAddressId comment) — fetched once, first entry is the BE-sorted default address.
+  const [deliveryAddresses, setDeliveryAddresses] = useState<DeliveryAddressDto[] | null>(null);
+  const selectedAddress = deliveryAddresses?.[0] ?? null;
+
+  useEffect(() => {
+    restaurantApi
+      .getDeliveryAddresses()
+      .then(setDeliveryAddresses)
+      .catch(() => setDeliveryAddresses([]));
+  }, []);
+
   const sendMessage = async (
     rawMessage: string,
     options?: { confirmOrderId?: string; hideUserMessage?: boolean },
@@ -125,6 +273,7 @@ export function RestaurantAssistantScreen() {
         sessionId: sessionId.current,
         message,
         marketId: selectedMarketId,
+        deliveryAddressId: selectedAddress?.id,
         confirmOrderId: options?.confirmOrderId,
       });
       setMessages((current) => [
@@ -206,24 +355,40 @@ export function RestaurantAssistantScreen() {
                   item.role === 'user' ? styles.userBubble : styles.assistantBubble,
                 ]}
               >
-                <Text
-                  style={[
+                <MessageContent
+                  content={item.content}
+                  textStyle={[
                     styles.messageText,
                     item.role === 'user' && styles.userMessageText,
                   ]}
-                >
-                  {item.content}
-                </Text>
+                />
                 {item.pendingConfirmation ? (
                   <OrderPreviewCard
                     previewJson={item.pendingConfirmation.previewJson}
                     sending={sending}
-                    onConfirm={() =>
+                    onConfirm={() => {
+                      if (!selectedAddress) {
+                        Alert.alert(
+                          'Chưa có địa chỉ giao hàng',
+                          'Vui lòng thêm địa chỉ giao hàng trước khi xác nhận đơn.',
+                          [
+                            {
+                              text: 'Thêm địa chỉ',
+                              onPress: () =>
+                                navigation.navigate('RestaurantProfile', {
+                                  screen: 'DeliveryAddresses',
+                                }),
+                            },
+                            { text: 'Để sau', style: 'cancel' },
+                          ],
+                        );
+                        return;
+                      }
                       void sendMessage('Tôi xác nhận đơn hàng này.', {
                         confirmOrderId: item.pendingConfirmation?.orderId,
                         hideUserMessage: false,
-                      })
-                    }
+                      });
+                    }}
                   />
                 ) : null}
                 {item.draftOrderId ? (
@@ -456,6 +621,27 @@ const styles = StyleSheet.create({
   userBubble: { backgroundColor: Colors.deepTeal, borderBottomRightRadius: 5 },
   messageText: { fontSize: 13, lineHeight: 20, color: Colors.textPrimary },
   userMessageText: { color: Colors.white },
+  table: {
+    marginTop: 6,
+    marginBottom: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  tableRow: { flexDirection: 'row' },
+  tableHeaderRow: { backgroundColor: Colors.primaryLight },
+  tableRowAlt: { backgroundColor: Colors.surfaceContainerLow },
+  tableCell: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRightWidth: 1,
+    borderRightColor: Colors.border,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  tableHeaderText: { fontSize: 11, fontFamily: Fonts.bold, color: Colors.primaryText },
+  tableCellText: { fontSize: 11, color: Colors.textPrimary },
   confirmButton: {
     marginTop: 11,
     minHeight: 42,
