@@ -197,7 +197,8 @@ export function ProfileScreen() {
       if (editAvatarUri) {
         setAvatarUploading(true);
         try {
-          finalAvatarUrl = await uploadImageToCloudinary(editAvatarUri);
+          const signature = await profileApi.getAvatarUploadSignature();
+          finalAvatarUrl = await uploadImageToCloudinary(editAvatarUri, signature);
         } finally {
           setAvatarUploading(false);
         }

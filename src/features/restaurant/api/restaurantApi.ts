@@ -1,4 +1,5 @@
 import { apiClient } from '../../../services/api/client';
+import type { CloudinaryUploadSignature } from '../../../services/cloudinaryUpload';
 
 export type RestaurantApprovalStatus = 'pending' | 'active' | 'suspended';
 
@@ -202,5 +203,12 @@ export const restaurantApi = {
 
   async deleteDeliveryAddress(id: string): Promise<void> {
     await apiClient.delete(`/api/v1/restaurants/me/delivery-addresses/${id}`);
+  },
+
+  async getLicenseUploadSignature(): Promise<CloudinaryUploadSignature> {
+    const { data } = await apiClient.post<CloudinaryUploadSignature>(
+      '/api/v1/restaurants/me/business-license/upload-signature',
+    );
+    return data;
   },
 };

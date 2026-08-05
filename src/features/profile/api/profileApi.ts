@@ -1,4 +1,5 @@
 import { apiClient } from '../../../services/api/client';
+import type { CloudinaryUploadSignature } from '../../../services/cloudinaryUpload';
 
 export interface UserProfileDto {
   id: string;
@@ -30,5 +31,12 @@ export const profileApi = {
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     await apiClient.post('/api/v1/auth/change-password', { currentPassword, newPassword });
+  },
+
+  async getAvatarUploadSignature(): Promise<CloudinaryUploadSignature> {
+    const { data } = await apiClient.post<CloudinaryUploadSignature>(
+      '/api/v1/profile/me/avatar/upload-signature',
+    );
+    return data;
   },
 };

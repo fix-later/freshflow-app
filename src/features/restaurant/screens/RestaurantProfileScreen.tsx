@@ -2,8 +2,9 @@ import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
-  Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -29,8 +30,6 @@ import {
   type RestaurantProfileDto,
   type ApprovalStatusDto,
 } from '../api/restaurantApi';
-
-const LICENSE_FOLDER = 'freshflow/licenses';
 
 type Nav = NativeStackNavigationProp<RestaurantProfileStackParamList>;
 
@@ -256,6 +255,8 @@ export function RestaurantProfileScreen() {
   // ─── Business license ───────────────────────────────────────────────────
   const [licenseUploading, setLicenseUploading] = useState(false);
   const [licenseError, setLicenseError] = useState<string | null>(null);
+  const [licensePreviewVisible, setLicensePreviewVisible] = useState(false);
+  const [licensePreviewFailed, setLicensePreviewFailed] = useState(false);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -491,7 +492,8 @@ export function RestaurantProfileScreen() {
     setLicenseUploading(true);
     setLicenseError(null);
     try {
-      const url = await uploadImageToCloudinary(result.assets[0].uri, LICENSE_FOLDER);
+      const signature = await restaurantApi.getLicenseUploadSignature();
+      const url = await uploadImageToCloudinary(result.assets[0].uri, signature);
       const updated = await restaurantApi.updateRestaurantProfile({
         name: profile?.name ?? '',
         address: profile?.address || null,
@@ -512,7 +514,8 @@ export function RestaurantProfileScreen() {
 
   const handleViewLicense = useCallback(() => {
     if (profile?.businessLicenseUrl) {
-      Linking.openURL(profile.businessLicenseUrl).catch(() => {});
+      setLicensePreviewFailed(false);
+      setLicensePreviewVisible(true);
     }
   }, [profile?.businessLicenseUrl]);
 
@@ -936,6 +939,37 @@ export function RestaurantProfileScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* ─── Business license preview modal ──── */}
+      <Modal
+        visible={licensePreviewVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLicensePreviewVisible(false)}
+      >
+        <View style={styles.previewOverlay}>
+          <Pressable
+            style={styles.previewCloseBtn}
+            onPress={() => setLicensePreviewVisible(false)}
+            hitSlop={12}
+          >
+            <Ionicons name="close" size={26} color="#FFFFFF" />
+          </Pressable>
+          {profile?.businessLicenseUrl && !licensePreviewFailed ? (
+            <Image
+              source={{ uri: profile.businessLicenseUrl }}
+              style={styles.previewImage}
+              resizeMode="contain"
+              onError={() => setLicensePreviewFailed(true)}
+            />
+          ) : (
+            <View style={styles.previewErrorBox}>
+              <Ionicons name="alert-circle-outline" size={40} color="#FFFFFF" />
+              <Text style={styles.previewErrorText}>Không thể hiển thị ảnh giấy phép.</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1163,4 +1197,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginLeft: 2,
   },
+
+  // ─── Business license preview modal ───────────
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewCloseBtn: {
+    position: 'absolute',
+    top: 56,
+    right: 20,
+    zIndex: 1,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  previewImage: { width: '100%', height: '80%' },
+  previewErrorBox: { alignItems: 'center', gap: 10, paddingHorizontal: 32 },
+  previewErrorText: { fontSize: 14, color: '#FFFFFF', textAlign: 'center' },
 });
