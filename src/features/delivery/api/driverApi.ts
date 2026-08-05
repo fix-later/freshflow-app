@@ -22,9 +22,11 @@ import type {
  * authenticated Bearer token (attached automatically by apiClient).
  */
 export const driverApi = {
-  /** GET /api/v1/driver/routes/today — route(s) assigned to the driver for today. */
-  async getTodayRoutes(): Promise<DriverRouteDto[]> {
-    const { data } = await apiClient.get('/api/v1/driver/routes/today');
+  /** GET /api/v1/driver/routes — route(s) assigned to the driver. Supports ?date=yyyy-MM-dd */
+  async getTodayRoutes(date?: string): Promise<DriverRouteDto[]> {
+    const { data } = await apiClient.get('/api/v1/driver/routes', {
+      params: date ? { date } : undefined,
+    });
     return data;
   },
 

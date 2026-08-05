@@ -96,6 +96,9 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
     setError(null);
     try {
       const manifest = await driverApi.getLoadingManifest(routeId);
+      if (manifest && manifest.stops) {
+        driverRouteStore.setManifestStops(manifest.stops);
+      }
       setItems(buildPickupItems(manifest));
     } catch {
       setError('Không thể tải danh sách hàng cần nhận. Vui lòng thử lại.');
@@ -145,8 +148,8 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
               await driverApi.confirmPickup(routeId, items.map(i => i.orderId));
               // Deliveries now exist server-side for the first time. Reload store to sync deliveries.
               const reloadedRoute = await driverRouteStore.load();
-              // Now that deliveries exist on BE and route is assigned, start the route to transition it to in_progress
-              if (reloadedRoute && ['planned', 'selected', 'reviewed', 'assigned'].includes(reloadedRoute.status)) {
+              // startRoute only accepts routes in 'assigned' status (BE rejects anything else with 409).
+              if (reloadedRoute && reloadedRoute.status === 'assigned') {
                 await driverApi.startRoute(routeId);
                 driverRouteStore.setRouteStatus('in_progress');
               }

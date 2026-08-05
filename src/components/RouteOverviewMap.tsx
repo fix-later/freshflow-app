@@ -87,8 +87,14 @@ function buildHtml(
     STOPS.forEach(function(s){
       var el=document.createElement('div');
       el.className='sm';
-      el.style.backgroundColor=s.color;
-      el.textContent=s.order;
+      el.style.backgroundColor=s.order === 0 ? '#3B82F6' : s.color;
+      el.textContent=s.order === 0 ? 'Hub' : s.order;
+      if(s.order === 0){
+        el.style.width='36px';
+        el.style.height='24px';
+        el.style.borderRadius='12px';
+        el.style.fontSize='11px';
+      }
       new goongjs.Marker({element:el}).setLngLat([s.lng,s.lat]).addTo(map);
     });
 
