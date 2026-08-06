@@ -109,6 +109,8 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
         password,
         restaurantName.trim(),
         normalizedPhone,
+        taxCode.trim(),
+        restaurantAddress.trim(),
       );
       navigation.navigate('VerifyEmail' as never, { email: email.trim() } as never);
     } catch (err: any) {
