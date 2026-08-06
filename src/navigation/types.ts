@@ -95,11 +95,16 @@ export type RestaurantOrdersStackParamList = {
 export type MarketHomeStackParamList = {
   MarketAgentHomeMain: undefined;
   MarketKiosks: { marketId: string; marketName: string };
+};
+
+export type MarketTasksStackParamList = {
+  MarketAgentTasksMain: undefined;
   ProcurementTaskDetail: { batchId: string };
 };
 
 export type MarketAgentStackParamList = {
-  MarketAgentHome: undefined;
+  MarketAgentHome: NavigatorScreenParams<MarketHomeStackParamList> | undefined;
+  MarketAgentTasks: NavigatorScreenParams<MarketTasksStackParamList> | undefined;
   UpdatePrice: { productId?: string; marketId?: string } | undefined;
   MarketAgentProfile: undefined;
 };
