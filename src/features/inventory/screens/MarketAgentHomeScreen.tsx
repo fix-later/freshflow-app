@@ -1,177 +1,64 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  StyleSheet,
-  View,
+  ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
-  Alert,
-  ActivityIndicator,
+  StyleSheet,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { useAuthStore } from '../../../store/authStore';
 import { ScreenContainer } from '../../../components/layout/ScreenContainer';
-import { Card } from '../../../components/ui/Card';
 import { Text } from '../../../components/ui/Text';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
+import { useAuthStore } from '../../../store/authStore';
 import { inventoryApi, type AssignedMarketDto } from '../api/inventoryApi';
-import type { MarketProductDto } from '../../../types/api.types';
-import {
-  marketProcurementApi,
-  type MarketProcurementTaskDto,
-  type ProcurementTaskStatus,
-} from '../../procurement/api/marketProcurementApi';
-
-const PROCUREMENT_STATUS: Record<ProcurementTaskStatus, { label: string; color: string; background: string }> = {
-  Built: { label: 'Đang lập phiếu', color: Colors.textMuted, background: Colors.surfaceContainerHigh },
-  Manifested: { label: 'Chờ thu mua', color: '#8A5900', background: Colors.warningLight },
-  Purchasing: { label: 'Đang thu mua', color: Colors.primaryText, background: Colors.primaryLight },
-  HandedOff: { label: 'Đã bàn giao', color: Colors.secondary, background: Colors.secondaryContainer },
-  Cancelled: { label: 'Đã huỷ', color: Colors.danger, background: Colors.dangerLight },
-};
-
-function getVietnamDate(): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
-function formatBatchDate(value: string): string {
-  const [year, month, day] = value.split('-').map(Number);
-  return new Intl.DateTimeFormat('vi-VN', {
-    weekday: 'short',
-    day: '2-digit',
-    month: '2-digit',
-  }).format(new Date(year, month - 1, day));
-}
-
-function shortBatchCode(value: string): string {
-  return `PO-${value.replaceAll('-', '').slice(0, 8).toUpperCase()}`;
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function MarketAgentHomeScreen() {
   const navigation = useNavigation<any>();
   const { user } = useAuthStore();
-
-  const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(true);
-
   const [assignedMarkets, setAssignedMarkets] = useState<AssignedMarketDto[]>([]);
-  const [priceProducts, setPriceProducts] = useState<MarketProductDto[]>([]);
-  const [procurementTasks, setProcurementTasks] = useState<MarketProcurementTaskDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchData = useCallback(async () => {
+  const fetchOverview = useCallback(async () => {
     try {
-      const [markets, tasks] = await Promise.all([
-        inventoryApi.getAssignedMarkets(),
-        marketProcurementApi.getTasksInNextSevenDays(getVietnamDate()),
-      ]);
-      setAssignedMarkets(markets);
-      setProcurementTasks(tasks);
-
-      // Fetch products from all assigned markets for the price watchlist
-      const allProducts: MarketProductDto[] = [];
-      for (const market of markets) {
-        try {
-          const page = await inventoryApi.getMarketProducts(market.marketId, { pageSize: 10 });
-          const items = Array.isArray(page) ? page : page.items ?? [];
-          allProducts.push(...items);
-        } catch {
-          // Skip failed market — don't block the whole screen
-        }
-      }
-      // Sort by most recently updated
-      allProducts.sort(
-        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-      );
-      setPriceProducts(allProducts.slice(0, 10));
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.message || 'Không thể tải dữ liệu. Vui lòng thử lại.');
+      setAssignedMarkets(await inventoryApi.getAssignedMarkets());
+    } catch (error: any) {
+      Alert.alert('Không thể tải tổng quan', error?.message || 'Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useFocusEffect(useCallback(() => {
-    void fetchData();
-  }, [fetchData]));
+    void fetchOverview();
+  }, [fetchOverview]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchData();
+    await fetchOverview();
     setRefreshing(false);
-  }, [fetchData]);
+  }, [fetchOverview]);
 
-  const formatPrice = (value: number) =>
-    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-
-  const formatRelativeTime = (isoDate: string) => {
-    const diff = Date.now() - new Date(isoDate).getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return 'Vừa xong';
-    if (minutes < 60) return `${minutes} phút trước`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} giờ trước`;
-    const days = Math.floor(hours / 24);
-    return `${days} ngày trước`;
+  const openPriceUpdate = () => {
+    navigation.getParent()?.navigate('UpdatePrice');
   };
 
-  const procurementSummary = useMemo(() => {
-    const orderIds = new Set(
-      procurementTasks.flatMap((task) => task.members.map((member) => member.orderId)),
-    );
-    return {
-      orderCount: orderIds.size,
-      batchCount: procurementTasks.length,
-      pendingBatchCount: procurementTasks.filter((task) => task.status === 'Manifested').length,
-      quantity: procurementTasks.reduce(
-        (total, task) => total + task.items.reduce((sum, item) => sum + item.totalQuantity, 0),
-        0,
-      ),
-    };
-  }, [procurementTasks]);
-
-  const procurementGroups = useMemo(() => {
-    const groups = new Map<string, MarketProcurementTaskDto[]>();
-    procurementTasks.forEach((task) => {
-      const tasks = groups.get(task.batchDate) ?? [];
-      tasks.push(task);
-      groups.set(task.batchDate, tasks);
-    });
-
-    return Array.from(groups.entries()).map(([date, tasks]) => {
-      const orderIds = new Set(
-        tasks.flatMap((task) => task.members.map((member) => member.orderId)),
-      );
-      const totalQuantity = tasks.reduce(
-        (total, task) => total + task.items.reduce((sum, item) => sum + item.totalQuantity, 0),
-        0,
-      );
-      return { date, tasks, orderCount: orderIds.size, totalQuantity };
-    });
-  }, [procurementTasks]);
-
-  // ── Loading state ──
   if (loading) {
     return (
       <ScreenContainer
         scroll={false}
-        safeArea={true}
+        safeArea
         edges={['top']}
         bgColor={Colors.background}
         style={styles.container}
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primaryText} />
-          <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+          <Text style={styles.loadingText}>Đang tải tổng quan...</Text>
         </View>
       </ScreenContainer>
     );
@@ -179,782 +66,373 @@ export function MarketAgentHomeScreen() {
 
   return (
     <ScreenContainer
-      scroll={true}
+      scroll
       padding={false}
-      safeArea={true}
+      safeArea
       edges={['top']}
       bgColor={Colors.background}
       style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primaryText]} />
-      }
+      refreshControl={(
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[Colors.primaryText]}
+          tintColor={Colors.primaryText}
+        />
+      )}
     >
-      {/* ─── HEADER BANNER ────────────────────────────────────────── */}
-      <View style={styles.headerBanner}>
-        <View style={styles.headerDecoCircle1} />
-        <View style={styles.headerDecoCircle2} />
+      <View style={styles.hero}>
+        <View style={styles.heroOrbLarge} />
+        <View style={styles.heroOrbSmall} />
 
-        {/* Row: avatar + greeting + notification bell */}
-        <View style={styles.headerRow}>
-          <View style={styles.userInfo}>
-            <View style={styles.avatarContainer}>
-              <Text style={styles.avatarText}>
-                {user?.name ? user.name.charAt(0).toUpperCase() : 'M'}
-              </Text>
-            </View>
-            <View>
-              <Text style={styles.welcomeText}>Xin chào,</Text>
-              <Text style={styles.userName}>{user?.name || 'Market Agent'}</Text>
-            </View>
-          </View>
-          <Pressable
-            style={styles.notificationBtn}
-            onPress={() => navigation.navigate('Notifications' as never)}
-          >
-            <Ionicons name="notifications-outline" size={24} color={Colors.white} />
-            <View style={styles.notificationDot} />
-          </Pressable>
-        </View>
-
-        {/* Ecosystem Status Card */}
-        <View style={styles.ecosystemCard}>
-          <View style={styles.ecosystemLeft}>
-            <Text style={styles.ecosystemTitle}>Trạng thái Hệ sinh thái</Text>
-            <Text style={styles.ecosystemSub}>
-              Tổng quan thời gian thực các trung tâm vận hành được phân công.
+        <View style={styles.profileRow}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>
+              {user?.name?.charAt(0).toUpperCase() || 'M'}
             </Text>
           </View>
-          <View style={styles.ecosystemStatsRow}>
-            <View style={styles.ecoStatItem}>
-              <Text style={styles.ecoStatVal} numeric>{assignedMarkets.length}</Text>
-              <Text style={styles.ecoStatLabel}>Chợ được phân công</Text>
-            </View>
-            <View style={styles.ecoStatDivider} />
-            <View style={styles.ecoStatItem}>
-              <Text style={styles.ecoStatVal} numeric>{priceProducts.length}</Text>
-              <Text style={styles.ecoStatLabel}>Sản phẩm theo dõi</Text>
-            </View>
+          <View style={styles.profileCopy}>
+            <Text style={styles.greeting}>Xin chào,</Text>
+            <Text style={styles.userName} numberOfLines={1}>{user?.name || 'Market Agent'}</Text>
           </View>
+          <View style={styles.onlinePill}>
+            <View style={styles.onlineDot} />
+            <Text style={styles.onlineText}>ĐANG HOẠT ĐỘNG</Text>
+          </View>
+        </View>
+
+        <View style={styles.heroContent}>
+          <Text style={styles.heroEyebrow}>PHẠM VI VẬN HÀNH</Text>
+          <Text style={styles.heroTitle}>
+            {assignedMarkets.length > 0
+              ? `${assignedMarkets.length} chợ đầu mối đang phụ trách`
+              : 'Chưa có chợ được phân công'}
+          </Text>
+          <Text style={styles.heroSubtitle}>
+            {assignedMarkets.length > 0
+              ? 'Theo dõi từng điểm chợ và cập nhật giá bán từ một nơi.'
+              : 'Liên hệ quản trị viên để được thiết lập phạm vi làm việc.'}
+          </Text>
         </View>
       </View>
 
-      {/* ─── CONTENT ──────────────────────────────────────────────── */}
-      <View style={styles.contentPadding}>
-
-        {/* Quick Metrics */}
-        <View style={styles.metricsRow}>
-          <Card
-            style={StyleSheet.flatten([styles.metricCard, { borderColor: Colors.primary600 }])}
-            padding="sm"
-            onPress={() => navigation.navigate('UpdatePrice')}
-          >
-            <View style={styles.metricIconRow}>
-              <View style={[styles.metricIconBg, { backgroundColor: Colors.primaryLight }]}>
-                <Ionicons name="pricetags-outline" size={20} color={Colors.primaryText} />
-              </View>
-            </View>
-            <Text style={styles.metricValue} numeric>{priceProducts.length}</Text>
-            <Text style={styles.metricLabelText}>Sản phẩm hiện có</Text>
-          </Card>
-
-          <Card
-            style={StyleSheet.flatten([styles.metricCard, { borderColor: Colors.secondary }])}
-            padding="sm"
-          >
-            <View style={styles.metricIconRow}>
-              <View style={[styles.metricIconBg, { backgroundColor: Colors.secondaryContainer }]}>
-                <Ionicons name="time-outline" size={20} color={Colors.secondary} />
-              </View>
-            </View>
-            <Text style={styles.metricValue} numeric>{assignedMarkets.length} chợ</Text>
-            <Text style={styles.metricLabelText}>Đang phụ trách</Text>
-          </Card>
-        </View>
-
-        {/* ─── PROCUREMENT TASKS: TODAY + NEXT 6 DAYS ─────────── */}
-        <View style={styles.procurementSummaryCard}>
-          <View style={styles.procurementSummaryHeader}>
-            <View style={styles.procurementSummaryIcon}>
-              <Ionicons name="basket-outline" size={22} color={Colors.primaryText} />
-            </View>
-            <View style={styles.procurementSummaryCopy}>
-              <Text style={styles.procurementSummaryTitle}>Kế hoạch thu mua trong 7 ngày</Text>
-              <Text style={styles.procurementSummarySub}>Hôm nay và 6 ngày tiếp theo</Text>
-            </View>
-          </View>
-          <View style={styles.procurementStats}>
-            <ProcurementMetric value={procurementSummary.orderCount} label="đơn hàng" />
-            <ProcurementMetric value={procurementSummary.batchCount} label="lô thu mua" />
-            <ProcurementMetric value={procurementSummary.pendingBatchCount} label="chờ thực hiện" />
-            <ProcurementMetric value={procurementSummary.quantity} label="SL cần mua" />
+      <View style={styles.content}>
+        <View style={styles.sectionHeading}>
+          <View>
+            <Text style={styles.sectionEyebrow}>THAO TÁC THƯỜNG DÙNG</Text>
+            <Text style={styles.sectionTitle}>Truy cập nhanh</Text>
           </View>
         </View>
 
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Nhiệm vụ thu mua được giao</Text>
-          <Text style={styles.weekLabel}>7 NGÀY</Text>
+        <Pressable
+          style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}
+          onPress={openPriceUpdate}
+          accessibilityRole="button"
+          accessibilityLabel="Mở màn hình cập nhật giá"
+        >
+          <View style={styles.primaryActionIcon}>
+            <Ionicons name="pricetags-outline" size={25} color={Colors.deepTeal} />
+          </View>
+          <View style={styles.primaryActionCopy}>
+            <Text style={styles.primaryActionTitle}>Cập nhật giá và tồn kho</Text>
+            <Text style={styles.primaryActionText}>
+              Chọn chợ, lọc danh mục và cập nhật trực tiếp từng mặt hàng.
+            </Text>
+          </View>
+          <View style={styles.primaryActionArrow}>
+            <Ionicons name="arrow-forward" size={18} color={Colors.primaryText} />
+          </View>
+        </Pressable>
+
+        <View style={styles.scopeCard}>
+          <View style={styles.scopeIcon}>
+            <Ionicons name="shield-checkmark-outline" size={22} color={Colors.primaryText} />
+          </View>
+          <View style={styles.scopeCopy}>
+            <Text style={styles.scopeTitle}>Phạm vi đã đồng bộ</Text>
+            <Text style={styles.scopeText}>
+              Danh sách dưới đây được lấy từ phân công hiện tại của hệ thống.
+            </Text>
+          </View>
+          <Text style={styles.scopeValue} numeric>{assignedMarkets.length}</Text>
         </View>
 
-        {procurementTasks.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons name="basket-outline" size={40} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>Chưa có nhiệm vụ thu mua</Text>
-            <Text style={styles.emptySubtext}>Lô sẽ xuất hiện sau khi Operations gán cho bạn</Text>
+        <View style={styles.marketSectionHeading}>
+          <View>
+            <Text style={styles.sectionEyebrow}>ĐIỂM VẬN HÀNH</Text>
+            <Text style={styles.sectionTitle}>Chợ đang phụ trách</Text>
           </View>
-        ) : (
-          <View style={styles.procurementList}>
-            {procurementGroups.map((group) => (
-              <View key={group.date} style={styles.dayGroup}>
-                <View style={styles.dayHeader}>
-                  <View style={styles.dayDateIcon}>
-                    <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
-                  </View>
-                  <View style={styles.dayHeaderCopy}>
-                    <Text style={styles.dayDate}>{formatBatchDate(group.date)}</Text>
-                    <Text style={styles.dayOrderCount} numeric>{group.orderCount} đơn trong ngày</Text>
-                  </View>
-                  <View style={styles.dayQuantity}>
-                    <Text style={styles.dayQuantityValue} numeric>{group.totalQuantity}</Text>
-                    <Text style={styles.dayQuantityLabel}>tổng số lượng</Text>
-                  </View>
-                </View>
-
-                <View style={styles.dayTaskList}>
-                  {group.tasks.map((task) => {
-                    const status = PROCUREMENT_STATUS[task.status];
-                    const market = assignedMarkets.find((item) => item.marketId === task.marketId);
-                    const quantity = task.items.reduce((sum, item) => sum + item.totalQuantity, 0);
-
-                    return (
-                      <Pressable
-                        key={task.id}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Mở chi tiết lô ${shortBatchCode(task.id)}`}
-                        style={({ pressed }) => [styles.procurementTaskCard, pressed && styles.taskPressed]}
-                        onPress={() => navigation.navigate('ProcurementTaskDetail', { batchId: task.id })}
-                      >
-                        <View style={styles.procurementTaskHeader}>
-                          <View style={styles.procurementTaskCopy}>
-                            <Text style={styles.procurementTaskCode} numeric>{shortBatchCode(task.id)}</Text>
-                            <Text style={styles.procurementTaskMarket} numberOfLines={1}>
-                              {market?.name ?? 'Chợ được phân công'}
-                            </Text>
-                          </View>
-                          <View style={[styles.procurementStatus, { backgroundColor: status.background }]}>
-                            <Text style={[styles.procurementStatusText, { color: status.color }]}>{status.label}</Text>
-                          </View>
-                        </View>
-                        <View style={styles.procurementTaskStats}>
-                          <TaskStat icon="receipt-outline" value={`${task.members.length} đơn`} />
-                          <TaskStat icon="cube-outline" value={`${task.items.length} mặt hàng`} />
-                          <TaskStat icon="layers-outline" value={`${quantity} SL`} />
-                        </View>
-                        <Text style={styles.procurementProducts} numberOfLines={2}>
-                          {task.items.map((item) => `${item.productNameSnapshot} ×${item.totalQuantity}`).join(' · ')}
-                        </Text>
-                        <View style={styles.taskOpenRow}>
-                          <Text style={styles.taskOpenText}>Mở chi tiết và xác nhận thu mua</Text>
-                          <Ionicons name="chevron-forward" size={16} color={Colors.primaryText} />
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
+          <View style={styles.marketCountPill}>
+            <Ionicons name="storefront-outline" size={13} color={Colors.primaryText} />
+            <Text style={styles.marketCountText} numeric>{assignedMarkets.length} chợ</Text>
           </View>
-        )}
-
-        {/* ─── ASSIGNED MARKETS ─────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Chợ Đầu Mối Được Phân Công</Text>
+        </View>
 
         {assignedMarkets.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Ionicons name="storefront-outline" size={40} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>Chưa được phân công chợ nào</Text>
-            <Text style={styles.emptySubtext}>Liên hệ quản trị để được phân công chợ</Text>
-          </View>
-        ) : (
-          assignedMarkets.map((market) => (
-            <View key={market.marketId} style={styles.marketCard}>
-              <View style={styles.marketDetails}>
-                <View style={styles.marketTitleRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.marketTitle}>{market.name}</Text>
-                    {market.address ? (
-                      <Text style={styles.marketFocus}>{market.address}</Text>
-                    ) : market.location ? (
-                      <Text style={styles.marketFocus}>{market.location}</Text>
-                    ) : null}
-                  </View>
-                  <View style={styles.activeBadge}>
-                    <View style={styles.pulseDot} />
-                    <Text style={styles.activeBadgeText}>ACTIVE</Text>
-                  </View>
-                </View>
-
-                <Pressable
-                  style={({ pressed }) => [styles.viewKiosksBtn, pressed && styles.viewKiosksBtnPressed]}
-                  onPress={() =>
-                    navigation.navigate('MarketKiosks', {
-                      marketId: market.marketId,
-                      marketName: market.name,
-                    })
-                  }
-                >
-                  <Text style={styles.viewKiosksBtnText}>Xem Kiosk liên kết</Text>
-                  <Ionicons name="arrow-forward" size={16} color={Colors.onPrimary} />
-                </Pressable>
-              </View>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="storefront-outline" size={28} color={Colors.textMuted} />
             </View>
-          ))
-        )}
-
-        {/* ─── PRICE WATCHLIST ──────────────────────────────────── */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Theo dõi giá biến động</Text>
-          <Pressable onPress={() => navigation.navigate('UpdatePrice')}>
-            <Text style={styles.seeAllLink}>Tất cả giá</Text>
-          </Pressable>
-        </View>
-
-        {priceProducts.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons name="pricetag-outline" size={40} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>Chưa có sản phẩm nào</Text>
-            <Text style={styles.emptySubtext}>Sản phẩm sẽ xuất hiện khi được thêm vào chợ</Text>
+            <Text style={styles.emptyTitle}>Chưa được phân công chợ</Text>
+            <Text style={styles.emptyText}>
+              Khi có phân công mới, thông tin chợ sẽ xuất hiện tại đây.
+            </Text>
           </View>
         ) : (
-          <View style={styles.watchlistCard}>
-            {priceProducts.map((item, index) => (
-              <View
-                key={item.marketProductId}
-                style={[styles.watchlistItem, index === priceProducts.length - 1 && styles.noBorder]}
-              >
-                <View style={styles.watchlistProductInfo}>
-                  <Text style={styles.watchlistProductName}>{item.productName}</Text>
-                  <Text style={styles.watchlistTime}>
-                    {formatRelativeTime(item.updatedAt)} • {item.unit}
-                  </Text>
-                </View>
-
-                <View style={styles.watchlistPriceSection}>
-                  <Text style={styles.watchlistPriceText} numeric>{formatPrice(item.currentPrice)}</Text>
-                  <Text style={styles.watchlistQtyText} numeric>
-                    Kho: {item.availableQuantity} {item.unit}
-                  </Text>
+          <View style={styles.marketList}>
+            {assignedMarkets.map((market, index) => (
+              <View key={market.marketId} style={styles.marketCard}>
+                <View style={styles.marketCardHeader}>
+                  <View style={styles.marketIndex}>
+                    <Text style={styles.marketIndexText} numeric>{String(index + 1).padStart(2, '0')}</Text>
+                  </View>
+                  <View style={styles.marketCopy}>
+                    <Text style={styles.marketName} numberOfLines={1}>{market.name}</Text>
+                    <View style={styles.marketLocationRow}>
+                      <Ionicons name="location-outline" size={13} color={Colors.textMuted} />
+                      <Text style={styles.marketLocation} numberOfLines={2}>
+                        {market.address || market.location || 'Chưa cập nhật địa chỉ'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.assignedBadge}>
+                    <View style={styles.assignedDot} />
+                    <Text style={styles.assignedText}>ĐÃ PHÂN CÔNG</Text>
+                  </View>
                 </View>
 
                 <Pressable
-                  style={styles.quickPriceBtn}
-                  onPress={() => navigation.navigate('UpdatePrice', { productId: item.productId, marketId: item.marketId })}
+                  style={({ pressed }) => [styles.marketAction, pressed && styles.pressed]}
+                  onPress={() => navigation.navigate('MarketKiosks', {
+                    marketId: market.marketId,
+                    marketName: market.name,
+                  })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Xem Kiosk liên kết tại ${market.name}`}
                 >
-                  <Ionicons name="create-outline" size={18} color={Colors.primaryText} />
+                  <View style={styles.marketActionLeft}>
+                    <Ionicons name="grid-outline" size={16} color={Colors.primaryText} />
+                    <Text style={styles.marketActionText}>Xem Kiosk liên kết</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={Colors.primaryText} />
                 </Pressable>
               </View>
             ))}
           </View>
         )}
-
-        <View style={styles.bottomSpacer} />
       </View>
     </ScreenContainer>
   );
 }
 
-function ProcurementMetric({ value, label }: { value: number; label: string }) {
-  return (
-    <View style={styles.procurementMetric}>
-      <Text style={styles.procurementMetricValue} numeric>{value}</Text>
-      <Text style={styles.procurementMetricLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function TaskStat({ icon, value }: { icon: keyof typeof Ionicons.glyphMap; value: string }) {
-  return (
-    <View style={styles.taskStat}>
-      <Ionicons name={icon} size={13} color={Colors.textMuted} />
-      <Text style={styles.taskStatText} numeric>{value}</Text>
-    </View>
-  );
-}
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: Colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    fontWeight: '500',
-  },
-
-  // ── Header Banner ──
-  headerBanner: {
-    backgroundColor: Colors.deepTeal,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    paddingTop: 20,
+  container: { flex: 1, backgroundColor: Colors.background },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  loadingText: { fontSize: 13, color: Colors.textMuted, fontFamily: Fonts.medium },
+  hero: {
+    minHeight: 268,
+    paddingHorizontal: 18,
+    paddingTop: 18,
     paddingBottom: 24,
-    paddingHorizontal: 20,
     overflow: 'hidden',
-    position: 'relative',
+    backgroundColor: Colors.deepTeal,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
-  headerDecoCircle1: {
+  heroOrbLarge: {
     position: 'absolute',
-    top: -50,
-    right: -30,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    top: -74,
+    right: -54,
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    backgroundColor: 'rgba(80,240,163,0.12)',
   },
-  headerDecoCircle2: {
+  heroOrbSmall: {
     position: 'absolute',
-    bottom: -40,
-    left: -40,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    left: -36,
+    bottom: -56,
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  avatarContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.deepTeal,
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  avatarText: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.onPrimary,
-  },
-  welcomeText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.75)',
-    fontWeight: '500',
-  },
-  userName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  notificationBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 10,
-    right: 11,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.danger,
-    borderWidth: 1.5,
-    borderColor: Colors.deepTeal,
-  },
-
-  // ── Ecosystem Card (inside header) ──
-  ecosystemCard: {
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  ecosystemLeft: {
-    marginBottom: 14,
-  },
-  ecosystemTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.white,
-    marginBottom: 4,
-  },
-  ecosystemSub: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    lineHeight: 17,
-  },
-  ecosystemStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ecoStatItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  ecoStatDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: 12,
-  },
-  ecoStatVal: {
-    fontSize: 22,
-    fontFamily: Fonts.monoBold,
-    color: Colors.white,
-  },
-  ecoStatLabel: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
-    fontWeight: '500',
-  },
-
-  // ── Content wrapper ──
-  contentPadding: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-  },
-
-  // ── Quick Metrics ──
-  metricsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 24,
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    shadowColor: Colors.deepTeal,
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  metricIconRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  metricIconBg: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metricValue: {
-    fontSize: 15,
-    fontFamily: Fonts.monoSemibold,
-    color: Colors.textPrimary,
-  },
-  metricLabelText: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  procurementSummaryCard: {
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 22,
-    backgroundColor: Colors.primaryLight,
-    borderWidth: 1,
-    borderColor: Colors.primary600,
-  },
-  procurementSummaryHeader: { flexDirection: 'row', alignItems: 'center' },
-  procurementSummaryIcon: {
+  profileRow: { flexDirection: 'row', alignItems: 'center' },
+  avatar: {
     width: 42,
     height: 42,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.primary,
   },
-  procurementSummaryCopy: { flex: 1, paddingLeft: 10 },
-  procurementSummaryTitle: { fontSize: 14, fontWeight: '800', color: Colors.textPrimary },
-  procurementSummarySub: { fontSize: 10, color: Colors.textSecondary, marginTop: 3 },
-  procurementStats: { flexDirection: 'row', marginTop: 15 },
-  procurementMetric: { flex: 1, alignItems: 'center' },
-  procurementMetricValue: { fontSize: 15, fontFamily: Fonts.monoBold, color: Colors.primaryText },
-  procurementMetricLabel: { fontSize: 8, color: Colors.textMuted, textAlign: 'center', marginTop: 2 },
-  weekLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: Colors.primaryText,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  procurementList: { gap: 14, marginBottom: 24 },
-  dayGroup: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
-  },
-  dayHeader: {
-    minHeight: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 13,
-    backgroundColor: Colors.primaryLight,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.primary600,
-  },
-  dayDateIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surface,
-  },
-  dayHeaderCopy: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
-  dayDate: { fontSize: 13, fontWeight: '800', color: Colors.textPrimary, textTransform: 'capitalize' },
-  dayOrderCount: { fontSize: 9, fontFamily: Fonts.monoMedium, color: Colors.textSecondary, marginTop: 4 },
-  dayQuantity: { alignItems: 'flex-end', minWidth: 65 },
-  dayQuantityValue: { fontSize: 17, fontFamily: Fonts.monoBold, color: Colors.primaryText },
-  dayQuantityLabel: { fontSize: 7, color: Colors.textMuted, marginTop: 2 },
-  dayTaskList: { padding: 10, gap: 9 },
-  procurementTaskCard: {
-    borderRadius: 14,
-    padding: 14,
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  procurementTaskHeader: { flexDirection: 'row', alignItems: 'flex-start' },
-  procurementTaskCopy: { flex: 1, minWidth: 0, paddingRight: 8 },
-  procurementTaskCode: { fontSize: 12, fontFamily: Fonts.monoBold, color: Colors.textPrimary },
-  procurementTaskMarket: { fontSize: 10, color: Colors.textMuted, marginTop: 3 },
-  procurementStatus: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
-  procurementStatusText: { fontSize: 8, fontWeight: '800' },
-  procurementTaskStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
-  taskStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  taskStatText: { fontSize: 9, fontFamily: Fonts.monoMedium, color: Colors.textSecondary },
-  procurementProducts: { fontSize: 10, lineHeight: 15, color: Colors.textSecondary, marginTop: 10 },
-  taskPressed: { opacity: 0.78 },
-  taskOpenRow: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.outlineVariant,
-    marginTop: 11,
-    paddingTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  taskOpenText: { fontSize: 10, fontWeight: '700', color: Colors.primaryText },
-
-  // ── Section labels ──
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 12,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  seeAllLink: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.primaryText,
-  },
-
-  // ── Empty state ──
-  emptyCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 32,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  emptyText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginTop: 8,
-  },
-  emptySubtext: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    marginTop: 4,
-  },
-
-  // ── Market Card ──
-  marketCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 18,
-    marginBottom: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: Colors.deepTeal,
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  marketDetails: {
-    padding: 16,
-    gap: 12,
-  },
-  marketTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  marketTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    marginBottom: 3,
-  },
-  marketFocus: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: Colors.textSecondary,
-  },
-  activeBadge: {
+  avatarText: { fontSize: 16, color: Colors.deepTeal, fontFamily: Fonts.bold },
+  profileCopy: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
+  greeting: { fontSize: 9, color: '#BFD3D6', fontFamily: Fonts.medium },
+  userName: { marginTop: 2, fontSize: 14, color: Colors.white, fontFamily: Fonts.bold },
+  onlinePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  pulseDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: Colors.primaryText,
+  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary },
+  onlineText: { fontSize: 7, letterSpacing: 0.5, color: Colors.white, fontFamily: Fonts.bold },
+  heroContent: { marginTop: 38, maxWidth: '90%' },
+  heroEyebrow: {
+    fontSize: 8,
+    letterSpacing: 1.2,
+    color: Colors.primary,
+    fontFamily: Fonts.bold,
   },
-  activeBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
+  heroTitle: { marginTop: 8, fontSize: 25, lineHeight: 32, color: Colors.white, fontFamily: Fonts.extraBold },
+  heroSubtitle: { marginTop: 10, fontSize: 11, lineHeight: 18, color: '#C8DADD', fontFamily: Fonts.medium },
+  content: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 32 },
+  sectionHeading: { marginBottom: 12 },
+  sectionEyebrow: {
+    marginBottom: 4,
+    fontSize: 8,
+    letterSpacing: 1,
     color: Colors.primaryText,
-    letterSpacing: 0.5,
+    fontFamily: Fonts.bold,
   },
-  viewKiosksBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    height: 44,
+  sectionTitle: { fontSize: 19, color: Colors.textPrimary, fontFamily: Fonts.bold },
+  primaryAction: {
+    minHeight: 96,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    shadowColor: Colors.deepTeal,
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  viewKiosksBtnPressed: {
-    opacity: 0.85,
-  },
-  viewKiosksBtnText: {
-    color: Colors.onPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  // ── Price Watchlist ──
-  watchlistCard: {
+    gap: 12,
+    borderRadius: 20,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    shadowColor: Colors.deepTeal,
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
   },
-  watchlistItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  noBorder: {
-    borderBottomWidth: 0,
-  },
-  watchlistProductInfo: {
-    flex: 1,
-  },
-  watchlistProductName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  watchlistTime: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  watchlistPriceSection: {
-    alignItems: 'flex-end',
-    marginRight: 12,
-  },
-  watchlistPriceText: {
-    fontSize: 14,
-    fontFamily: Fonts.monoSemibold,
-    color: Colors.primaryText,
-  },
-  watchlistQtyText: {
-    fontSize: 11,
-    fontFamily: Fonts.monoRegular,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  quickPriceBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: Colors.primaryLight,
+  primaryActionIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.primary,
   },
-
-  bottomSpacer: {
-    height: 48,
+  primaryActionCopy: { flex: 1, minWidth: 0 },
+  primaryActionTitle: { fontSize: 12, color: Colors.deepTeal, fontFamily: Fonts.bold },
+  primaryActionText: { marginTop: 5, fontSize: 9, lineHeight: 14, color: Colors.textSecondary },
+  primaryActionArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
   },
+  scopeCard: {
+    minHeight: 72,
+    marginTop: 10,
+    paddingHorizontal: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 18,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: '#C9F4DD',
+  },
+  scopeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+  },
+  scopeCopy: { flex: 1, minWidth: 0 },
+  scopeTitle: { fontSize: 10, color: Colors.deepTeal, fontFamily: Fonts.bold },
+  scopeText: { marginTop: 3, fontSize: 8, lineHeight: 13, color: Colors.textSecondary },
+  scopeValue: { fontSize: 22, color: Colors.primaryText, fontFamily: Fonts.monoBold },
+  marketSectionHeading: {
+    marginTop: 28,
+    marginBottom: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  marketCountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: Colors.primaryLight,
+  },
+  marketCountText: { fontSize: 9, color: Colors.primaryText, fontFamily: Fonts.bold },
+  marketList: { gap: 11 },
+  marketCard: {
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  marketCardHeader: { flexDirection: 'row', alignItems: 'flex-start' },
+  marketIndex: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.deepTeal,
+  },
+  marketIndexText: { fontSize: 11, color: Colors.primary, fontFamily: Fonts.monoBold },
+  marketCopy: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
+  marketName: { fontSize: 13, color: Colors.textPrimary, fontFamily: Fonts.bold },
+  marketLocationRow: { marginTop: 5, flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
+  marketLocation: { flex: 1, fontSize: 9, lineHeight: 14, color: Colors.textMuted },
+  assignedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+  },
+  assignedDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.primary600 },
+  assignedText: { fontSize: 6, letterSpacing: 0.4, color: Colors.primaryText, fontFamily: Fonts.bold },
+  marketAction: {
+    minHeight: 42,
+    marginTop: 13,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 13,
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  marketActionLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  marketActionText: { fontSize: 10, color: Colors.primaryText, fontFamily: Fonts.bold },
+  emptyCard: {
+    padding: 24,
+    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  emptyTitle: { marginTop: 12, fontSize: 12, color: Colors.textPrimary, fontFamily: Fonts.bold },
+  emptyText: { marginTop: 6, fontSize: 9, lineHeight: 15, textAlign: 'center', color: Colors.textMuted },
+  pressed: { opacity: 0.72 },
 });

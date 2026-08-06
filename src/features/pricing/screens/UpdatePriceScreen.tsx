@@ -146,6 +146,50 @@ function ProductThumbnail({
   );
 }
 
+function CategoryThumbnail({
+  imageUrl,
+  category,
+  active,
+  compact = false,
+}: {
+  imageUrl: string | null | undefined;
+  category: string;
+  active: boolean;
+  compact?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => setFailed(false), [imageUrl]);
+
+  return (
+    <View style={[
+      styles.categoryImageFrame,
+      compact && styles.categoryImageFrameCompact,
+      active && styles.categoryImageFrameActive,
+    ]}>
+      {imageUrl && !failed ? (
+        <Image
+          source={{ uri: imageUrl }}
+          resizeMode="cover"
+          style={[styles.categoryImage, compact && styles.categoryImageCompact]}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Ionicons
+          name={category === 'Tất cả' ? 'grid-outline' : getCategoryIcon(category)}
+          size={compact ? 17 : 22}
+          color={Colors.primaryText}
+        />
+      )}
+      {active && !compact ? (
+        <View style={styles.categorySelectedBadge}>
+          <Ionicons name="checkmark" size={11} color={Colors.deepTeal} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function UpdatePriceScreen() {
@@ -164,6 +208,7 @@ export function UpdatePriceScreen() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [categoryCollapsed, setCategoryCollapsed] = useState(false);
 
   // ── Filter state ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -183,6 +228,7 @@ export function UpdatePriceScreen() {
 
   // ── FAB animation ──
   const fabScale = useRef(new Animated.Value(0)).current;
+  const categoryCollapseAnimation = useRef(new Animated.Value(0)).current;
 
   // ── Derived ──
   const selectedMarket = useMemo(
@@ -210,6 +256,34 @@ export function UpdatePriceScreen() {
       right.count - left.count || left.name.localeCompare(right.name, 'vi')
     ));
   }, [products]);
+
+  const categoryImageByName = useMemo(() => {
+    const imageByName = new Map<string, string | null>();
+    const firstProductWithImage = products.find((product) => (
+      Boolean(productMetadata.get(product.productId)?.imageUrl)
+    ));
+    imageByName.set(
+      'Tất cả',
+      firstProductWithImage
+        ? productMetadata.get(firstProductWithImage.productId)?.imageUrl ?? null
+        : null,
+    );
+
+    uniqueCategories.forEach((category) => {
+      const representative = products.find((product) => (
+        categoryName(product) === category.name
+        && Boolean(productMetadata.get(product.productId)?.imageUrl)
+      ));
+      imageByName.set(
+        category.name,
+        representative
+          ? productMetadata.get(representative.productId)?.imageUrl ?? null
+          : null,
+      );
+    });
+
+    return imageByName;
+  }, [productMetadata, products, uniqueCategories]);
 
   const filteredProducts = useMemo(() => {
     let result = products;
@@ -255,6 +329,17 @@ export function UpdatePriceScreen() {
       friction: 8,
     }).start();
   }, [pendingCount, fabScale]);
+
+  useEffect(() => {
+    Animated.timing(categoryCollapseAnimation, {
+      toValue: categoryCollapsed ? 1 : 0,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
+  }, [categoryCollapseAnimation, categoryCollapsed]);
+
+  const collapseCategories = useCallback(() => setCategoryCollapsed(true), []);
+  const expandCategories = useCallback(() => setCategoryCollapsed(false), []);
 
   // ── Load initial data ──
   const loadInit = useCallback(async () => {
@@ -534,49 +619,119 @@ export function UpdatePriceScreen() {
           )}
         </View>
 
-        <View style={styles.categoryHeading}>
-          <View>
-            <Text style={styles.categoryHeadingTitle}>Danh mục</Text>
-            <Text style={styles.categoryHeadingSub}>Chọn nhóm hàng cần cập nhật</Text>
-          </View>
-          {activeCategory ? (
-            <Pressable onPress={() => setActiveCategory('')}>
-              <Text style={styles.categoryToggle}>Xem tất cả</Text>
-            </Pressable>
-          ) : null}
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.rootCategoryList}
+        <Animated.View
+          pointerEvents={categoryCollapsed ? 'none' : 'auto'}
+          style={[
+            styles.expandedCategoryPanel,
+            {
+              maxHeight: categoryCollapseAnimation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [190, 0],
+              }),
+              opacity: categoryCollapseAnimation.interpolate({
+                inputRange: [0, 0.72, 1],
+                outputRange: [1, 0.2, 0],
+              }),
+              transform: [{
+                translateY: categoryCollapseAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, -10],
+                }),
+              }],
+            },
+          ]}
         >
-          {[{ name: 'Tất cả', count: totalProducts }, ...uniqueCategories].map((category, index) => {
-            const isAll = index === 0;
-            const active = isAll ? activeCategory === '' : activeCategory === category.name;
-            return (
-              <Pressable
-                key={category.name}
-                style={[styles.rootCategory, active && styles.rootCategoryActive]}
-                onPress={() => setActiveCategory(isAll ? '' : category.name)}
-              >
-                <View style={[styles.rootCategoryIcon, active && styles.rootCategoryIconActive]}>
-                  <Ionicons
-                    name={isAll ? 'grid-outline' : getCategoryIcon(category.name)}
-                    size={21}
-                    color={active ? Colors.onPrimary : Colors.primaryText}
+          <View style={styles.categoryHeading}>
+            <View>
+              <Text style={styles.categoryEyebrow}>CẬP NHẬT NHANH</Text>
+              <Text style={styles.categoryHeadingTitle}>Danh mục sản phẩm</Text>
+            </View>
+            <Pressable
+              style={styles.collapseCategoryButton}
+              onPress={collapseCategories}
+              accessibilityRole="button"
+              accessibilityLabel="Thu gọn danh mục sản phẩm"
+            >
+              <Text style={styles.collapseCategoryButtonText}>Thu gọn</Text>
+              <Ionicons name="chevron-up" size={14} color={Colors.primaryText} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.rootCategoryList}
+          >
+            {[{ name: 'Tất cả', count: totalProducts }, ...uniqueCategories].map((category, index) => {
+              const isAll = index === 0;
+              const active = isAll ? activeCategory === '' : activeCategory === category.name;
+              return (
+                <Pressable
+                  key={category.name}
+                  style={styles.rootCategory}
+                  onPress={() => setActiveCategory(isAll ? '' : category.name)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <CategoryThumbnail
+                    imageUrl={categoryImageByName.get(category.name)}
+                    category={category.name}
+                    active={active}
                   />
-                </View>
-                <Text style={[styles.rootCategoryText, active && styles.rootCategoryTextActive]} numberOfLines={2}>
-                  {category.name}
-                </Text>
-                <Text style={[styles.rootCategoryCount, active && styles.rootCategoryTextActive]} numeric>
-                  {category.count}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                  <Text
+                    style={[styles.rootCategoryText, active && styles.rootCategoryTextActive]}
+                    numberOfLines={2}
+                  >
+                    {category.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </Animated.View>
+
+        <Animated.View
+          pointerEvents={categoryCollapsed ? 'auto' : 'none'}
+          style={[
+            styles.compactCategoryPanel,
+            {
+              maxHeight: categoryCollapseAnimation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 52],
+              }),
+              opacity: categoryCollapseAnimation,
+            },
+          ]}
+        >
+          <Pressable
+            style={styles.compactCategoryBar}
+            onPress={expandCategories}
+            accessibilityRole="button"
+            accessibilityLabel="Mở danh mục sản phẩm"
+          >
+            <CategoryThumbnail
+              imageUrl={categoryImageByName.get(activeCategory || 'Tất cả')}
+              category={activeCategory || 'Tất cả'}
+              active={false}
+              compact
+            />
+            <View style={styles.compactCategoryCopy}>
+              <Text style={styles.compactCategoryLabel}>DANH MỤC ĐANG CHỌN</Text>
+              <Text style={styles.compactCategoryName} numberOfLines={1}>
+                {activeCategory || 'Tất cả sản phẩm'}
+              </Text>
+            </View>
+            <Text style={styles.compactCategoryCount} numeric>
+              {activeCategory
+                ? uniqueCategories.find((category) => category.name === activeCategory)?.count ?? 0
+                : totalProducts}
+            </Text>
+            <View style={styles.compactCategoryExpand}>
+              <Text style={styles.compactCategoryExpandText}>Mở danh mục</Text>
+              <Ionicons name="chevron-down" size={16} color={Colors.primaryText} />
+            </View>
+          </Pressable>
+        </Animated.View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickFilters}>
           <QuickFilter
@@ -1041,49 +1196,153 @@ function QuickFilter({
 
 const styles = StyleSheet.create({
   categoryHeading: {
-    marginTop: 15,
-    marginBottom: 9,
+    marginTop: 17,
+    marginBottom: 4,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
-  categoryHeadingTitle: { fontSize: 13, fontWeight: '800', color: Colors.textPrimary },
-  categoryHeadingSub: { fontSize: 9, color: Colors.textMuted, marginTop: 2 },
-  categoryToggle: { fontSize: 10, fontWeight: '800', color: Colors.primaryText },
-  rootCategoryList: { gap: 10, paddingTop: 11, paddingBottom: 3 },
-  rootCategory: {
-    width: 88,
-    minHeight: 96,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 8,
-    paddingVertical: 9,
+  categoryEyebrow: {
+    marginBottom: 3,
+    fontSize: 8,
+    letterSpacing: 1,
+    color: Colors.primaryText,
+    fontFamily: Fonts.bold,
   },
-  rootCategoryActive: { backgroundColor: Colors.deepTeal, borderColor: Colors.deepTeal },
-  rootCategoryIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+  categoryHeadingTitle: { fontSize: 18, fontFamily: Fonts.bold, color: Colors.textPrimary },
+  collapseCategoryButton: {
+    minHeight: 32,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    borderRadius: 16,
     backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: '#C9F4DD',
   },
-  rootCategoryIconActive: { backgroundColor: Colors.primary },
+  collapseCategoryButtonText: {
+    fontSize: 9,
+    color: Colors.primaryText,
+    fontFamily: Fonts.bold,
+  },
+  expandedCategoryPanel: { overflow: 'hidden' },
+  rootCategoryList: {
+    gap: 10,
+    paddingTop: 10,
+    paddingBottom: 4,
+    alignItems: 'flex-start',
+  },
+  rootCategory: {
+    width: 82,
+    height: 108,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 3,
+  },
+  categoryImageFrame: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  categoryImageFrameActive: {
+    borderWidth: 2.5,
+    borderColor: Colors.primaryText,
+    shadowColor: Colors.deepTeal,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.16,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  categoryImage: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  categorySelectedBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: Colors.surface,
+  },
   rootCategoryText: {
-    minHeight: 28,
-    marginTop: 7,
-    fontSize: 10,
-    lineHeight: 13,
+    width: '100%',
+    height: 34,
+    marginTop: 8,
+    fontSize: 11,
+    lineHeight: 16,
     textAlign: 'center',
-    fontWeight: '700',
-    color: Colors.textSecondary,
+    fontFamily: Fonts.semibold,
+    color: Colors.textPrimary,
   },
-  rootCategoryTextActive: { color: Colors.white },
-  rootCategoryCount: { marginTop: 2, fontSize: 8, fontFamily: Fonts.monoBold, color: Colors.textMuted },
+  rootCategoryTextActive: { color: Colors.primaryText, fontFamily: Fonts.bold },
+  compactCategoryPanel: { overflow: 'hidden' },
+  compactCategoryBar: {
+    height: 46,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    borderRadius: 14,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: '#C9F4DD',
+  },
+  categoryImageFrameCompact: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+  },
+  categoryImageCompact: { width: 30, height: 30, borderRadius: 15 },
+  compactCategoryCopy: { flex: 1, minWidth: 0 },
+  compactCategoryLabel: {
+    fontSize: 7,
+    letterSpacing: 0.7,
+    color: Colors.primaryText,
+    fontFamily: Fonts.bold,
+  },
+  compactCategoryName: {
+    marginTop: 2,
+    fontSize: 11,
+    color: Colors.deepTeal,
+    fontFamily: Fonts.semibold,
+  },
+  compactCategoryCount: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+    fontFamily: Fonts.monoBold,
+  },
+  compactCategoryExpand: {
+    minWidth: 82,
+    height: 28,
+    borderRadius: 14,
+    paddingHorizontal: 7,
+    flexDirection: 'row',
+    gap: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+  },
+  compactCategoryExpandText: {
+    fontSize: 8,
+    color: Colors.primaryText,
+    fontFamily: Fonts.bold,
+  },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   categoryChoice: {
     width: '48.8%',

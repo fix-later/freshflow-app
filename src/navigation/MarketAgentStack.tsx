@@ -5,16 +5,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MarketAgentHomeScreen } from '../features/inventory/screens/MarketAgentHomeScreen';
 import { MarketKiosksScreen } from '../features/inventory/screens/MarketKiosksScreen';
+import { MarketAgentTasksScreen } from '../features/procurement/screens/MarketAgentTasksScreen';
 import { ProcurementTaskDetailScreen } from '../features/procurement/screens/ProcurementTaskDetailScreen';
 
 import { UpdatePriceScreen } from '../features/pricing/screens/UpdatePriceScreen';
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
-import { type MarketAgentStackParamList, type MarketHomeStackParamList } from './types';
+import {
+  type MarketAgentStackParamList,
+  type MarketHomeStackParamList,
+  type MarketTasksStackParamList,
+} from './types';
 import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
 
 const Tab = createBottomTabNavigator<MarketAgentStackParamList>();
 const HomeStack = createNativeStackNavigator<MarketHomeStackParamList>();
+const TasksStack = createNativeStackNavigator<MarketTasksStackParamList>();
 
 function MarketAgentHomeNavigator() {
   return (
@@ -45,12 +51,36 @@ function MarketAgentHomeNavigator() {
           title: route.params?.marketName || 'Danh sách Kiosk',
         })}
       />
-      <HomeStack.Screen
+    </HomeStack.Navigator>
+  );
+}
+
+function MarketAgentTasksNavigator() {
+  return (
+    <TasksStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.surface },
+        headerTitleAlign: 'center',
+        headerTitleStyle: {
+          fontFamily: Fonts.semibold,
+          fontSize: 18,
+          color: Colors.deepTeal,
+        },
+        headerTintColor: Colors.deepTeal,
+        headerShadowVisible: false,
+      }}
+    >
+      <TasksStack.Screen
+        name="MarketAgentTasksMain"
+        component={MarketAgentTasksScreen}
+        options={{ headerShown: false }}
+      />
+      <TasksStack.Screen
         name="ProcurementTaskDetail"
         component={ProcurementTaskDetailScreen}
         options={{ title: 'Chi tiết thu mua' }}
       />
-    </HomeStack.Navigator>
+    </TasksStack.Navigator>
   );
 }
 
@@ -59,6 +89,11 @@ const TAB_CONFIG = {
     label: 'Tổng quan',
     icon: 'home-outline' as const,
     activeIcon: 'home' as const,
+  },
+  MarketAgentTasks: {
+    label: 'Nhiệm vụ',
+    icon: 'clipboard-outline' as const,
+    activeIcon: 'clipboard' as const,
   },
   UpdatePrice: {
     label: 'Cập nhật giá',
@@ -142,6 +177,7 @@ export function MarketAgentStack() {
       }}
     >
       <Tab.Screen name="MarketAgentHome" component={MarketAgentHomeNavigator} options={{ title: 'Tổng quan', headerShown: false }} />
+      <Tab.Screen name="MarketAgentTasks" component={MarketAgentTasksNavigator} options={{ title: 'Nhiệm vụ', headerShown: false }} />
       <Tab.Screen name="UpdatePrice" component={UpdatePriceScreen} options={{ title: 'Cập nhật giá', headerShown: false }} />
       <Tab.Screen name="MarketAgentProfile" component={ProfileScreen} options={{ title: 'Tài khoản' }} />
     </Tab.Navigator>

@@ -14,14 +14,14 @@ import { ScreenContainer } from '../../../components/layout/ScreenContainer';
 import { ErrorView, Loading, Text } from '../../../components/ui';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
-import type { MarketHomeStackParamList } from '../../../navigation/types';
+import type { MarketTasksStackParamList } from '../../../navigation/types';
 import {
   marketProcurementApi,
   type MarketProcurementTaskDto,
   type ProcurementTaskStatus,
 } from '../api/marketProcurementApi';
 
-type Props = NativeStackScreenProps<MarketHomeStackParamList, 'ProcurementTaskDetail'>;
+type Props = NativeStackScreenProps<MarketTasksStackParamList, 'ProcurementTaskDetail'>;
 type PurchaseInput = { quantity: string; price: string };
 
 const STATUS: Record<ProcurementTaskStatus, { label: string; color: string; background: string }> = {
