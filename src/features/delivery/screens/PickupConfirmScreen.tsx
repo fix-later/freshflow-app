@@ -8,7 +8,7 @@ import { Colors } from '../../../constants/colors';
 import { type DriverStackParamList } from '../../../navigation/types';
 import { driverApi } from '../api/driverApi';
 import { driverRouteStore } from '../store/driverRouteStore';
-import { type LoadingManifestDto } from '../types/delivery.types';
+import { type LoadingLineDto, type LoadingManifestDto } from '../types/delivery.types';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'PickupConfirm'>;
 
@@ -23,6 +23,7 @@ interface PickupItem {
   order: number;
   restaurantName: string;
   lineCount: number;
+  lines: LoadingLineDto[];
 }
 
 function buildPickupItems(manifest: LoadingManifestDto): PickupItem[] {
@@ -40,13 +41,21 @@ function buildPickupItems(manifest: LoadingManifestDto): PickupItem[] {
 
   let seq = 0;
   for (const stop of sortedStops) {
-    const lineCountByOrder = new Map<string, number>();
+    const linesByOrder = new Map<string, LoadingLineDto[]>();
     for (const line of stop.lines) {
-      lineCountByOrder.set(line.orderId, (lineCountByOrder.get(line.orderId) ?? 0) + 1);
+      const existing = linesByOrder.get(line.orderId) ?? [];
+      existing.push(line);
+      linesByOrder.set(line.orderId, existing);
     }
-    for (const [orderId, lineCount] of lineCountByOrder) {
+    for (const [orderId, lines] of linesByOrder) {
       seq += 1;
-      items.push({ orderId, order: seq, restaurantName: stop.restaurantName, lineCount });
+      items.push({
+        orderId,
+        order: seq,
+        restaurantName: stop.restaurantName,
+        lineCount: lines.length,
+        lines,
+      });
     }
   }
   return items;
@@ -61,24 +70,58 @@ function PackageCard({
   checked: boolean;
   onToggle: () => void;
 }) {
+  const [expanded, setExpanded] = useState(true);
+
   return (
-    <Pressable
-      style={({ pressed }) => [styles.card, checked && styles.cardChecked, pressed && { opacity: 0.8 }]}
-      onPress={onToggle}
-    >
-      <View style={[styles.stopNum, checked && styles.stopNumChecked]}>
-        <Text style={[styles.stopNumText, checked && styles.stopNumTextChecked]}>{item.order}</Text>
-      </View>
-      <View style={styles.cardInfo}>
-        <Text style={styles.cardName} numberOfLines={1}>{item.restaurantName}</Text>
-        <Text style={styles.cardMeta}>
-          Đơn #{item.orderId.slice(0, 8).toUpperCase()} · {item.lineCount} mặt hàng
-        </Text>
-      </View>
-      <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-        {checked && <Ionicons name="checkmark" size={16} color="#fff" />}
-      </View>
-    </Pressable>
+    <View style={[styles.cardContainer, checked && styles.cardContainerChecked]}>
+      <Pressable
+        style={({ pressed }) => [styles.cardHeader, pressed && { opacity: 0.8 }]}
+        onPress={onToggle}
+      >
+        <View style={[styles.stopNum, checked && styles.stopNumChecked]}>
+          <Text style={[styles.stopNumText, checked && styles.stopNumTextChecked]}>{item.order}</Text>
+        </View>
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardName} numberOfLines={1}>{item.restaurantName}</Text>
+          <Text style={styles.cardMeta}>
+            Đơn #{item.orderId.slice(0, 8).toUpperCase()} · {item.lineCount} mặt hàng
+          </Text>
+        </View>
+        {item.lines.length > 0 && (
+          <Pressable
+            style={({ pressed }) => [styles.expandBtn, pressed && { opacity: 0.6 }]}
+            onPress={(e) => {
+              e.stopPropagation();
+              setExpanded(prev => !prev);
+            }}
+            hitSlop={8}
+          >
+            <Ionicons
+              name={expanded ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={Colors.textMuted}
+            />
+          </Pressable>
+        )}
+        <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+          {checked && <Ionicons name="checkmark" size={16} color="#fff" />}
+        </View>
+      </Pressable>
+
+      {expanded && item.lines.length > 0 && (
+        <View style={styles.itemsList}>
+          {item.lines.map((line, idx) => (
+            <View key={line.orderItemId || `${line.orderId}-${idx}`} style={styles.itemRow}>
+              <View style={styles.itemBullet} />
+              <Text style={styles.itemName} numberOfLines={1}>
+                {line.productName}
+              </Text>
+              <Text style={styles.itemQty}>x{line.quantity}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -350,16 +393,57 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
   },
 
-  card: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
+  cardContainer: {
     backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: 14, padding: 12,
-    borderWidth: 1.5, borderColor: Colors.outlineVariant,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.outlineVariant,
+    overflow: 'hidden',
   },
-  cardChecked: {
+  cardContainerChecked: {
     borderColor: Colors.driverPrimary + '60',
     backgroundColor: Colors.driverPrimaryLight,
   },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+  },
+  expandBtn: {
+    padding: 4,
+  },
+  itemsList: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.outlineVariant + '70',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  itemBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.driverPrimary,
+  },
+  itemName: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  itemQty: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.driverPrimary,
+  },
+
   stopNum: {
     width: 34, height: 34, borderRadius: 10,
     backgroundColor: Colors.surfaceContainerHigh,

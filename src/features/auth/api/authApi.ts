@@ -142,8 +142,17 @@ export const authApi = {
     password: string,
     restaurantName: string,
     phone: string,
+    taxCode?: string,
+    address?: string,
   ): Promise<void> {
-    await apiClient.post('/api/v1/auth/register', { email, password, restaurantName, phone });
+    await apiClient.post('/api/v1/auth/register', {
+      email,
+      password,
+      restaurantName,
+      phone,
+      ...(taxCode ? { taxCode, taxNumber: taxCode } : {}),
+      ...(address ? { address } : {}),
+    });
   },
 
   async refreshAccessToken(): Promise<{ user: User; accessToken: string } | null> {
