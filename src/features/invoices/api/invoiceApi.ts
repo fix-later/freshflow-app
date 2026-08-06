@@ -24,6 +24,7 @@ export interface InvoiceSummaryDto {
 
 export interface InvoiceLineDto {
   productName: string;
+  unit: string | null;
   quantity: number;
   unitPrice: number;
   vatRateCode: string;
@@ -51,6 +52,9 @@ export interface InvoiceDto {
   vatAmount: number;
   total: number;
   retryCount: number;
+  // Machine error code from the last issuance attempt — non-null on 'Failed' and, while a
+  // retry is still pending, also on 'PendingIssuance' (see MarkAwaitingBuyerInfo/MarkIssuanceFailed).
+  errorReason: string | null;
   createdAt: string;
   lines: InvoiceLineDto[];
 }

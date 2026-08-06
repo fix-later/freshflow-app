@@ -516,7 +516,9 @@ export function OrderListScreen() {
         <View style={styles.productFooter}>
           <View style={styles.priceBlock}>
             <Text numeric style={styles.productPrice}>{formatPrice(item.currentPrice)}</Text>
-            <Text style={styles.productUnit}>/{item.unit}</Text>
+            <Text style={styles.productUnit}>
+              /{item.unit}{item.sellingUnit?.weightKg ? ` (~${item.sellingUnit.weightKg}kg)` : ''}
+            </Text>
           </View>
 
           {quantity > 0 ? (

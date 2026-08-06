@@ -77,6 +77,12 @@ export interface UnitDto {
   updatedAt: string;
 }
 
+/** Weight-in-kg equivalent for a product's selling unit (e.g. "Bó" ≈ 0.5kg) — null when unknown. */
+export interface SellingUnitDto {
+  unitName: string;
+  weightKg: number | null;
+}
+
 /** Product listed at a market with current price and stock (from Pricing module). */
 export interface MarketProductDto {
   marketProductId: string;
@@ -90,6 +96,7 @@ export interface MarketProductDto {
   availableQuantity: number;
   updatedAt: string;
   updatedBy: string | null;
+  sellingUnit: SellingUnitDto;
 }
 
 /** A price/quantity change record for a market product. */
