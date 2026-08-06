@@ -112,7 +112,10 @@ export function AddDraftOrderItemScreen({ route, navigation }: Props) {
       <View style={[styles.productCard, outOfStock && styles.productCardDisabled]}>
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{item.productName}</Text>
-          <Text style={styles.productMeta}>{item.category} • {item.unit}</Text>
+          <Text style={styles.productMeta}>
+            {item.category} • {item.unit}
+            {item.sellingUnit?.weightKg ? ` (~${item.sellingUnit.weightKg}kg)` : ''}
+          </Text>
           <Text style={styles.productPrice}>{item.currentPrice.toLocaleString('vi-VN')}đ</Text>
           <Text style={[styles.stockText, outOfStock && styles.stockTextDanger]}>
             Còn {item.availableQuantity} {item.unit}

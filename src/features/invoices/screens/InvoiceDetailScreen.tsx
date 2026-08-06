@@ -36,8 +36,31 @@ const STATUS_HINT: Partial<Record<InvoiceStatus, string>> = {
   Draft: 'Hóa đơn đang được khởi tạo, chưa gửi tới cơ quan thuế.',
   PendingIssuance:
     'Đang chờ phát hành. Nếu hồ sơ thuế của nhà hàng chưa đầy đủ (mã số thuế, tên pháp lý, địa chỉ), hệ thống sẽ không thể phát hành — vui lòng kiểm tra ở mục "Hồ sơ thuế".',
+  // Fallback for error codes we don't recognize below (e.g. a raw e-invoice-provider code).
   Failed: 'Phát hành thất bại sau nhiều lần thử. Vui lòng liên hệ FreshFlow để được hỗ trợ.',
 };
+
+// invoice.errorReason is a machine code (see BE's InvoiceBuyerValidator / InvoiceIssuanceService),
+// never user-facing prose — map the ones we know to Vietnamese. PendingIssuance can carry the same
+// buyer-info codes as Failed (MarkAwaitingBuyerInfo keeps retrying instead of giving up), so this
+// applies to both statuses, not just Failed.
+const INVOICE_ERROR_REASON_LABEL: Record<string, string> = {
+  BUYER_TAX_CODE_REQUIRED: 'Nhà hàng chưa nhập mã số thuế trong hồ sơ thuế.',
+  BUYER_TAX_CODE_INVALID: 'Mã số thuế trong hồ sơ thuế không hợp lệ.',
+  BUYER_LEGAL_NAME_REQUIRED: 'Nhà hàng chưa nhập tên pháp lý trong hồ sơ thuế.',
+  BUYER_ADDRESS_REQUIRED: 'Nhà hàng chưa nhập địa chỉ trong hồ sơ thuế.',
+  INVOICE_LINE_UNIT_REQUIRED:
+    'Một số sản phẩm trong đơn hàng thiếu đơn vị tính. Vui lòng liên hệ FreshFlow để được hỗ trợ.',
+  PROVIDER_EXCEPTION: 'Hệ thống phát hành hóa đơn điện tử đang gặp sự cố tạm thời.',
+};
+
+function resolveStatusHint(invoice: InvoiceDto): string | undefined {
+  const mappedReason = invoice.errorReason ? INVOICE_ERROR_REASON_LABEL[invoice.errorReason] : undefined;
+  if (mappedReason) {
+    return invoice.status === 'Failed' ? `Phát hành thất bại: ${mappedReason}` : mappedReason;
+  }
+  return STATUS_HINT[invoice.status];
+}
 
 function formatVnd(amount: number) {
   return amount.toLocaleString('vi-VN') + 'đ';
@@ -124,7 +147,7 @@ export function InvoiceDetailScreen({ route, navigation }: Props) {
     );
   }
 
-  const statusHint = STATUS_HINT[invoice.status];
+  const statusHint = resolveStatusHint(invoice);
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -195,7 +218,8 @@ export function InvoiceDetailScreen({ route, navigation }: Props) {
                 <Text style={styles.lineTotal}>{formatVnd(line.lineTotal)}</Text>
               </View>
               <Text style={styles.lineSub}>
-                {line.quantity} x {formatVnd(line.unitPrice)} · VAT {line.vatRateCode} ({line.vatRatePercent}%)
+                {line.quantity}{line.unit ? ` ${line.unit}` : ''} x {formatVnd(line.unitPrice)} · VAT{' '}
+                {line.vatRateCode} ({line.vatRatePercent}%)
               </Text>
               {index < invoice.lines.length - 1 && <View style={styles.lineSeparator} />}
             </View>
