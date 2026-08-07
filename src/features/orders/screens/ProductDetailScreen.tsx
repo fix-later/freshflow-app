@@ -15,7 +15,7 @@ import { Text } from '../../../components/ui/Text';
 import { useFavoritesStore } from '../../../store/favoritesStore';
 import { useCartStore } from '../../../store/cartStore';
 import { pricingApi } from '../../pricing/api/pricingApi';
-import type { PriceHistoryItemDto } from '../../../types/api.types';
+import type { MarketProductTagDto, PriceHistoryItemDto } from '../../../types/api.types';
 
 interface RouteParams {
   product: {
@@ -29,6 +29,7 @@ interface RouteParams {
     unit: string;
     currentPrice: number;
     availableQuantity: number;
+    tags: MarketProductTagDto[];
     description?: string | null;
   };
 }
@@ -160,6 +161,26 @@ export function ProductDetailScreen() {
               />
             </Pressable>
           </View>
+
+          {product.tags.length > 0 ? (
+            <View style={styles.tagsRow}>
+              {product.tags.map((tag) => (
+                <View
+                  key={tag.id}
+                  style={[styles.tagChip, tag.pinsToTop && styles.tagChipPinned]}
+                >
+                  <Ionicons
+                    name={tag.pinsToTop ? 'star' : 'pricetag-outline'}
+                    size={12}
+                    color={tag.pinsToTop ? Colors.tertiary : Colors.primaryText}
+                  />
+                  <Text style={[styles.tagText, tag.pinsToTop && styles.tagTextPinned]}>
+                    {tag.name}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           <Text style={styles.name}>{product.productName}</Text>
           <Text style={styles.description}>
@@ -298,6 +319,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
   },
+  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 12 },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: Colors.primaryLight,
+  },
+  tagChipPinned: { backgroundColor: Colors.warningLight, borderWidth: 1, borderColor: '#FDE68A' },
+  tagText: { fontSize: 10, color: Colors.primaryText, fontWeight: '700' },
+  tagTextPinned: { color: Colors.tertiary },
   name: {
     marginTop: 6,
     fontSize: 24,

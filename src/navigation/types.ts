@@ -1,5 +1,6 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { HubInboundTask } from '../features/hub/api/hubApi';
+import type { MarketProductTagDto } from '../types/api.types';
 
 export type AuthStackParamList = {
   Login: undefined;
@@ -31,6 +32,7 @@ export type RestaurantFavoritesStackParamList = {
       unit: string;
       currentPrice: number;
       availableQuantity: number;
+      tags: MarketProductTagDto[];
       description?: string | null;
     };
   };
@@ -94,6 +96,7 @@ export type RestaurantOrdersStackParamList = {
       unit: string;
       currentPrice: number;
       availableQuantity: number;
+      tags: MarketProductTagDto[];
       description?: string | null;
     };
   };

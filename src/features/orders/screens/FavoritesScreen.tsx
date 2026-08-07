@@ -61,6 +61,7 @@ export function FavoritesScreen() {
         unit: item.unit,
         currentPrice: item.currentPrice,
         availableQuantity: item.availableQuantity,
+        tags: [],
       },
     });
   };

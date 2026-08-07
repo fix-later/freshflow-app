@@ -6,12 +6,14 @@ import type {
   PriceHistoryItemDto,
   ProductDto,
   PaginationMeta,
+  TagDto,
 } from '../../../types/api.types';
 
 export interface GetMarketProductsParams {
   category?: string;
   cursor?: string;
   pageSize?: number;
+  tag?: string;
 }
 
 export interface MarketProductsResponse {
@@ -45,6 +47,12 @@ export const pricingApi = {
     return data;
   },
 
+  /** GET /api/v1/tags — live tag catalog used by the Restaurant product board. */
+  async getTags(): Promise<TagDto[]> {
+    const { data } = await apiClient.get<TagDto[]>('/api/v1/tags');
+    return data;
+  },
+
   /** GET /api/v1/products — product metadata including description and image. */
   async getProducts(params?: {
     search?: string;
@@ -68,7 +76,7 @@ export const pricingApi = {
   /**
    * GET /api/v1/markets/{marketId}/products
    * Returns active products at a market with current price & stock.
-   * Cursor-paginated; optionally filtered by category.
+   * Cursor-paginated; optionally filtered by category or exact tag name.
    */
   async getMarketProducts(
     marketId: string,
@@ -81,6 +89,7 @@ export const pricingApi = {
           category: params?.category,
           cursor: params?.cursor,
           pageSize: params?.pageSize ?? 50,
+          tag: params?.tag,
         },
       },
     );

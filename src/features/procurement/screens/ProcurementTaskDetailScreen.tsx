@@ -26,13 +26,21 @@ import {
 
 type Props = NativeStackScreenProps<MarketTasksStackParamList, 'ProcurementTaskDetail'>;
 type PurchaseInput = { quantity: string; price: string };
+type StatusPresentation = { label: string; color: string; background: string };
 
-const STATUS: Record<ProcurementTaskStatus, { label: string; color: string; background: string }> = {
+const STATUS: Record<ProcurementTaskStatus, StatusPresentation> = {
   Built: { label: 'Đang lập phiếu', color: Colors.textMuted, background: Colors.surfaceContainerHigh },
   Manifested: { label: 'Chờ thu mua', color: '#8A5900', background: Colors.warningLight },
   Purchasing: { label: 'Đang thu mua', color: Colors.primaryText, background: Colors.primaryLight },
   HandedOff: { label: 'Đã bàn giao', color: Colors.secondary, background: Colors.secondaryContainer },
+  Completed: { label: 'Đã hoàn tất', color: Colors.primaryText, background: Colors.successLight },
   Cancelled: { label: 'Đã huỷ', color: Colors.danger, background: Colors.dangerLight },
+};
+
+const UNKNOWN_STATUS: StatusPresentation = {
+  label: 'Không xác định',
+  color: Colors.textSecondary,
+  background: Colors.surfaceContainerHigh,
 };
 
 const ORDER_STATUS: Record<string, string> = {
@@ -227,7 +235,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
   if (error && !task) return <ErrorView fullScreen message={error} onRetry={() => void load()} />;
   if (!task) return null;
 
-  const status = STATUS[task.status];
+  const status = STATUS[task.status] ?? UNKNOWN_STATUS;
 
   return (
     <ScreenContainer

@@ -6,6 +6,7 @@ export type ProcurementTaskStatus =
   | 'Manifested'
   | 'Purchasing'
   | 'HandedOff'
+  | 'Completed'
   | 'Cancelled';
 
 export interface ProcurementTaskItemDto {
