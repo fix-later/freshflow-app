@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
@@ -164,15 +165,28 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
       .catch(() => {
         // non-critical — keep the default fallback, backend still validates for real at submit time
       });
-
-    // Required to confirm (BE's ConfirmOrderRequest.DeliveryAddressId is non-empty-validated) —
-    // unlike the other two calls above this one is NOT non-critical, so failures still leave
-    // deliveryAddresses as [] rather than null, which correctly blocks submit below.
-    restaurantApi
-      .getDeliveryAddresses()
-      .then(setDeliveryAddresses)
-      .catch(() => setDeliveryAddresses([]));
   }, []);
+
+  // Required to confirm (BE's ConfirmOrderRequest.DeliveryAddressId is non-empty-validated) —
+  // unlike the two calls above this one is NOT non-critical, so failures still leave
+  // deliveryAddresses as [] rather than null, which correctly blocks submit below.
+  // Re-fetches on every focus (not just mount) so the address the user just added via the
+  // inline "Thêm địa chỉ" shortcut shows up immediately on returning to this screen.
+  useFocusEffect(
+    useCallback(() => {
+      restaurantApi
+        .getDeliveryAddresses()
+        .then(setDeliveryAddresses)
+        .catch(() => setDeliveryAddresses([]));
+    }, []),
+  );
+
+  // Pushed onto this same stack (registered alongside ConfirmOrder in
+  // RestaurantOrdersTab) rather than switching to the Profile tab, so the
+  // header back button returns here instead of stranding the user on Profile.
+  const goToAddAddress = () => {
+    navigation.navigate('DeliveryAddresses');
+  };
 
   const subtotal = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
   const itemCount = items.reduce((sum, it) => sum + it.quantity, 0);
@@ -231,13 +245,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         'Chưa có địa chỉ giao hàng',
         'Vui lòng thêm địa chỉ giao hàng trước khi đặt đơn.',
         [
-          {
-            text: 'Thêm địa chỉ',
-            onPress: () =>
-              navigation.getParent<any>()?.navigate('RestaurantProfile', {
-                screen: 'DeliveryAddresses',
-              }),
-          },
+          { text: 'Thêm địa chỉ', onPress: goToAddAddress },
           { text: 'Để sau', style: 'cancel' },
         ],
       );
@@ -379,9 +387,15 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
           ) : addressesLoaded ? (
             <View style={styles.infoRow}>
               <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
-              <Text style={[styles.infoText, { color: Colors.danger }]}>
-                Chưa có địa chỉ giao hàng. Vui lòng thêm địa chỉ trước khi đặt đơn.
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.infoText, { color: Colors.danger }]}>
+                  Chưa có địa chỉ giao hàng. Vui lòng thêm địa chỉ trước khi đặt đơn.
+                </Text>
+                <Pressable style={styles.addAddressBtn} onPress={goToAddAddress}>
+                  <Ionicons name="add-circle-outline" size={16} color={Colors.primary} />
+                  <Text style={styles.addAddressBtnText}>Thêm địa chỉ giao hàng</Text>
+                </Pressable>
+              </View>
             </View>
           ) : (
             <View style={styles.infoRow}>
@@ -548,6 +562,18 @@ const styles = StyleSheet.create({
   },
   infoText: { fontSize: 14, color: Colors.onSurface, flex: 1, lineHeight: 20 },
   addressLine: { fontSize: 12, color: Colors.textMuted, marginTop: 2, lineHeight: 16 },
+  addAddressBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight ?? '#f0faf4',
+  },
+  addAddressBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
 
   // Summary
   summaryRow: {
