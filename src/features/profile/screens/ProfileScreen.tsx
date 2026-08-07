@@ -511,6 +511,28 @@ export function ProfileScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
               </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.card,
+                  styles.restaurantCard,
+                  styles.navRow,
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => navigation.navigate('RestaurantPolicy' as never)}
+              >
+                <View style={styles.rowLeft}>
+                  <Ionicons
+                    name="document-text-outline"
+                    size={18}
+                    color={Colors.primaryText}
+                  />
+                  <View>
+                    <Text style={styles.changePwTitle}>Chính sách nhà hàng</Text>
+                    <Text style={styles.navRowSub}>Đặt hàng, giao nhận và khiếu nại</Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              </Pressable>
             </>
           )}
 
@@ -890,4 +912,5 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 14,
   },
+  navRowSub: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
 });
