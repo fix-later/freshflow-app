@@ -30,8 +30,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "FreshFlow cần truy cập ảnh để cập nhật ảnh đại diện.",
-          "cameraPermission": "FreshFlow cần truy cập camera để chụp ảnh đại diện."
+          "photosPermission": "FreshFlow cần truy cập ảnh để đính kèm hình ảnh và bằng chứng nghiệp vụ.",
+          "cameraPermission": "FreshFlow cần truy cập camera để chụp hình ảnh và bằng chứng nghiệp vụ.",
+          "microphonePermission": false
         }
       ],
       "@react-native-community/datetimepicker"

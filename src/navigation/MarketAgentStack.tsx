@@ -7,6 +7,10 @@ import { MarketAgentHomeScreen } from '../features/inventory/screens/MarketAgent
 import { MarketKiosksScreen } from '../features/inventory/screens/MarketKiosksScreen';
 import { MarketAgentTasksScreen } from '../features/procurement/screens/MarketAgentTasksScreen';
 import { ProcurementTaskDetailScreen } from '../features/procurement/screens/ProcurementTaskDetailScreen';
+import {
+  MarketAgentTaskRealtimeProvider,
+  useMarketAgentTaskRealtime,
+} from '../features/procurement/context/MarketAgentTaskRealtimeContext';
 
 import { UpdatePriceScreen } from '../features/pricing/screens/UpdatePriceScreen';
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
@@ -107,8 +111,9 @@ const TAB_CONFIG = {
   },
 } as const;
 
-export function MarketAgentStack() {
+function MarketAgentTabs() {
   const insets = useSafeAreaInsets();
+  const { actionableTaskCount } = useMarketAgentTaskRealtime();
 
   return (
     <Tab.Navigator
@@ -177,9 +182,31 @@ export function MarketAgentStack() {
       }}
     >
       <Tab.Screen name="MarketAgentHome" component={MarketAgentHomeNavigator} options={{ title: 'Tổng quan', headerShown: false }} />
-      <Tab.Screen name="MarketAgentTasks" component={MarketAgentTasksNavigator} options={{ title: 'Nhiệm vụ', headerShown: false }} />
+      <Tab.Screen
+        name="MarketAgentTasks"
+        component={MarketAgentTasksNavigator}
+        options={{
+          title: 'Nhiệm vụ',
+          headerShown: false,
+          tabBarBadge: actionableTaskCount > 0 ? actionableTaskCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: Colors.danger,
+            color: Colors.white,
+            fontFamily: Fonts.monoBold,
+            fontSize: 9,
+          },
+        }}
+      />
       <Tab.Screen name="UpdatePrice" component={UpdatePriceScreen} options={{ title: 'Cập nhật giá', headerShown: false }} />
       <Tab.Screen name="MarketAgentProfile" component={ProfileScreen} options={{ title: 'Tài khoản' }} />
     </Tab.Navigator>
+  );
+}
+
+export function MarketAgentStack() {
+  return (
+    <MarketAgentTaskRealtimeProvider>
+      <MarketAgentTabs />
+    </MarketAgentTaskRealtimeProvider>
   );
 }

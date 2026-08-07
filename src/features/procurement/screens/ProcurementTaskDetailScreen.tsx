@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -15,6 +16,8 @@ import { ErrorView, Loading, Text } from '../../../components/ui';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import type { MarketTasksStackParamList } from '../../../navigation/types';
+import { ProcurementExceptionModal } from '../components/ProcurementExceptionModal';
+import { ProcurementPurchaseProofCard } from '../components/ProcurementPurchaseProofCard';
 import {
   marketProcurementApi,
   type MarketProcurementTaskDto,
@@ -65,6 +68,26 @@ function formatMoney(value: number | null): string {
   }).format(value);
 }
 
+function exceptionLabel(type: string): string {
+  const labels: Record<string, string> = {
+    unavailable: 'Không có hàng',
+    shortfall: 'Thiếu số lượng',
+    pricediscrepancy: 'Sai lệch giá',
+    damaged: 'Hàng hư hỏng',
+  };
+  return labels[type.toLowerCase()] ?? type;
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
 function readError(error: unknown): string {
   const message = (error as { response?: { data?: { message?: string } } })
     ?.response?.data?.message;
@@ -92,6 +115,8 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportingItemId, setReportingItemId] = useState<string | null>(null);
+  const [purchaseProofUri, setPurchaseProofUri] = useState<string | null>(null);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -120,6 +145,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
 
   const canEdit = task?.status === 'Manifested' || task?.status === 'Purchasing';
   const totalPlannedQuantity = task?.items.reduce((sum, item) => sum + item.totalQuantity, 0) ?? 0;
+  const reportingItem = task?.items.find((item) => item.marketProductId === reportingItemId) ?? null;
 
   const updateInput = (marketProductId: string, field: keyof PurchaseInput, value: string) => {
     setInputs((current) => ({
@@ -154,7 +180,12 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
       const updated = await marketProcurementApi.confirmPurchase(task.id, lines);
       setTask(updated);
       setInputs(createInputs(updated));
-      Alert.alert('Đã xác nhận thu mua', 'Số lượng và đơn giá thực tế đã được cập nhật thành công.');
+      Alert.alert(
+        'Đã xác nhận thu mua',
+        purchaseProofUri
+          ? 'Kết quả đã được cập nhật. Ảnh hiện chỉ được giữ tạm trên màn hình vì backend chưa có API lưu ảnh xác nhận cho Admin/Hub.'
+          : 'Số lượng và đơn giá thực tế đã được cập nhật thành công.',
+      );
     } catch (submitError) {
       Alert.alert('Không thể xác nhận', readError(submitError));
     } finally {
@@ -296,10 +327,73 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
                     </View>
                   </View>
                 )}
+
+                {canEdit ? (
+                  <Pressable
+                    disabled={submitting}
+                    style={({ pressed }) => [styles.reportIssueButton, pressed && styles.buttonPressed]}
+                    onPress={() => setReportingItemId(item.marketProductId)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Báo sự cố và thêm ảnh cho ${item.productNameSnapshot}`}
+                  >
+                    <Ionicons name="camera-outline" size={16} color={Colors.primaryText} />
+                    <Text style={styles.reportIssueText}>Báo sự cố / thêm ảnh bằng chứng</Text>
+                    <Ionicons name="chevron-forward" size={15} color={Colors.textMuted} />
+                  </Pressable>
+                ) : null}
               </View>
             );
           })}
         </View>
+
+        {task.exceptions.length > 0 ? (
+          <>
+            <Text style={styles.sectionTitle}>Sự cố & bằng chứng đã gửi</Text>
+            <View style={styles.exceptionList}>
+              {task.exceptions.map((exception) => {
+                const productName = task.items.find(
+                  (item) => item.marketProductId === exception.marketProductId,
+                )?.productNameSnapshot ?? 'Mặt hàng trong lô';
+                return (
+                  <View key={exception.id} style={styles.exceptionCard}>
+                    {exception.proofImageUrl ? (
+                      <Image
+                        source={{ uri: exception.proofImageUrl }}
+                        style={styles.exceptionImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.exceptionImagePlaceholder}>
+                        <Ionicons name="image-outline" size={25} color={Colors.textMuted} />
+                        <Text style={styles.exceptionNoImage}>Không có ảnh</Text>
+                      </View>
+                    )}
+                    <View style={styles.exceptionCopy}>
+                      <View style={styles.exceptionHeading}>
+                        <Text numberOfLines={1} style={styles.exceptionProduct}>{productName}</Text>
+                        <View style={styles.exceptionTypeBadge}>
+                          <Text style={styles.exceptionTypeText}>{exceptionLabel(exception.type)}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.exceptionMeta} numeric>
+                        SL ảnh hưởng: {exception.reportedQuantity} · {formatDateTime(exception.reportedAt)}
+                      </Text>
+                      {exception.note ? <Text style={styles.exceptionNote}>{exception.note}</Text> : null}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+
+        <Text style={styles.sectionTitle}>Xác nhận lô hàng</Text>
+        <ProcurementPurchaseProofCard
+          value={purchaseProofUri}
+          editable={canEdit}
+          disabled={submitting}
+          onChange={setPurchaseProofUri}
+        />
 
         <Text style={styles.sectionTitle}>Đơn hàng trong lô</Text>
         <View style={styles.orderCard}>
@@ -351,6 +445,14 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
           </View>
         )}
       </View>
+
+      <ProcurementExceptionModal
+        batchId={task.id}
+        item={reportingItem}
+        visible={reportingItem !== null}
+        onClose={() => setReportingItemId(null)}
+        onSaved={(updated) => setTask(updated)}
+      />
     </ScreenContainer>
   );
 }
@@ -411,6 +513,39 @@ const styles = StyleSheet.create({
   currency: { color: Colors.textMuted, fontSize: 10, paddingRight: 10 },
   unavailableNotice: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 11, padding: 9, borderRadius: 8, backgroundColor: Colors.dangerLight },
   unavailableText: { flex: 1, color: Colors.danger, fontSize: 9 },
+  reportIssueButton: {
+    minHeight: 40,
+    marginTop: 11,
+    paddingHorizontal: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: Colors.primary600,
+    backgroundColor: Colors.primaryLight,
+  },
+  reportIssueText: { flex: 1, fontSize: 9, color: Colors.primaryText, fontFamily: Fonts.semibold },
+  exceptionList: { gap: 10, marginBottom: 22 },
+  exceptionCard: {
+    overflow: 'hidden',
+    flexDirection: 'row',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  exceptionImage: { width: 100, minHeight: 112 },
+  exceptionImagePlaceholder: { width: 100, minHeight: 112, alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: Colors.surfaceContainerLow },
+  exceptionNoImage: { fontSize: 7, color: Colors.textMuted },
+  exceptionCopy: { flex: 1, minWidth: 0, padding: 11 },
+  exceptionHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
+  exceptionProduct: { flex: 1, fontSize: 10, color: Colors.textPrimary, fontFamily: Fonts.bold },
+  exceptionTypeBadge: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 8, backgroundColor: Colors.warningLight },
+  exceptionTypeText: { fontSize: 7, color: '#8A5900', fontFamily: Fonts.bold },
+  exceptionMeta: { marginTop: 7, fontSize: 7, color: Colors.textMuted, fontFamily: Fonts.monoRegular },
+  exceptionNote: { marginTop: 6, fontSize: 8, lineHeight: 13, color: Colors.textSecondary },
   orderCard: { backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 22 },
   orderRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: Colors.outlineVariant },
   lastRow: { borderBottomWidth: 0 },
