@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../../../constants/colors';
 import { GoongLocationPicker, type PickedLocation } from '../../../components/GoongLocationPicker';
+import { searchPlaces, getPlaceDetail, type PlacePrediction } from '../../../services/goongPlaces';
 import {
   restaurantApi,
   type DeliveryAddressDto,
@@ -133,6 +134,16 @@ export function DeliveryAddressesScreen() {
   // Map picker step
   const [showMap, setShowMap] = useState(false);
 
+  // Address line autocomplete (typing in the "Địa chỉ giao hàng" field)
+  const [addressSuggestions, setAddressSuggestions] = useState<PlacePrediction[]>([]);
+  const [addressSearching, setAddressSearching] = useState(false);
+  const [resolvingAddressId, setResolvingAddressId] = useState<string | null>(null);
+  // Guards against a slow/stale search response landing after the user has already
+  // typed something else — without this it could show suggestions for a query
+  // that's no longer in the field.
+  const addressQueryRef = useRef('');
+  const addressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Success banner + quick "set default" action
   const [savedOk, setSavedOk] = useState(false);
   const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
@@ -163,11 +174,20 @@ export function DeliveryAddressesScreen() {
     setSaveError(null);
   };
 
+  const clearAddressSuggestions = () => {
+    if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
+    addressQueryRef.current = '';
+    setAddressSuggestions([]);
+    setAddressSearching(false);
+    setResolvingAddressId(null);
+  };
+
   const openAdd = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setSaveError(null);
     setShowMap(false);
+    clearAddressSuggestions();
     setShowForm(true);
   };
 
@@ -183,6 +203,7 @@ export function DeliveryAddressesScreen() {
     });
     setSaveError(null);
     setShowMap(false);
+    clearAddressSuggestions();
     setShowForm(true);
   };
 
@@ -192,6 +213,7 @@ export function DeliveryAddressesScreen() {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setSaveError(null);
+    clearAddressSuggestions();
   };
 
   const handleLocationPicked = (loc: PickedLocation) => {
@@ -202,6 +224,45 @@ export function DeliveryAddressesScreen() {
       addressLine: loc.address || prev.addressLine,
     }));
     setShowMap(false);
+    clearAddressSuggestions();
+  };
+
+  // Only triggers search from actual keystrokes in the address field — programmatic
+  // updates to addressLine (map pick, opening edit) call setForm/setField directly
+  // and never go through here, so they can't reopen a stale suggestion dropdown.
+  const handleAddressChange = (text: string) => {
+    setField('addressLine', text);
+    if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
+    const trimmed = text.trim();
+    addressQueryRef.current = trimmed;
+    if (trimmed.length < 3) {
+      setAddressSuggestions([]);
+      setAddressSearching(false);
+      return;
+    }
+    setAddressSearching(true);
+    addressDebounceRef.current = setTimeout(async () => {
+      const results = await searchPlaces(trimmed);
+      if (addressQueryRef.current !== trimmed) return; // superseded by a newer edit — discard
+      setAddressSuggestions(results);
+      setAddressSearching(false);
+    }, 300);
+  };
+
+  const handleSelectAddressSuggestion = async (item: PlacePrediction) => {
+    setField('addressLine', item.description);
+    setAddressSuggestions([]);
+    setResolvingAddressId(item.placeId);
+    const detail = await getPlaceDetail(item.placeId);
+    setResolvingAddressId(null);
+    if (detail) {
+      setForm(prev => ({
+        ...prev,
+        addressLine: detail.address || item.description,
+        latitude: detail.lat,
+        longitude: detail.lng,
+      }));
+    }
   };
 
   const handleSave = async () => {
@@ -351,7 +412,11 @@ export function DeliveryAddressesScreen() {
         <SafeAreaView style={styles.modalSafe} edges={['bottom']}>
           <KeyboardAvoidingView
             style={styles.flex}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            // iOS 16+ already resizes a pageSheet Modal to dodge the keyboard on its own —
+            // stacking 'padding' behavior on top double-applies the offset, making the
+            // save bar rocket up past where the keyboard actually starts. Android has no
+            // such native handling, so it still needs KeyboardAvoidingView here.
+            behavior={Platform.OS === 'ios' ? undefined : 'height'}
           >
             {/* Modal header */}
             <View style={styles.modalHeader}>
@@ -427,13 +492,36 @@ export function DeliveryAddressesScreen() {
                       <TextInput
                         style={styles.input}
                         value={form.addressLine}
-                        onChangeText={v => setField('addressLine', v)}
+                        onChangeText={handleAddressChange}
                         placeholder="Số nhà, đường, phường, quận..."
                         placeholderTextColor={Colors.textMuted}
                         multiline
                         numberOfLines={2}
                       />
+                      {addressSearching && <ActivityIndicator size="small" color={Colors.primary} />}
                     </View>
+
+                    {addressSuggestions.length > 0 && (
+                      <View style={styles.suggestionList}>
+                        {addressSuggestions.map((item, index) => (
+                          <Pressable
+                            key={item.placeId}
+                            style={[
+                              styles.suggestionItem,
+                              index < addressSuggestions.length - 1 && styles.suggestionItemDivider,
+                            ]}
+                            onPress={() => handleSelectAddressSuggestion(item)}
+                            disabled={resolvingAddressId !== null}
+                          >
+                            <Ionicons name="location-outline" size={16} color={Colors.textMuted} />
+                            <Text style={styles.suggestionText} numberOfLines={2}>{item.description}</Text>
+                            {resolvingAddressId === item.placeId && (
+                              <ActivityIndicator size="small" color={Colors.primary} />
+                            )}
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
                   </View>
 
                   {/* Recipient name */}
@@ -670,6 +758,23 @@ const styles = StyleSheet.create({
     flex: 1, fontSize: 15, color: Colors.textPrimary,
     padding: 0, textAlignVertical: 'top',
   },
+
+  // Address autocomplete suggestions
+  suggestionList: {
+    marginTop: 6,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 12,
+    borderWidth: 1, borderColor: Colors.outlineVariant,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  suggestionItemDivider: {
+    borderBottomWidth: 1, borderBottomColor: Colors.outlineVariant,
+  },
+  suggestionText: { flex: 1, fontSize: 13, color: Colors.textPrimary, lineHeight: 18 },
 
   // Switch
   switchRow: {

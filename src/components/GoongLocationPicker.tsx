@@ -1,5 +1,16 @@
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../constants/colors';
+import { searchPlaces, getPlaceDetail, type PlacePrediction } from '../services/goongPlaces';
 
 const TILES_KEY = process.env.EXPO_PUBLIC_GOONG_MAP_API_KEY ?? '';
 const PLACES_KEY = process.env.EXPO_PUBLIC_GOONG_PLACES_API_KEY ?? '';
@@ -140,27 +151,130 @@ export function GoongLocationPicker({
     }
   };
 
+  // ─── Search-by-address ────────────────────────────────────────────────────
+  const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<PlacePrediction[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  // Guards against a slow/stale search response landing after the user has already
+  // typed something else — without this it could show suggestions for a query
+  // that's no longer in the field.
+  const queryRequestRef = useRef('');
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    queryRequestRef.current = trimmed;
+    if (trimmed.length < 3) {
+      setSuggestions([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      const results = await searchPlaces(trimmed);
+      if (queryRequestRef.current !== trimmed) return; // superseded by a newer edit — discard
+      setSuggestions(results);
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const handleSelectSuggestion = async (item: PlacePrediction) => {
+    setQuery(item.description);
+    setSuggestions([]);
+    setResolvingId(item.placeId);
+    const detail = await getPlaceDetail(item.placeId);
+    setResolvingId(null);
+    if (detail) {
+      onLocationPicked({
+        lat: detail.lat,
+        lng: detail.lng,
+        address: detail.address || item.description,
+      });
+    }
+  };
+
   return (
-    <View style={[styles.container, style]}>
-      <WebView
-        source={{ html, baseUrl: 'https://tiles.goong.io' }}
-        style={styles.map}
-        originWhitelist={['*']}
-        javaScriptEnabled
-        domStorageEnabled
-        mixedContentMode="compatibility"
-        allowFileAccessFromFileURLs
-        allowUniversalAccessFromFileURLs
-        onMessage={handleMessage}
-        scrollEnabled={false}
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-      />
+    <View style={styles.wrapper}>
+      <View style={styles.searchWrap}>
+        <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
+        <TextInput
+          style={styles.searchInput}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Nhập địa chỉ, tên địa điểm..."
+          placeholderTextColor={Colors.textMuted}
+        />
+        {searching && <ActivityIndicator size="small" color={Colors.primary} />}
+      </View>
+
+      {suggestions.length > 0 && (
+        <View style={styles.suggestionList}>
+          {suggestions.map((item, index) => (
+            <Pressable
+              key={item.placeId}
+              style={[
+                styles.suggestionItem,
+                index < suggestions.length - 1 && styles.suggestionItemDivider,
+              ]}
+              onPress={() => handleSelectSuggestion(item)}
+              disabled={resolvingId !== null}
+            >
+              <Ionicons name="location-outline" size={16} color={Colors.textMuted} />
+              <Text style={styles.suggestionText} numberOfLines={2}>{item.description}</Text>
+              {resolvingId === item.placeId && (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              )}
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      <View style={[styles.container, style]}>
+        <WebView
+          source={{ html, baseUrl: 'https://tiles.goong.io' }}
+          style={styles.map}
+          originWhitelist={['*']}
+          javaScriptEnabled
+          domStorageEnabled
+          mixedContentMode="compatibility"
+          allowFileAccessFromFileURLs
+          allowUniversalAccessFromFileURLs
+          onMessage={handleMessage}
+          scrollEnabled={false}
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: { gap: 10 },
   container: { borderRadius: 16, overflow: 'hidden', height: 260 },
   map: { flex: 1, backgroundColor: '#e8ecf0' },
+
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: 12, paddingHorizontal: 14, height: 46,
+    borderWidth: 1, borderColor: Colors.outlineVariant,
+  },
+  searchInput: { flex: 1, fontSize: 14, color: Colors.textPrimary, padding: 0 },
+
+  suggestionList: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 12,
+    borderWidth: 1, borderColor: Colors.outlineVariant,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  suggestionItemDivider: {
+    borderBottomWidth: 1, borderBottomColor: Colors.outlineVariant,
+  },
+  suggestionText: { flex: 1, fontSize: 13, color: Colors.textPrimary, lineHeight: 18 },
 });
