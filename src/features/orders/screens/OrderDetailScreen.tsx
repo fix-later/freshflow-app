@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -167,13 +167,6 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   // BE returns addresses sorted default-first — the first entry is always the right preselect.
   const selectedAddress = deliveryAddresses?.[0] ?? null;
 
-  useEffect(() => {
-    restaurantApi
-      .getDeliveryAddresses()
-      .then(setDeliveryAddresses)
-      .catch(() => setDeliveryAddresses([]));
-  }, []);
-
   const performReorder = async () => {
     if (!order) return;
     setReordering(true);
@@ -231,6 +224,10 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     useCallback(() => {
       setLoading(true);
       fetchOrder();
+      restaurantApi
+        .getDeliveryAddresses()
+        .then(setDeliveryAddresses)
+        .catch(() => setDeliveryAddresses([]));
       const connection = createOrderStatusConnection((event) => {
         if (event.orderId === orderId) fetchOrder();
       });
@@ -381,13 +378,9 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         'Chưa có địa chỉ giao hàng',
         'Vui lòng thêm địa chỉ giao hàng trước khi xác nhận đơn.',
         [
-          {
-            text: 'Thêm địa chỉ',
-            onPress: () =>
-              navigation.getParent<any>()?.navigate('RestaurantProfile', {
-                screen: 'DeliveryAddresses',
-              }),
-          },
+          // Pushed onto this same stack (registered alongside OrderDetail) rather than
+          // switching to the Profile tab, so the header back button returns here.
+          { text: 'Thêm địa chỉ', onPress: () => navigation.navigate('DeliveryAddresses') },
           { text: 'Để sau', style: 'cancel' },
         ],
       );

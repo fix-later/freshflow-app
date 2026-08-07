@@ -12,7 +12,7 @@ export type AuthStackParamList = {
 export type RestaurantTabParamList = {
   RestaurantOrders: NavigatorScreenParams<RestaurantOrdersStackParamList> | undefined;
   RestaurantFavorites: NavigatorScreenParams<RestaurantFavoritesStackParamList> | undefined;
-  RestaurantAssistant: undefined;
+  RestaurantAssistant: NavigatorScreenParams<RestaurantAssistantStackParamList> | undefined;
   RestaurantTracking: NavigatorScreenParams<RestaurantOrdersStackParamList> | undefined;
   RestaurantProfile: undefined;
 };
@@ -34,6 +34,11 @@ export type RestaurantFavoritesStackParamList = {
       description?: string | null;
     };
   };
+};
+
+export type RestaurantAssistantStackParamList = {
+  AssistantChat: undefined;
+  DeliveryAddresses: undefined;
 };
 
 export type RestaurantProfileStackParamList = {
@@ -76,6 +81,7 @@ export type RestaurantOrdersStackParamList = {
   CreateRecurringOrder: { scheduledOrderId?: string } | undefined;
   ManageRecurringOrders: undefined;
   ScheduledOrderInstances: { scheduledOrderId: string };
+  DeliveryAddresses: undefined;
   ProductDetail: {
     product: {
       marketProductId: string;

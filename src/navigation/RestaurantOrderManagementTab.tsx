@@ -10,6 +10,7 @@ import { OrderDetailScreen } from '../features/orders/screens/OrderDetailScreen'
 import { OrderHistoryScreen } from '../features/orders/screens/OrderHistoryScreen';
 import { ReportIssueScreen } from '../features/orders/screens/ReportIssueScreen';
 import { ScheduledOrderInstancesScreen } from '../features/orders/screens/ScheduledOrderInstancesScreen';
+import { DeliveryAddressesScreen } from '../features/restaurant/screens/DeliveryAddressesScreen';
 import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
 import { type RestaurantOrdersStackParamList } from './types';
@@ -72,6 +73,14 @@ export function RestaurantOrderManagementTab() {
         name="ScheduledOrderInstances"
         component={ScheduledOrderInstancesScreen}
         options={{ title: 'Đơn đã tạo từ lịch' }}
+      />
+      {/* Also reachable from Profile > DeliveryAddresses — registered here too so
+          "Thêm địa chỉ" from OrderDetail pushes onto this same stack instead of
+          switching tabs, letting the back button return to the order screen. */}
+      <Stack.Screen
+        name="DeliveryAddresses"
+        component={DeliveryAddressesScreen}
+        options={{ title: 'Địa chỉ giao hàng' }}
       />
     </Stack.Navigator>
   );

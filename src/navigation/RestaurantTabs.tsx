@@ -7,7 +7,7 @@ import { RestaurantProfileTab } from './RestaurantProfileTab';
 import { RestaurantOrdersTab } from './RestaurantOrdersTab';
 import { RestaurantOrderManagementTab } from './RestaurantOrderManagementTab';
 import { RestaurantFavoritesTab } from './RestaurantFavoritesTab';
-import { RestaurantAssistantScreen } from '../features/assistant/screens/RestaurantAssistantScreen';
+import { RestaurantAssistantTab } from './RestaurantAssistantTab';
 import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
 import { type RestaurantTabParamList } from './types';
@@ -134,7 +134,7 @@ export function RestaurantTabs() {
       />
       <Tab.Screen
         name="RestaurantAssistant"
-        component={RestaurantAssistantScreen}
+        component={RestaurantAssistantTab}
         options={{ headerShown: false }}
       />
       <Tab.Screen

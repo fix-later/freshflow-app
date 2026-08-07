@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo } from '../../../components/ui/BrandLogo';
 import { Text, TextInput } from '../../../components/ui/Text';
@@ -241,16 +241,19 @@ export function RestaurantAssistantScreen() {
   const canSend = input.trim().length > 0 && !sending;
 
   // Required by BE's preview_confirmation/confirm_order tools (see assistantApi.chat's
-  // deliveryAddressId comment) — fetched once, first entry is the BE-sorted default address.
+  // deliveryAddressId comment) — re-fetches on focus so an address added via the "Thêm địa chỉ"
+  // shortcut shows up immediately on returning to chat.
   const [deliveryAddresses, setDeliveryAddresses] = useState<DeliveryAddressDto[] | null>(null);
   const selectedAddress = deliveryAddresses?.[0] ?? null;
 
-  useEffect(() => {
-    restaurantApi
-      .getDeliveryAddresses()
-      .then(setDeliveryAddresses)
-      .catch(() => setDeliveryAddresses([]));
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      restaurantApi
+        .getDeliveryAddresses()
+        .then(setDeliveryAddresses)
+        .catch(() => setDeliveryAddresses([]));
+    }, []),
+  );
 
   const sendMessage = async (
     rawMessage: string,
@@ -372,12 +375,12 @@ export function RestaurantAssistantScreen() {
                           'Chưa có địa chỉ giao hàng',
                           'Vui lòng thêm địa chỉ giao hàng trước khi xác nhận đơn.',
                           [
+                            // Pushed onto this same stack (registered alongside
+                            // AssistantChat) rather than switching to the Profile
+                            // tab, so the header back button returns to the chat.
                             {
                               text: 'Thêm địa chỉ',
-                              onPress: () =>
-                                navigation.navigate('RestaurantProfile', {
-                                  screen: 'DeliveryAddresses',
-                                }),
+                              onPress: () => navigation.navigate('DeliveryAddresses'),
                             },
                             { text: 'Để sau', style: 'cancel' },
                           ],
