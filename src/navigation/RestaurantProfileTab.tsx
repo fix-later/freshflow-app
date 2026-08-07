@@ -4,6 +4,7 @@ import {
 } from '@react-navigation/native-stack';
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { RestaurantProfileScreen } from '../features/restaurant/screens/RestaurantProfileScreen';
+import { RestaurantPolicyScreen } from '../features/restaurant/screens/RestaurantPolicyScreen';
 import { DeliveryAddressesScreen } from '../features/restaurant/screens/DeliveryAddressesScreen';
 import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
@@ -41,6 +42,11 @@ export function RestaurantProfileTab() {
         name="RestaurantProfileEdit"
         component={RestaurantProfileScreen}
         options={{ title: 'Thông tin nhà hàng' }}
+      />
+      <Stack.Screen
+        name="RestaurantPolicy"
+        component={RestaurantPolicyScreen}
+        options={{ title: 'Chính sách nhà hàng' }}
       />
       <Stack.Screen
         name="DeliveryAddresses"

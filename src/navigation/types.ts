@@ -39,6 +39,7 @@ export type RestaurantFavoritesStackParamList = {
 export type RestaurantProfileStackParamList = {
   ProfileMain: undefined;
   RestaurantProfileEdit: undefined;
+  RestaurantPolicy: undefined;
   DeliveryAddresses: undefined;
   CreditOverview: undefined;
   CreditStatements: { restaurantId: string };
