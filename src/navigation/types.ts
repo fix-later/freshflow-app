@@ -29,6 +29,9 @@ export type RestaurantFavoritesStackParamList = {
       marketName: string;
       category: string | null;
       unit: string;
+      packingCodeId: string | null;
+      weightKg: number | null;
+      minimumOrderQuantity: number;
       currentPrice: number;
       availableQuantity: number;
       description?: string | null;
@@ -52,6 +55,9 @@ export type CreateOrderItem = {
   productName: string;
   marketName: string;
   unit: string;
+  packingCodeId: string | null;
+  weightKg: number | null;
+  minimumOrderQuantity: number;
   quantity: number;
   unitPrice: number;
   image: string;
@@ -86,6 +92,9 @@ export type RestaurantOrdersStackParamList = {
       marketName: string;
       category: string | null;
       unit: string;
+      packingCodeId: string | null;
+      weightKg: number | null;
+      minimumOrderQuantity: number;
       currentPrice: number;
       availableQuantity: number;
       description?: string | null;

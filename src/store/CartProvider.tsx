@@ -13,22 +13,42 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     name: string;
     market: string;
     unit: string;
+    packingCodeId: string | null;
+    weightKg: number | null;
+    minimumOrderQuantity: number;
+    maxQuantity: number;
     price: number;
     image: string;
-  }) => {
+  }, quantity = 1) => {
+    if (
+      !item.packingCodeId
+      || !item.weightKg
+      || item.weightKg <= 0
+      || item.minimumOrderQuantity < 1
+      || item.maxQuantity < item.minimumOrderQuantity
+    ) return;
+
     setCart((prev) => {
       const existing = prev.find((c) => c.id === item.id);
       if (existing) {
-        return prev.map((c) => (c.id === item.id ? { ...c, qty: c.qty + 1 } : c));
+        return prev.map((c) => (
+          c.id === item.id
+            ? { ...c, ...item, qty: Math.min(item.maxQuantity, c.qty + quantity) }
+            : c
+        ));
       }
-      return [...prev, { ...item, qty: 1 }];
+      const initialQuantity = Math.min(
+        item.maxQuantity,
+        Math.max(item.minimumOrderQuantity, quantity),
+      );
+      return initialQuantity > 0 ? [...prev, { ...item, qty: initialQuantity }] : prev;
     });
   }, []);
 
   const removeFromCart = useCallback((itemId: string) => {
     setCart((prev) => {
       const existing = prev.find((c) => c.id === itemId);
-      if (existing && existing.qty <= 1) {
+      if (existing && existing.qty <= existing.minimumOrderQuantity) {
         return prev.filter((c) => c.id !== itemId);
       }
       return prev.map((c) => (c.id === itemId ? { ...c, qty: c.qty - 1 } : c));
@@ -40,7 +60,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (qty <= 0) {
         return prev.filter((c) => c.id !== itemId);
       }
-      return prev.map((c) => (c.id === itemId ? { ...c, qty } : c));
+      return prev.map((c) => (
+        c.id === itemId
+          ? {
+              ...c,
+              qty: Math.min(c.maxQuantity, Math.max(c.minimumOrderQuantity, qty)),
+            }
+          : c
+      ));
     });
   }, []);
 

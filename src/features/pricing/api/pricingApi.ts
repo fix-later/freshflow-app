@@ -65,6 +65,12 @@ export const pricingApi = {
     return data;
   },
 
+  /** GET /api/v1/products/{id} — product packing metadata for restaurant purchase validation. */
+  async getProduct(productId: string): Promise<ProductDto> {
+    const { data } = await apiClient.get<ProductDto>(`/api/v1/products/${productId}`);
+    return data;
+  },
+
   /**
    * GET /api/v1/markets/{marketId}/products
    * Returns active products at a market with current price & stock.

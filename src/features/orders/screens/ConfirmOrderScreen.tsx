@@ -23,6 +23,7 @@ import { useCartStore } from '../../../store/cartStore';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';
 import { creditApi } from '../../credit/api/creditApi';
 import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
+import { calculatePackedWeight, formatPackingRule, formatWeightKg } from '../utils/packing';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'ConfirmOrder'>;
 
@@ -106,11 +107,15 @@ function ItemRow({ item }: { item: CreateOrderItem }) {
         <Image source={{ uri: item.image }} style={styles.itemImg} />
         <View style={styles.itemInfo}>
           <Text style={styles.itemName} numberOfLines={2}>{item.productName}</Text>
-          <Text style={styles.itemMeta}>{item.marketName} • {item.unit}</Text>
+          <Text style={styles.itemMeta}>{item.marketName}</Text>
+          <Text style={styles.itemPacking}>{formatPackingRule(item.unit, item.weightKg)}</Text>
+          <Text style={styles.itemWeight}>
+            {item.quantity} kiện · {formatWeightKg(calculatePackedWeight(item.quantity, item.weightKg) ?? 0)} kg
+          </Text>
           <Text style={styles.itemPrice}>{(item.unitPrice * item.quantity).toLocaleString('vi-VN')}đ</Text>
         </View>
         <View style={styles.itemQtyWrap}>
-          <Text style={styles.itemQtyLabel}>SL</Text>
+          <Text style={styles.itemQtyLabel}>KIỆN</Text>
           <Text style={styles.itemQty}>{item.quantity}</Text>
         </View>
       </View>
@@ -176,6 +181,10 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
 
   const subtotal = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
   const itemCount = items.reduce((sum, it) => sum + it.quantity, 0);
+  const totalWeightKg = items.reduce(
+    (sum, item) => sum + (calculatePackedWeight(item.quantity, item.weightKg) ?? 0),
+    0,
+  );
 
   const openOrderManagement = (orderId: string) => {
     navigation.getParent<any>()?.navigate('RestaurantTracking', {
@@ -343,7 +352,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         )}
 
         {/* ── Items ── */}
-        <Text style={styles.sectionTitle}>Sản phẩm ({itemCount} sản phẩm)</Text>
+        <Text style={styles.sectionTitle}>Đóng gói ({itemCount} kiện · {formatWeightKg(totalWeightKg)} kg)</Text>
         <View style={styles.card}>
           <FlatList
             data={items}
@@ -533,6 +542,8 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1 },
   itemName: { fontSize: 13, fontWeight: '600', color: Colors.onSurface, marginBottom: 2 },
   itemMeta: { fontSize: 11, color: Colors.textMuted, marginBottom: 4 },
+  itemPacking: { fontSize: 11, color: Colors.primaryText, fontWeight: '700', marginBottom: 2 },
+  itemWeight: { fontSize: 10, color: Colors.textMuted, marginBottom: 4 },
   itemPrice: { fontSize: 13, fontWeight: '700', color: Colors.primaryText },
   itemQtyWrap: { alignItems: 'center', minWidth: 36 },
   itemQtyLabel: { fontSize: 10, color: Colors.textMuted },

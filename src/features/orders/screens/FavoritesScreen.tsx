@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -17,6 +17,9 @@ import { Text, TextInput } from '../../../components/ui/Text';
 import { useFavoritesStore } from '../../../store/favoritesStore';
 import { useCartStore } from '../../../store/cartStore';
 import { CartModal } from '../components/CartModal';
+import { pricingApi } from '../../pricing/api/pricingApi';
+import type { ProductDto } from '../../../types/api.types';
+import { formatPackingRule } from '../utils/packing';
 
 function formatPrice(p: number) {
   return p.toLocaleString("vi-VN") + "đ";
@@ -31,6 +34,43 @@ export function FavoritesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [showCart, setShowCart] = useState(false);
+  const [productMetadata, setProductMetadata] = useState<Map<string, ProductDto>>(new Map());
+
+  useEffect(() => {
+    let active = true;
+    const productIds = [...new Set(favorites.map((item) => item.productId))];
+    if (productIds.length === 0) {
+      setProductMetadata(new Map());
+      return () => { active = false; };
+    }
+
+    Promise.allSettled(productIds.map((productId) => pricingApi.getProduct(productId)))
+      .then((results) => {
+        if (!active) return;
+        setProductMetadata(new Map(
+          results.flatMap((result) => (
+            result.status === 'fulfilled' ? [[result.value.id, result.value] as const] : []
+          )),
+        ));
+      });
+
+    return () => { active = false; };
+  }, [favorites]);
+
+  const packingFor = (item: typeof favorites[0]) => {
+    const metadata = productMetadata.get(item.productId);
+    const unit = metadata?.sellingUnit?.unitName?.trim() || item.unit;
+    const weightKg = metadata?.sellingUnit?.weightKg ?? item.weightKg ?? null;
+    const minimumOrderQuantity = Math.max(1, metadata?.minimumOrderQuantity ?? item.minimumOrderQuantity ?? 1);
+    const packingCodeId = metadata?.packingCodeId ?? item.packingCodeId ?? null;
+    return {
+      unit,
+      weightKg,
+      minimumOrderQuantity,
+      packingCodeId,
+      canOrder: Boolean(packingCodeId && weightKg && item.availableQuantity >= minimumOrderQuantity),
+    };
+  };
 
   const filteredFavorites = useMemo(() => {
     const q = searchQuery.trim().toLocaleLowerCase('vi-VN');
@@ -49,6 +89,7 @@ export function FavoritesScreen() {
   );
 
   const openProductDetail = (item: typeof favorites[0]) => {
+    const packing = packingFor(item);
     navigation.navigate('ProductDetail', {
       product: {
         marketProductId: item.marketProductId,
@@ -58,7 +99,10 @@ export function FavoritesScreen() {
         marketId: item.marketId,
         marketName: item.marketName,
         category: item.category,
-        unit: item.unit,
+        unit: packing.unit,
+        packingCodeId: packing.packingCodeId,
+        weightKg: packing.weightKg,
+        minimumOrderQuantity: packing.minimumOrderQuantity,
         currentPrice: item.currentPrice,
         availableQuantity: item.availableQuantity,
       },
@@ -70,14 +114,20 @@ export function FavoritesScreen() {
   };
 
   const handleAddToCart = (item: typeof favorites[0]) => {
+    const packing = packingFor(item);
+    if (!packing.canOrder) return;
     addToCart({
       id: item.marketProductId,
       name: item.productName,
       market: item.marketName,
-      unit: item.unit,
+      unit: packing.unit,
+      packingCodeId: packing.packingCodeId,
+      weightKg: packing.weightKg,
+      minimumOrderQuantity: packing.minimumOrderQuantity,
+      maxQuantity: item.availableQuantity,
       price: item.currentPrice,
       image: item.imageUrl ?? '',
-    });
+    }, packing.minimumOrderQuantity);
   };
 
   // Checkout is a multi-step flow (CreateOrder → ConfirmOrder) that only exists
@@ -94,6 +144,9 @@ export function FavoritesScreen() {
           productName: item.name,
           marketName: item.market,
           unit: item.unit,
+          packingCodeId: item.packingCodeId,
+          weightKg: item.weightKg,
+          minimumOrderQuantity: item.minimumOrderQuantity,
           quantity: item.qty,
           unitPrice: item.price,
           image: item.image,
@@ -106,6 +159,7 @@ export function FavoritesScreen() {
   const renderFavoriteItem = ({ item }: { item: typeof favorites[0] }) => {
     const qty = getCartQty(item.marketProductId);
     const outOfStock = item.availableQuantity <= 0;
+    const packing = packingFor(item);
 
     return (
       <Pressable style={styles.card} onPress={() => openProductDetail(item)}>
@@ -127,7 +181,7 @@ export function FavoritesScreen() {
                 </View>
               )}
               <View style={styles.unitTag}>
-                <Text style={styles.unitText}>{item.unit}</Text>
+                <Text style={styles.unitText}>{formatPackingRule(packing.unit, packing.weightKg)}</Text>
               </View>
             </View>
           </View>
@@ -158,19 +212,20 @@ export function FavoritesScreen() {
                 color={outOfStock ? Colors.danger : Colors.textMuted}
               />
               <Text style={[styles.stockText, outOfStock && styles.stockTextDanger]}>
-                Kho: {item.availableQuantity} {item.unit}
+                Kho: {item.availableQuantity} kiện
               </Text>
             </View>
 
             {!outOfStock && (
               <Pressable
-                style={styles.addBtn}
+                style={[styles.addBtn, !packing.canOrder && styles.addBtnDisabled]}
+                disabled={!packing.canOrder}
                 onPress={(e) => {
                   e.stopPropagation();
                   handleAddToCart(item);
                 }}
               >
-                <Ionicons name="add" size={18} color={Colors.onPrimary} />
+                <Ionicons name={packing.canOrder ? 'add' : 'alert'} size={18} color={Colors.onPrimary} />
               </Pressable>
             )}
           </View>
@@ -522,6 +577,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  addBtnDisabled: { backgroundColor: Colors.textMuted },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',

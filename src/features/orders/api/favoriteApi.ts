@@ -14,6 +14,9 @@ export interface FavoriteItemDto {
   marketName: string;
   category: string | null;
   unit: string;
+  packingCodeId?: string | null;
+  weightKg?: number | null;
+  minimumOrderQuantity?: number;
   currentPrice: number;
   availableQuantity: number;
   createdAt: string;

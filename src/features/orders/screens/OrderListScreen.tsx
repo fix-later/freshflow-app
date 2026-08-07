@@ -31,6 +31,10 @@ import {
 import { pricingApi } from '../../pricing/api/pricingApi';
 import { notificationApi } from '../../notifications/api/notificationApi';
 import { CartModal } from '../components/CartModal';
+import {
+  formatPackingRule,
+  resolvePackingSelection,
+} from '../utils/packing';
 
 type OrdersNav = NativeStackNavigationProp<RestaurantOrdersStackParamList>;
 
@@ -382,9 +386,11 @@ export function OrderListScreen() {
   );
 
   const addProduct = (product: MarketProductDto, quantity = 1) => {
-    if (product.availableQuantity <= 0 || quantity <= 0) return;
+    const packing = resolvePackingSelection(product, productMetadata.get(product.productId));
+    if (!packing.canOrder || quantity <= 0) return;
     const existing = cart.find((item) => item.id === product.marketProductId);
-    const nextQuantity = Math.min(product.availableQuantity, (existing?.qty ?? 0) + quantity);
+    const amountToAdd = existing ? quantity : Math.max(quantity, packing.minimumOrderQuantity);
+    const nextQuantity = Math.min(packing.maxQuantity, (existing?.qty ?? 0) + amountToAdd);
 
     if (existing) {
       updateItemQty(product.marketProductId, nextQuantity);
@@ -395,14 +401,18 @@ export function OrderListScreen() {
       id: product.marketProductId,
       name: product.productName,
       market: selectedMarket?.name ?? '',
-      unit: product.unit,
+      unit: packing.unit,
+      packingCodeId: packing.packingCodeId,
+      weightKg: packing.weightKg,
+      minimumOrderQuantity: packing.minimumOrderQuantity,
+      maxQuantity: packing.maxQuantity,
       price: product.currentPrice,
       image: resolveImage(product),
-    });
-    if (nextQuantity > 1) updateItemQty(product.marketProductId, nextQuantity);
+    }, nextQuantity);
   };
 
   const toggleProductFavorite = (product: MarketProductDto) => {
+    const packing = resolvePackingSelection(product, productMetadata.get(product.productId));
     toggleFavorite({
       marketProductId: product.marketProductId,
       productId: product.productId,
@@ -411,7 +421,10 @@ export function OrderListScreen() {
       marketId: product.marketId,
       marketName: selectedMarket?.name ?? '',
       category: product.category,
-      unit: product.unit,
+      unit: packing.unit,
+      packingCodeId: packing.packingCodeId,
+      weightKg: packing.weightKg,
+      minimumOrderQuantity: packing.minimumOrderQuantity,
       currentPrice: product.currentPrice,
       availableQuantity: product.availableQuantity,
       createdAt: new Date().toISOString(),
@@ -420,7 +433,9 @@ export function OrderListScreen() {
 
   const openProductDetail = (product: MarketProductDto) => {
     const img = resolveImage(product);
-    const desc = productMetadata.get(product.productId)?.description;
+    const metadata = productMetadata.get(product.productId);
+    const packing = resolvePackingSelection(product, metadata);
+    const desc = metadata?.description;
     navigation.navigate('ProductDetail', {
       product: {
         marketProductId: product.marketProductId,
@@ -430,10 +445,13 @@ export function OrderListScreen() {
         marketId: product.marketId,
         marketName: selectedMarket?.name ?? '',
         category: product.category,
-        unit: product.unit,
+        unit: packing.unit,
         currentPrice: product.currentPrice,
         availableQuantity: product.availableQuantity,
         description: desc || null,
+        packingCodeId: packing.packingCodeId,
+        weightKg: packing.weightKg,
+        minimumOrderQuantity: packing.minimumOrderQuantity,
       },
     });
   };
@@ -447,6 +465,9 @@ export function OrderListScreen() {
         productName: item.name,
         marketName: item.market,
         unit: item.unit,
+        packingCodeId: item.packingCodeId,
+        weightKg: item.weightKg,
+        minimumOrderQuantity: item.minimumOrderQuantity,
         quantity: item.qty,
         unitPrice: item.price,
         image: item.image,
@@ -463,13 +484,14 @@ export function OrderListScreen() {
     const quantity = cart.find((cartItem) => cartItem.id === item.marketProductId)?.qty ?? 0;
     const imageUrl = resolveImage(item);
     const dealDiscount = dealDiscountById.get(item.marketProductId);
+    const packing = resolvePackingSelection(item, productMetadata.get(item.productId));
 
     return (
       <Pressable
         style={[styles.productCard, horizontal && styles.productCardHorizontal]}
         onPress={() => void openProductDetail(item)}
         accessibilityRole="button"
-        accessibilityLabel={`${item.productName}, ${formatPrice(item.currentPrice)} mỗi ${item.unit}`}
+        accessibilityLabel={`${item.productName}, ${formatPrice(item.currentPrice)} mỗi ${packing.unit}`}
       >
         <View style={styles.productImageWrap}>
           <Image source={{ uri: imageUrl }} style={styles.productImage} resizeMode="cover" />
@@ -487,7 +509,11 @@ export function OrderListScreen() {
               color={favorite ? Colors.danger : Colors.deepTeal}
             />
           </Pressable>
-          {item.availableQuantity > 0 && dealDiscount ? (
+          {!packing.isConfigured ? (
+            <View style={[styles.soldOutBadge, styles.packingMissingBadge]}>
+              <Text style={styles.soldOutText}>Thiếu quy cách</Text>
+            </View>
+          ) : item.availableQuantity > 0 && dealDiscount ? (
             <View style={styles.dealBadge}>
               <Ionicons name="pricetag" size={9} color={Colors.tertiary} />
               <Text style={styles.dealBadgeText}>Giảm {dealDiscount}%</Text>
@@ -508,16 +534,29 @@ export function OrderListScreen() {
           <Text style={styles.productCategory} numberOfLines={1}>
             {item.category || 'Nông sản'}
           </Text>
-          <Text style={styles.stockText}>{item.availableQuantity} {item.unit}</Text>
+          <Text style={styles.stockText}>{item.availableQuantity} kiện</Text>
         </View>
         <Text style={styles.productName} numberOfLines={2}>
           {item.productName}
         </Text>
+        <View style={[styles.packingBadge, !packing.isConfigured && styles.packingBadgeMissing]}>
+          <Ionicons
+            name={packing.isConfigured ? 'cube-outline' : 'alert-circle-outline'}
+            size={12}
+            color={packing.isConfigured ? Colors.primaryText : Colors.danger}
+          />
+          <Text
+            style={[styles.packingText, !packing.isConfigured && styles.packingTextMissing]}
+            numberOfLines={1}
+          >
+            {formatPackingRule(packing.unit, packing.weightKg)}
+          </Text>
+        </View>
         <View style={styles.productFooter}>
           <View style={styles.priceBlock}>
             <Text numeric style={styles.productPrice}>{formatPrice(item.currentPrice)}</Text>
             <Text style={styles.productUnit}>
-              /{item.unit}{item.sellingUnit?.weightKg ? ` (~${item.sellingUnit.weightKg}kg)` : ''}
+              /{packing.unit}
             </Text>
           </View>
 
@@ -527,7 +566,7 @@ export function OrderListScreen() {
                 style={styles.quantityButton}
                 onPress={(event) => {
                   event.stopPropagation();
-                  if (quantity <= 1) removeFromCart(item.marketProductId);
+                  if (quantity <= packing.minimumOrderQuantity) removeFromCart(item.marketProductId);
                   else updateItemQty(item.marketProductId, quantity - 1);
                 }}
               >
@@ -536,7 +575,7 @@ export function OrderListScreen() {
               <Text numeric style={styles.quantityValue}>{quantity}</Text>
               <Pressable
                 style={[styles.quantityButton, styles.quantityButtonAdd]}
-                disabled={quantity >= item.availableQuantity}
+                disabled={quantity >= packing.maxQuantity}
                 onPress={(event) => {
                   event.stopPropagation();
                   addProduct(item);
@@ -549,9 +588,9 @@ export function OrderListScreen() {
             <Pressable
               style={[
                 styles.addButton,
-                item.availableQuantity <= 0 && styles.addButtonDisabled,
+                !packing.canOrder && styles.addButtonDisabled,
               ]}
-              disabled={item.availableQuantity <= 0}
+              disabled={!packing.canOrder}
               onPress={(event) => {
                 event.stopPropagation();
                 addProduct(item);
@@ -561,7 +600,7 @@ export function OrderListScreen() {
               <Ionicons
                 name="add"
                 size={21}
-                color={item.availableQuantity > 0 ? Colors.onPrimary : Colors.textMuted}
+                color={packing.canOrder ? Colors.onPrimary : Colors.textMuted}
               />
             </Pressable>
           )}
@@ -1442,6 +1481,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.deepTeal,
   },
   soldOutText: { fontSize: 9, color: Colors.white, fontFamily: Fonts.semibold },
+  packingMissingBadge: { backgroundColor: Colors.danger },
   productMetaRow: {
     marginTop: 9,
     flexDirection: 'row',
@@ -1464,6 +1504,20 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontFamily: Fonts.semibold,
   },
+  packingBadge: {
+    minHeight: 25,
+    marginTop: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primaryLight,
+  },
+  packingBadgeMissing: { backgroundColor: '#FEF2F2' },
+  packingText: { flex: 1, fontSize: 8, color: Colors.primaryText, fontFamily: Fonts.semibold },
+  packingTextMissing: { color: Colors.danger },
   productFooter: {
     minHeight: 36,
     marginTop: 7,

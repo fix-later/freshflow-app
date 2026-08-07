@@ -5,6 +5,10 @@ export interface CartItem {
   name: string; // productName
   market: string; // marketName
   unit: string;
+  packingCodeId: string | null;
+  weightKg: number | null;
+  minimumOrderQuantity: number;
+  maxQuantity: number;
   price: number; // currentPrice
   qty: number;
   image: string;
@@ -22,9 +26,13 @@ export interface CartStore {
     name: string;
     market: string;
     unit: string;
+    packingCodeId: string | null;
+    weightKg: number | null;
+    minimumOrderQuantity: number;
+    maxQuantity: number;
     price: number;
     image: string;
-  }) => void;
+  }, quantity?: number) => void;
   removeFromCart: (itemId: string) => void;
   updateItemQty: (itemId: string, qty: number) => void;
   updateItemNote: (itemId: string, note: string) => void;

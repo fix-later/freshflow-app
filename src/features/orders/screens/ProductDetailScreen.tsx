@@ -16,6 +16,11 @@ import { useFavoritesStore } from '../../../store/favoritesStore';
 import { useCartStore } from '../../../store/cartStore';
 import { pricingApi } from '../../pricing/api/pricingApi';
 import type { PriceHistoryItemDto } from '../../../types/api.types';
+import {
+  calculatePackedWeight,
+  formatPackingRule,
+  formatWeightKg,
+} from '../utils/packing';
 
 interface RouteParams {
   product: {
@@ -27,6 +32,9 @@ interface RouteParams {
     marketName: string;
     category: string | null;
     unit: string;
+    packingCodeId: string | null;
+    weightKg: number | null;
+    minimumOrderQuantity: number;
     currentPrice: number;
     availableQuantity: number;
     description?: string | null;
@@ -58,7 +66,13 @@ export function ProductDetailScreen() {
 
   const [priceHistory, setPriceHistory] = useState<PriceHistoryItemDto[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [quantity, setQuantity] = useState(product.availableQuantity > 0 ? 1 : 0);
+  const canOrder = Boolean(
+    product.packingCodeId
+    && product.weightKg
+    && product.availableQuantity >= product.minimumOrderQuantity,
+  );
+  const [quantity, setQuantity] = useState(canOrder ? product.minimumOrderQuantity : 0);
+  const selectedWeightKg = calculatePackedWeight(quantity, product.weightKg);
 
   useEffect(() => {
     navigation.setOptions({ title: product.productName });
@@ -92,7 +106,7 @@ export function ProductDetailScreen() {
   }, [product.marketId, product.productId]);
 
   const handleAddToCart = () => {
-    if (product.availableQuantity <= 0 || quantity <= 0) return;
+    if (!canOrder || quantity < product.minimumOrderQuantity) return;
     const existing = cart.find((item) => item.id === product.marketProductId);
     const nextQuantity = Math.min(product.availableQuantity, (existing?.qty ?? 0) + quantity);
 
@@ -104,12 +118,13 @@ export function ProductDetailScreen() {
         name: product.productName,
         market: product.marketName,
         unit: product.unit,
+        packingCodeId: product.packingCodeId,
+        weightKg: product.weightKg,
+        minimumOrderQuantity: product.minimumOrderQuantity,
+        maxQuantity: product.availableQuantity,
         price: product.currentPrice,
         image: product.imageUrl ?? '',
-      });
-      if (nextQuantity > 1) {
-        updateItemQty(product.marketProductId, nextQuantity);
-      }
+      }, nextQuantity);
     }
     navigation.goBack();
   };
@@ -147,6 +162,9 @@ export function ProductDetailScreen() {
                   marketName: product.marketName,
                   category: product.category,
                   unit: product.unit,
+                  packingCodeId: product.packingCodeId,
+                  weightKg: product.weightKg,
+                  minimumOrderQuantity: product.minimumOrderQuantity,
                   currentPrice: product.currentPrice,
                   availableQuantity: product.availableQuantity,
                   createdAt: new Date().toISOString(),
@@ -171,9 +189,37 @@ export function ProductDetailScreen() {
             <Text style={styles.unit}>/{product.unit}</Text>
           </Text>
 
+          <View style={[styles.packingCard, !canOrder && styles.packingCardInvalid]}>
+            <View style={styles.packingHeader}>
+              <Ionicons
+                name={product.packingCodeId ? 'cube-outline' : 'alert-circle-outline'}
+                size={20}
+                color={canOrder ? Colors.primaryText : Colors.danger}
+              />
+              <Text style={[styles.packingTitle, !canOrder && styles.packingTitleInvalid]}>
+                Quy cách đóng gói
+              </Text>
+            </View>
+            <Text style={styles.packingRule}>{formatPackingRule(product.unit, product.weightKg)}</Text>
+            {canOrder ? (
+              <Text style={styles.packingSummary}>
+                Đang chọn {quantity} kiện · {formatWeightKg(selectedWeightKg ?? 0)} kg
+              </Text>
+            ) : (
+              <Text style={styles.packingError}>
+                Sản phẩm chưa có packing code hợp lệ hoặc tồn kho thấp hơn mức đặt tối thiểu.
+              </Text>
+            )}
+            {product.minimumOrderQuantity > 1 ? (
+              <Text style={styles.minimumOrderText}>
+                Tối thiểu {product.minimumOrderQuantity} kiện mỗi lần đặt
+              </Text>
+            ) : null}
+          </View>
+
           {existingInCart && (
             <Text style={styles.cartIndicator}>
-              Đã thêm {existingInCart.qty} {product.unit} vào giỏ hàng
+              Đã thêm {existingInCart.qty} kiện vào giỏ hàng
             </Text>
           )}
 
@@ -190,7 +236,7 @@ export function ProductDetailScreen() {
               <View>
                 <Text style={styles.factLabel}>Tồn khả dụng</Text>
                 <Text style={styles.factValue}>
-                  {product.availableQuantity} {product.unit}
+                  {product.availableQuantity} kiện
                 </Text>
               </View>
             </View>
@@ -211,7 +257,7 @@ export function ProductDetailScreen() {
                     <Text numeric style={styles.historyPrice}>{formatPrice(history.price)}</Text>
                     <Text style={styles.historyDate}>{formatDateTime(history.recordedAt)}</Text>
                   </View>
-                  <Text numeric style={styles.historyQuantity}>{history.quantity} {product.unit}</Text>
+                  <Text numeric style={styles.historyQuantity}>{history.quantity} kiện</Text>
                 </View>
               ))}
             </View>
@@ -226,15 +272,15 @@ export function ProductDetailScreen() {
         <View style={styles.quantity}>
           <Pressable
             style={styles.quantityButton}
-            disabled={quantity <= 1}
-            onPress={() => setQuantity((value) => Math.max(1, value - 1))}
+            disabled={!canOrder || quantity <= product.minimumOrderQuantity}
+            onPress={() => setQuantity((value) => Math.max(product.minimumOrderQuantity, value - 1))}
           >
             <Ionicons name="remove" size={22} color={Colors.deepTeal} />
           </Pressable>
           <Text numeric style={styles.quantityValue}>{quantity}</Text>
           <Pressable
             style={styles.quantityButton}
-            disabled={quantity >= product.availableQuantity}
+            disabled={!canOrder || quantity >= product.availableQuantity}
             onPress={() => setQuantity((value) => Math.min(product.availableQuantity, value + 1))}
           >
             <Ionicons name="add" size={22} color={Colors.deepTeal} />
@@ -243,13 +289,13 @@ export function ProductDetailScreen() {
         <Pressable
           style={[
             styles.addButton,
-            product.availableQuantity <= 0 && styles.addButtonDisabled,
+            !canOrder && styles.addButtonDisabled,
           ]}
-          disabled={product.availableQuantity <= 0}
+          disabled={!canOrder}
           onPress={handleAddToCart}
         >
           <Ionicons name="bag-add-outline" size={20} color={Colors.onPrimary} />
-          <Text style={styles.addText}>Thêm vào giỏ</Text>
+          <Text style={styles.addText}>{canOrder ? 'Thêm theo kiện' : 'Chưa thể đặt'}</Text>
         </Pressable>
       </View>
     </View>
@@ -321,6 +367,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textMuted,
   },
+  packingCard: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+  },
+  packingCardInvalid: { borderColor: '#FECACA', backgroundColor: '#FEF2F2' },
+  packingHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  packingTitle: { fontSize: 13, color: Colors.primaryText, fontWeight: '800' },
+  packingTitleInvalid: { color: Colors.danger },
+  packingRule: { marginTop: 8, fontSize: 15, color: Colors.deepTeal, fontWeight: '800' },
+  packingSummary: { marginTop: 5, fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
+  packingError: { marginTop: 7, fontSize: 12, lineHeight: 17, color: Colors.danger },
+  minimumOrderText: { marginTop: 5, fontSize: 11, color: Colors.textMuted },
   facts: {
     flexDirection: 'row',
     gap: 12,

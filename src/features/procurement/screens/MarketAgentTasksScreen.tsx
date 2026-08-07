@@ -33,7 +33,14 @@ const STATUS: Record<ProcurementTaskStatus, {
   Manifested: { label: 'Chờ thu mua', color: '#8A5900', background: Colors.warningLight },
   Purchasing: { label: 'Đang thu mua', color: Colors.primaryText, background: Colors.primaryLight },
   HandedOff: { label: 'Đã bàn giao', color: Colors.secondary, background: Colors.secondaryContainer },
+  Completed: { label: 'Hoàn tất', color: Colors.primaryText, background: Colors.successLight },
   Cancelled: { label: 'Đã huỷ', color: Colors.danger, background: Colors.dangerLight },
+};
+
+const UNKNOWN_STATUS = {
+  label: 'Chưa xác định',
+  color: Colors.textSecondary,
+  background: Colors.surfaceContainerHigh,
 };
 
 function formatBatchDate(value: string): string {
@@ -52,7 +59,9 @@ function shortBatchCode(value: string): string {
 function matchesFilter(task: MarketProcurementTaskDto, filter: TaskFilter): boolean {
   if (filter === 'pending') return task.status === 'Built' || task.status === 'Manifested';
   if (filter === 'active') return task.status === 'Purchasing';
-  if (filter === 'completed') return task.status === 'HandedOff';
+  if (filter === 'completed') {
+    return task.status === 'HandedOff' || task.status === 'Completed' || task.isCompleted;
+  }
   return true;
 }
 
@@ -259,7 +268,7 @@ export function MarketAgentTasksScreen() {
 
                 <View style={styles.taskList}>
                   {group.tasks.map((task) => {
-                    const status = STATUS[task.status];
+                    const status = STATUS[task.status] ?? UNKNOWN_STATUS;
                     const quantity = task.items.reduce((sum, item) => sum + item.totalQuantity, 0);
                     return (
                       <Pressable

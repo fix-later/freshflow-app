@@ -39,12 +39,16 @@ export interface ProductDto {
   categoryName: string | null;
   unitId: string;
   unitName: string | null;
+  packingCodeId: string | null;
   description: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
   isDeleted: boolean;
   imageUrl: string | null;
+  minimumOrderQuantity: number;
+  vatRate: string | null;
+  sellingUnit: SellingUnitDto;
 }
 
 export interface MarketDto {

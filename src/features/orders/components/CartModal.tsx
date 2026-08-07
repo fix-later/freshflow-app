@@ -6,6 +6,7 @@ import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import { Text, TextInput } from '../../../components/ui/Text';
 import { useCartStore } from '../../../store/cartStore';
+import { calculatePackedWeight, formatPackingRule, formatWeightKg } from '../utils/packing';
 
 function formatPrice(value: number) {
   return `${value.toLocaleString('vi-VN')}đ`;
@@ -34,6 +35,18 @@ export function CartModal({
   const { cart, cartCount, cartTotal, removeFromCart, updateItemQty, updateItemNote, clearCart } =
     useCartStore();
   const isCartEmpty = cart.length === 0;
+  const hasInvalidPacking = cart.some((item) => !item.packingCodeId || !item.weightKg);
+  const hasInvalidQuantity = cart.some((item) => {
+    const liveMax = Math.min(
+      stockByMarketProductId[item.id] ?? item.maxQuantity,
+      item.maxQuantity,
+    );
+    return item.qty < item.minimumOrderQuantity || item.qty > liveMax;
+  });
+  const totalWeightKg = cart.reduce(
+    (sum, item) => sum + (calculatePackedWeight(item.qty, item.weightKg) ?? 0),
+    0,
+  );
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   return (
@@ -43,7 +56,7 @@ export function CartModal({
           <Pressable onPress={onClose} style={styles.cartScreenClose}>
             <MaterialIcons name="arrow-back" size={24} color={Colors.onSurface} />
           </Pressable>
-          <Text style={styles.cartScreenTitle}>Giỏ hàng ({cartCount})</Text>
+          <Text style={styles.cartScreenTitle}>Giỏ hàng ({cartCount} kiện)</Text>
           {!isCartEmpty ? (
             <Pressable onPress={() => setShowClearConfirm(true)}>
               <Text style={styles.cartScreenClear}>Xoá tất cả</Text>
@@ -74,7 +87,10 @@ export function CartModal({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.cartScreenList}
               renderItem={({ item }) => {
-                const maxQuantity = stockByMarketProductId[item.id] ?? Number.MAX_SAFE_INTEGER;
+                const maxQuantity = Math.min(
+                  stockByMarketProductId[item.id] ?? item.maxQuantity,
+                  item.maxQuantity,
+                );
 
                 return (
                   <View style={styles.cartScreenItem}>
@@ -83,8 +99,19 @@ export function CartModal({
                       <View style={styles.cartScreenItemInfo}>
                         <Text style={styles.cartScreenItemName}>{item.name}</Text>
                         <Text style={styles.cartScreenItemMarket}>
-                          {item.market} • {item.unit}
+                          {item.market}
                         </Text>
+                        <Text style={styles.cartScreenPacking}>
+                          {formatPackingRule(item.unit, item.weightKg)}
+                        </Text>
+                        <Text style={styles.cartScreenWeight}>
+                          {item.qty} kiện · {formatWeightKg(calculatePackedWeight(item.qty, item.weightKg) ?? 0)} kg
+                        </Text>
+                        {item.qty > maxQuantity ? (
+                          <Text style={styles.cartScreenQuantityError}>
+                            Tồn kho mới chỉ còn {maxQuantity} kiện
+                          </Text>
+                        ) : null}
                         <Text numeric style={styles.cartScreenItemPrice}>
                           {formatPrice(item.price * item.qty)}
                         </Text>
@@ -93,8 +120,11 @@ export function CartModal({
                         <Pressable
                           style={styles.cartScreenQtyBtn}
                           onPress={() => {
-                            if (item.qty <= 1) removeFromCart(item.id);
-                            else updateItemQty(item.id, item.qty - 1);
+                            if (item.qty <= item.minimumOrderQuantity) removeFromCart(item.id);
+                            else updateItemQty(
+                              item.id,
+                              item.qty > maxQuantity ? maxQuantity : item.qty - 1,
+                            );
                           }}
                         >
                           <MaterialIcons name="remove" size={16} color={Colors.primaryText} />
@@ -138,6 +168,12 @@ export function CartModal({
               ListFooterComponent={
                 <View style={styles.cartScreenSummary}>
                   <View style={styles.cartScreenSummaryRow}>
+                    <Text style={styles.cartScreenSummaryLabel}>Tổng đóng gói</Text>
+                    <Text numeric style={styles.cartScreenSummaryValue}>
+                      {cartCount} kiện · {formatWeightKg(totalWeightKg)} kg
+                    </Text>
+                  </View>
+                  <View style={styles.cartScreenSummaryRow}>
                     <Text style={styles.cartScreenSummaryLabel}>Tạm tính</Text>
                     <Text numeric style={styles.cartScreenSummaryValue}>
                       {formatPrice(cartTotal)}
@@ -175,13 +211,20 @@ export function CartModal({
               <Pressable
                 style={[
                   styles.cartScreenCheckoutBtn,
-                  isCartEmpty && styles.cartScreenCheckoutBtnDisabled,
+                  (isCartEmpty || hasInvalidPacking || hasInvalidQuantity)
+                    && styles.cartScreenCheckoutBtnDisabled,
                 ]}
-                disabled={isCartEmpty}
+                disabled={isCartEmpty || hasInvalidPacking || hasInvalidQuantity}
                 onPress={onCheckout}
               >
                 <Text style={styles.cartScreenCheckoutBtnText}>
-                  {isCartEmpty ? 'Thêm sản phẩm trước' : 'Tiến hành thanh toán'}
+                  {isCartEmpty
+                    ? 'Thêm sản phẩm trước'
+                    : hasInvalidPacking
+                      ? 'Có sản phẩm thiếu quy cách'
+                      : hasInvalidQuantity
+                        ? 'Cập nhật lại số kiện'
+                      : 'Tiến hành thanh toán'}
                 </Text>
               </Pressable>
             </View>
@@ -289,6 +332,9 @@ const styles = StyleSheet.create({
   cartScreenItemInfo: { flex: 1, gap: 2 },
   cartScreenItemName: { fontSize: 14, fontFamily: Fonts.semibold, color: Colors.onSurface },
   cartScreenItemMarket: { fontSize: 12, fontFamily: Fonts.regular, color: Colors.outline },
+  cartScreenPacking: { fontSize: 11, fontFamily: Fonts.semibold, color: Colors.primaryText },
+  cartScreenWeight: { fontSize: 11, fontFamily: Fonts.regular, color: Colors.textMuted },
+  cartScreenQuantityError: { fontSize: 11, fontFamily: Fonts.semibold, color: Colors.danger },
   cartScreenItemPrice: {
     fontSize: 15,
     fontFamily: Fonts.monoSemibold,

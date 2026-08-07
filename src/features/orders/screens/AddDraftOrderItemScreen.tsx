@@ -13,17 +13,33 @@ import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
 import { Text, TextInput } from '../../../components/ui/Text';
 import { pricingApi } from '../../pricing/api/pricingApi';
-import { type MarketDto, type MarketProductDto } from '../../../types/api.types';
+import { type MarketDto, type MarketProductDto, type ProductDto } from '../../../types/api.types';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 import { orderApi } from '../api/orderApi';
+import { formatPackingRule, resolvePackingSelection } from '../utils/packing';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'AddDraftOrderItem'>;
+
+const PRODUCT_PAGE_SIZE = 100;
+
+async function loadAllCatalogProducts(): Promise<ProductDto[]> {
+  const first = await pricingApi.getProducts({ page: 1, pageSize: PRODUCT_PAGE_SIZE });
+  const pageCount = Math.ceil(first.meta.total / first.meta.pageSize);
+  if (pageCount <= 1) return first.data;
+  const remaining = await Promise.all(
+    Array.from({ length: pageCount - 1 }, (_, index) => (
+      pricingApi.getProducts({ page: index + 2, pageSize: PRODUCT_PAGE_SIZE })
+    )),
+  );
+  return [first.data, ...remaining.map((page) => page.data)].flat();
+}
 
 export function AddDraftOrderItemScreen({ route, navigation }: Props) {
   const { orderId } = route.params;
   const [markets, setMarkets] = useState<MarketDto[]>([]);
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
   const [products, setProducts] = useState<MarketProductDto[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<ProductDto[]>([]);
   const [query, setQuery] = useState('');
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [loadingMarkets, setLoadingMarkets] = useState(true);
@@ -34,9 +50,13 @@ export function AddDraftOrderItemScreen({ route, navigation }: Props) {
   useEffect(() => {
     (async () => {
       try {
-        const result = await pricingApi.getMarkets();
-        setMarkets(result);
-        setSelectedMarketId(result[0]?.id ?? null);
+        const [marketData, productData] = await Promise.all([
+          pricingApi.getMarkets(),
+          loadAllCatalogProducts(),
+        ]);
+        setMarkets(marketData);
+        setCatalogProducts(productData);
+        setSelectedMarketId(marketData[0]?.id ?? null);
       } catch {
         setError('Không thể tải danh sách chợ.');
       } finally {
@@ -78,18 +98,34 @@ export function AddDraftOrderItemScreen({ route, navigation }: Props) {
     );
   }, [products, query]);
 
-  const quantityFor = (product: MarketProductDto) =>
-    quantities[product.marketProductId] ?? 1;
+  const productMetadata = useMemo(
+    () => new Map(catalogProducts.map((product) => [product.id, product])),
+    [catalogProducts],
+  );
+
+  const quantityFor = (product: MarketProductDto) => {
+    const packing = resolvePackingSelection(product, productMetadata.get(product.productId));
+    return quantities[product.marketProductId] ?? packing.minimumOrderQuantity;
+  };
 
   const changeQuantity = (product: MarketProductDto, delta: number) => {
+    const packing = resolvePackingSelection(product, productMetadata.get(product.productId));
     const next = Math.min(
-      product.availableQuantity,
-      Math.max(1, quantityFor(product) + delta),
+      packing.maxQuantity,
+      Math.max(packing.minimumOrderQuantity, quantityFor(product) + delta),
     );
     setQuantities((current) => ({ ...current, [product.marketProductId]: next }));
   };
 
   const handleAdd = async (product: MarketProductDto) => {
+    const packing = resolvePackingSelection(product, productMetadata.get(product.productId));
+    if (!packing.canOrder) {
+      Alert.alert(
+        'Chưa thể thêm sản phẩm',
+        'Sản phẩm chưa có packing code hợp lệ hoặc không đủ số kiện tối thiểu.',
+      );
+      return;
+    }
     setAddingId(product.marketProductId);
     try {
       await orderApi.addItem(orderId, product.marketProductId, quantityFor(product));
@@ -105,29 +141,30 @@ export function AddDraftOrderItemScreen({ route, navigation }: Props) {
   };
 
   const renderProduct = ({ item }: { item: MarketProductDto }) => {
+    const packing = resolvePackingSelection(item, productMetadata.get(item.productId));
     const quantity = quantityFor(item);
-    const outOfStock = item.availableQuantity <= 0;
+    const unavailable = !packing.canOrder;
     const adding = addingId === item.marketProductId;
     return (
-      <View style={[styles.productCard, outOfStock && styles.productCardDisabled]}>
+      <View style={[styles.productCard, unavailable && styles.productCardDisabled]}>
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{item.productName}</Text>
           <Text style={styles.productMeta}>
-            {item.category} • {item.unit}
-            {item.sellingUnit?.weightKg ? ` (~${item.sellingUnit.weightKg}kg)` : ''}
+            {item.category} • {formatPackingRule(packing.unit, packing.weightKg)}
           </Text>
           <Text style={styles.productPrice}>{item.currentPrice.toLocaleString('vi-VN')}đ</Text>
-          <Text style={[styles.stockText, outOfStock && styles.stockTextDanger]}>
-            Còn {item.availableQuantity} {item.unit}
+          <Text style={[styles.stockText, unavailable && styles.stockTextDanger]}>
+            Còn {item.availableQuantity} kiện
+            {!packing.isConfigured ? ' • Thiếu packing code' : ''}
           </Text>
         </View>
-        {!outOfStock ? (
+        {!unavailable ? (
           <View style={styles.productActions}>
             <View style={styles.quantityRow}>
               <Pressable
                 style={styles.quantityButton}
                 onPress={() => changeQuantity(item, -1)}
-                disabled={quantity <= 1 || adding}
+                disabled={quantity <= packing.minimumOrderQuantity || adding}
               >
                 <Ionicons name="remove" size={15} color={Colors.primaryText} />
               </Pressable>
