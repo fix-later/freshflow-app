@@ -83,6 +83,16 @@ export interface SellingUnitDto {
   weightKg: number | null;
 }
 
+/** Visual/business label assigned to a product listing at a specific market. */
+export interface MarketProductTagDto {
+  id: string;
+  name: string;
+  pinsToTop: boolean;
+}
+
+/** Global live tag catalog returned by GET /api/v1/tags. */
+export type TagDto = MarketProductTagDto;
+
 /** Product listed at a market with current price and stock (from Pricing module). */
 export interface MarketProductDto {
   marketProductId: string;
@@ -94,6 +104,7 @@ export interface MarketProductDto {
   currentPrice: number;
   currentQuantity: number;
   availableQuantity: number;
+  tags: MarketProductTagDto[];
   updatedAt: string;
   updatedBy: string | null;
   sellingUnit: SellingUnitDto;

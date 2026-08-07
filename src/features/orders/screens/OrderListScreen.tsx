@@ -35,8 +35,7 @@ import { CartModal } from '../components/CartModal';
 type OrdersNav = NativeStackNavigationProp<RestaurantOrdersStackParamList>;
 
 const PRODUCT_PAGE_SIZE = 100;
-const MOCK_DEAL_LIMIT = 12;
-const MOCK_DEAL_DISCOUNTS = [8, 10, 12, 15, 18, 20] as const;
+const FEATURED_PRODUCT_LIMIT = 12;
 const FALLBACK_IMAGES = [
   'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600',
   'https://images.unsplash.com/photo-1607305387299-a3d9611cd469?w=600',
@@ -172,7 +171,9 @@ export function OrderListScreen() {
   }, [loadInitialData]);
 
   useEffect(() => {
-    if (selectedMarketId) void loadProductsForMarket(selectedMarketId);
+    if (selectedMarketId) {
+      void loadProductsForMarket(selectedMarketId);
+    }
   }, [loadProductsForMarket, selectedMarketId]);
 
   useFocusEffect(
@@ -285,7 +286,8 @@ export function OrderListScreen() {
       const matchesSearch =
         !query ||
         marketProduct.productName.toLocaleLowerCase('vi-VN').includes(query) ||
-        marketProduct.category?.toLocaleLowerCase('vi-VN').includes(query);
+        marketProduct.category?.toLocaleLowerCase('vi-VN').includes(query) ||
+        marketProduct.tags.some((tag) => tag.name.toLocaleLowerCase('vi-VN').includes(query));
       if (!matchesSearch) return false;
       if (allowedCategoryIds.size === 0) return true;
 
@@ -310,27 +312,14 @@ export function OrderListScreen() {
     && selectedChildId === null
     && !showDealsOnly;
 
-  // Temporary storefront curation until the pricing API exposes campaigns.
-  // Keeping this as a bounded subset ensures "Xem tất cả" opens deals only,
-  // instead of accidentally falling back to the full market assortment.
+  // BE owns storefront curation: any tag with pinsToTop=true marks a real featured listing.
   const dealProducts = useMemo(() => {
-    const availableProducts = marketProducts
-      .filter((product) => product.availableQuantity > 0)
-      .sort((left, right) => left.currentPrice - right.currentPrice);
-    const dealCount = Math.min(
-      availableProducts.length,
-      MOCK_DEAL_LIMIT,
-      Math.max(6, Math.ceil(availableProducts.length * 0.35)),
-    );
-    return availableProducts.slice(0, dealCount);
+    return marketProducts
+      .filter((product) => (
+        product.availableQuantity > 0 && product.tags.some((tag) => tag.pinsToTop)
+      ))
+      .slice(0, FEATURED_PRODUCT_LIMIT);
   }, [marketProducts]);
-  const dealDiscountById = useMemo(
-    () => new Map(dealProducts.map((product, index) => [
-      product.marketProductId,
-      MOCK_DEAL_DISCOUNTS[index % MOCK_DEAL_DISCOUNTS.length],
-    ])),
-    [dealProducts],
-  );
   const featuredProducts = dealProducts.slice(0, 6);
   const displayedProducts = showDealsOnly ? dealProducts : filteredProducts;
 
@@ -339,7 +328,9 @@ export function OrderListScreen() {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     await loadInitialData();
-    if (selectedMarketId) await loadProductsForMarket(selectedMarketId);
+    if (selectedMarketId) {
+      await loadProductsForMarket(selectedMarketId);
+    }
     setRefreshing(false);
   }, [loadInitialData, loadProductsForMarket, selectedMarketId]);
 
@@ -433,6 +424,7 @@ export function OrderListScreen() {
         unit: product.unit,
         currentPrice: product.currentPrice,
         availableQuantity: product.availableQuantity,
+        tags: product.tags,
         description: desc || null,
       },
     });
@@ -462,7 +454,9 @@ export function OrderListScreen() {
     const favorite = isFavorite(item.marketProductId);
     const quantity = cart.find((cartItem) => cartItem.id === item.marketProductId)?.qty ?? 0;
     const imageUrl = resolveImage(item);
-    const dealDiscount = dealDiscountById.get(item.marketProductId);
+    const primaryTag = [...item.tags].sort((left, right) => (
+      Number(right.pinsToTop) - Number(left.pinsToTop)
+    ))[0];
 
     return (
       <Pressable
@@ -487,21 +481,28 @@ export function OrderListScreen() {
               color={favorite ? Colors.danger : Colors.deepTeal}
             />
           </Pressable>
-          {item.availableQuantity > 0 && dealDiscount ? (
-            <View style={styles.dealBadge}>
-              <Ionicons name="pricetag" size={9} color={Colors.tertiary} />
-              <Text style={styles.dealBadgeText}>Giảm {dealDiscount}%</Text>
-            </View>
-          ) : item.availableQuantity > 0 ? (
-            <View style={styles.freshBadge}>
-              <Ionicons name="sparkles" size={10} color={Colors.primaryText} />
-              <Text style={styles.freshBadgeText}>Tươi hôm nay</Text>
-            </View>
-          ) : (
+          {item.availableQuantity <= 0 ? (
             <View style={styles.soldOutBadge}>
               <Text style={styles.soldOutText}>Hết hàng</Text>
             </View>
-          )}
+          ) : primaryTag ? (
+            <View style={[styles.productTagBadge, primaryTag.pinsToTop && styles.productTagBadgePinned]}>
+              <Ionicons
+                name={primaryTag.pinsToTop ? 'star' : 'pricetag'}
+                size={9}
+                color={primaryTag.pinsToTop ? Colors.tertiary : Colors.primaryText}
+              />
+              <Text
+                style={[
+                  styles.productTagBadgeText,
+                  primaryTag.pinsToTop && styles.productTagBadgePinnedText,
+                ]}
+                numberOfLines={1}
+              >
+                {primaryTag.name}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.productMetaRow}>
@@ -636,6 +637,34 @@ export function OrderListScreen() {
           <Text style={styles.serviceText}>Đã kiểm định</Text>
         </View>
       </View>
+
+      {selectedMarketId && featuredProducts.length > 0 && !showDealsOnly ? (
+        <View style={styles.featuredSection}>
+          <View style={styles.featuredHeader}>
+            <View>
+              <Text style={styles.sectionEyebrow}>ĐƯỢC CHỢ ĐỀ XUẤT</Text>
+              <Text style={styles.sectionTitle}>Sản phẩm nổi bật</Text>
+            </View>
+            <Pressable
+              style={styles.featuredCountPill}
+              onPress={showAllDeals}
+              accessibilityRole="button"
+              accessibilityLabel="Xem tất cả sản phẩm nổi bật"
+            >
+              <Text style={styles.featuredCountText}>Xem tất cả</Text>
+              <Ionicons name="chevron-forward" size={13} color={Colors.primaryText} />
+            </Pressable>
+          </View>
+          <FlatList
+            horizontal
+            data={featuredProducts}
+            keyExtractor={(item) => `featured-${item.marketProductId}`}
+            renderItem={({ item }) => renderProductCard(item, true)}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.featuredList}
+          />
+        </View>
+      ) : null}
 
       <View style={styles.categoryHeader}>
         <View>
@@ -780,34 +809,6 @@ export function OrderListScreen() {
             </View>
           </View>
 
-          {featuredProducts.length > 0 ? (
-            <View style={styles.featuredSection}>
-              <View style={styles.featuredHeader}>
-                <View>
-                  <Text style={styles.sectionEyebrow}>GỢI Ý CHO BẾP</Text>
-                  <Text style={styles.sectionTitle}>Giá tốt hôm nay</Text>
-                </View>
-                <Pressable
-                  style={styles.featuredCountPill}
-                  onPress={showAllDeals}
-                  accessibilityRole="button"
-                  accessibilityLabel="Xem tất cả sản phẩm giá tốt hôm nay"
-                >
-                  <Text style={styles.featuredCountText}>Xem tất cả</Text>
-                  <Ionicons name="chevron-forward" size={13} color={Colors.primaryText} />
-                </Pressable>
-              </View>
-              <FlatList
-                horizontal
-                data={featuredProducts}
-                keyExtractor={(item) => `featured-${item.marketProductId}`}
-                renderItem={({ item }) => renderProductCard(item, true)}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.featuredList}
-              />
-            </View>
-          ) : null}
-
         </>
       ) : null}
 
@@ -823,8 +824,8 @@ export function OrderListScreen() {
             <Text style={styles.backToStorefrontText}>Về trang chủ</Text>
           </Pressable>
           <View style={styles.mockDealNotice}>
-            <Ionicons name="flash" size={12} color={Colors.tertiary} />
-            <Text style={styles.mockDealNoticeText}>{dealProducts.length} ưu đãi hôm nay</Text>
+            <Ionicons name="star" size={12} color={Colors.tertiary} />
+            <Text style={styles.mockDealNoticeText}>{dealProducts.length} sản phẩm được đề xuất</Text>
           </View>
         </View>
       ) : null}
@@ -833,17 +834,17 @@ export function OrderListScreen() {
         <View>
           <Text style={styles.sectionEyebrow}>
             {showDealsOnly
-              ? 'ƯU ĐÃI TRONG NGÀY'
+              ? 'TAG NỔI BẬT TỪ CHỢ'
               : isDiscoveryMode
                 ? 'DANH MỤC ĐẦY ĐỦ'
                 : 'KẾT QUẢ PHÙ HỢP'}
           </Text>
           <Text style={styles.sectionTitle}>
             {showDealsOnly
-              ? 'Giá tốt hôm nay'
+              ? 'Sản phẩm nổi bật'
               : selectedChildId
-              ? categoryById.get(selectedChildId)?.name ?? 'Sản phẩm'
-              : selectedRoot?.name ?? (searchQuery ? 'Kết quả tìm kiếm' : 'Tất cả sản phẩm')}
+                ? categoryById.get(selectedChildId)?.name ?? 'Sản phẩm'
+                : selectedRoot?.name ?? (searchQuery ? 'Kết quả tìm kiếm' : 'Tất cả sản phẩm')}
           </Text>
         </View>
         <View style={styles.resultCountPill}>
@@ -1404,7 +1405,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(226,232,240,0.8)',
   },
-  freshBadge: {
+  productTagBadge: {
     position: 'absolute',
     left: 7,
     bottom: 7,
@@ -1415,23 +1416,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 9,
     backgroundColor: 'rgba(229,252,238,0.94)',
+    maxWidth: '72%',
   },
-  freshBadgeText: { fontSize: 7, color: Colors.primaryText, fontFamily: Fonts.bold },
-  dealBadge: {
-    position: 'absolute',
-    left: 7,
-    bottom: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 9,
-    backgroundColor: 'rgba(255,251,235,0.96)',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  dealBadgeText: { fontSize: 7, color: Colors.tertiary, fontFamily: Fonts.bold },
+  productTagBadgePinned: { backgroundColor: 'rgba(255,251,235,0.96)' },
+  productTagBadgeText: { flexShrink: 1, fontSize: 7, color: Colors.primaryText, fontFamily: Fonts.bold },
+  productTagBadgePinnedText: { color: Colors.tertiary },
   soldOutBadge: {
     position: 'absolute',
     left: 8,

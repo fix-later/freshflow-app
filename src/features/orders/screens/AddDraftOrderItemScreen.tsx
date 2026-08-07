@@ -116,6 +116,22 @@ export function AddDraftOrderItemScreen({ route, navigation }: Props) {
             {item.category} • {item.unit}
             {item.sellingUnit?.weightKg ? ` (~${item.sellingUnit.weightKg}kg)` : ''}
           </Text>
+          {item.tags.length > 0 ? (
+            <View style={styles.tagsRow}>
+              {item.tags.slice(0, 3).map((tag) => (
+                <View key={tag.id} style={[styles.tagChip, tag.pinsToTop && styles.tagChipPinned]}>
+                  <Ionicons
+                    name={tag.pinsToTop ? 'star' : 'pricetag-outline'}
+                    size={10}
+                    color={tag.pinsToTop ? Colors.tertiary : Colors.primaryText}
+                  />
+                  <Text style={[styles.tagText, tag.pinsToTop && styles.tagTextPinned]} numberOfLines={1}>
+                    {tag.name}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
           <Text style={styles.productPrice}>{item.currentPrice.toLocaleString('vi-VN')}đ</Text>
           <Text style={[styles.stockText, outOfStock && styles.stockTextDanger]}>
             Còn {item.availableQuantity} {item.unit}
@@ -277,6 +293,20 @@ const styles = StyleSheet.create({
   productInfo: { flex: 1 },
   productName: { fontSize: 14, fontWeight: '800', color: Colors.textPrimary },
   productMeta: { marginTop: 4, fontSize: 11, color: Colors.textMuted },
+  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 7 },
+  tagChip: {
+    maxWidth: 120,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+  },
+  tagChipPinned: { backgroundColor: Colors.warningLight },
+  tagText: { flexShrink: 1, fontSize: 9, color: Colors.primaryText, fontWeight: '700' },
+  tagTextPinned: { color: Colors.tertiary },
   productPrice: { marginTop: 8, fontSize: 15, fontWeight: '800', color: Colors.primaryText },
   stockText: { marginTop: 3, fontSize: 11, color: Colors.textMuted },
   stockTextDanger: { color: Colors.error },
