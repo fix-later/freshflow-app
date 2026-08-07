@@ -28,13 +28,10 @@ function isPasswordStrong(pw: string): boolean {
 export function RegisterScreen({ navigation }: { navigation: any }) {
   const [isLoading, setIsLoading] = useState(false);
 
-  // ─── Personal info ───────────────────────
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-
   // ─── Restaurant info ─────────────────────
   const [restaurantName, setRestaurantName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [restaurantAddress, setRestaurantAddress] = useState('');
   const [taxCode, setTaxCode] = useState('');
   const [taxLookupLoading, setTaxLookupLoading] = useState(false);
@@ -43,10 +40,14 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
 
   // ─── Tax lookup ──────────────────────────
   // Guards against a slow/stale lookup response landing after the user has already
-  // changed the MST again — without this it could silently overwrite restaurantName/
-  // Address with data for a tax code that's no longer in the field.
+  // changed the MST again — without this it could silently overwrite Address with
+  // data for a tax code that's no longer in the field.
   const taxCodeRequestRef = useRef('');
 
+  // Only auto-fills the address — restaurantName is typed upfront (first field on
+  // the form now) before the user ever reaches this section, so overwriting it
+  // here would clobber what they already entered. The lookup result's `name` is
+  // the business's legal name (tên pháp lý), shown only as a verification hint.
   const handleTaxCodeChange = async (code: string) => {
     setTaxCode(code);
     setTaxVerified(false);
@@ -59,7 +60,6 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
       setTaxLookupLoading(false);
       if (taxCodeRequestRef.current !== code) return; // superseded by a newer edit — discard
       if (info) {
-        setRestaurantName(info.name);
         setRestaurantAddress(info.address);
         setTaxVerified(true);
       } else {
@@ -86,7 +86,6 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
   };
 
   const isFormValid =
-    name.trim().length > 0 &&
     phone.trim().length >= 10 &&
     email.includes('@') &&
     restaurantName.trim().length > 0 &&
@@ -208,19 +207,19 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
 
           {/* ─── Form Card ────────────────────── */}
           <View style={styles.formCard}>
-            {/* ═══ SECTION: THÔNG TIN CÁ NHÂN ═══ */}
+            {/* ═══ SECTION: THÔNG TIN NHÀ HÀNG ═══ */}
             <View style={styles.sectionRow}>
               <View style={styles.sectionLine} />
-              <Text style={styles.sectionText}>THÔNG TIN CÁ NHÂN</Text>
+              <Text style={styles.sectionText}>THÔNG TIN NHÀ HÀNG</Text>
               <View style={styles.sectionLine} />
             </View>
 
             {renderInput(
-              'Họ tên chủ nhà hàng *',
-              name,
-              setName,
-              'person-outline',
-              'Nguyễn Văn A',
+              'Tên nhà hàng *',
+              restaurantName,
+              setRestaurantName,
+              'restaurant-outline',
+              'Nhà hàng ABC',
               { autoCapitalize: 'words' },
             )}
 
@@ -246,10 +245,10 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
               { keyboardType: 'email-address' },
             )}
 
-            {/* ═══ SECTION: THÔNG TIN NHÀ HÀNG ═══ */}
+            {/* ═══ SECTION: THÔNG TIN THUẾ ═══ */}
             <View style={[styles.sectionRow, { marginTop: 24 }]}>
               <View style={styles.sectionLine} />
-              <Text style={styles.sectionText}>THÔNG TIN NHÀ HÀNG</Text>
+              <Text style={styles.sectionText}>THÔNG TIN THUẾ</Text>
               <View style={styles.sectionLine} />
             </View>
 
@@ -279,22 +278,11 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
             {taxLookupError ? (
               <Text style={styles.errorText}>{taxLookupError}</Text>
             ) : taxVerified ? (
-              <Text style={styles.successText}>Đã xác thực thông tin doanh nghiệp ✓</Text>
+              <Text style={styles.successText}>Đã xác thực thông tin doanh nghiệp (tên pháp lý) ✓</Text>
             ) : (
               <Text style={styles.helperText}>
-                Nhập mã số thuế để tự động điền thông tin nhà hàng
+                Nhập mã số thuế để tự động điền địa chỉ nhà hàng
               </Text>
-            )}
-
-            <View style={styles.fieldGap} />
-
-            {renderInput(
-              'Tên nhà hàng *',
-              restaurantName,
-              setRestaurantName,
-              'restaurant-outline',
-              'Tự động điền từ mã số thuế',
-              { autoCapitalize: 'words' },
             )}
 
             <View style={styles.fieldGap} />
