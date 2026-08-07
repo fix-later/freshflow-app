@@ -1,4 +1,3 @@
-import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -157,26 +156,11 @@ function MarketAgentTabs() {
             marginTop: 2,
           },
           tabBarIcon: ({ focused, size }) => (
-            <View
-              style={{
-                width: 58,
-                height: 32,
-                borderRadius: 16,
-                backgroundColor: focused ? Colors.primaryLight : 'transparent',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Ionicons
-                name={focused ? config.activeIcon : config.icon}
-                size={focused ? size + 1 : size}
-                color={
-                  focused
-                    ? Colors.primaryText
-                    : Colors.textSecondary
-                }
-              />
-            </View>
+            <Ionicons
+              name={focused ? config.activeIcon : config.icon}
+              size={focused ? size + 1 : size}
+              color={focused ? Colors.primaryText : Colors.textSecondary}
+            />
           ),
         };
       }}

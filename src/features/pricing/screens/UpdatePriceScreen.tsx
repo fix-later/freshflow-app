@@ -304,16 +304,22 @@ export function UpdatePriceScreen() {
           searchable(p.unit).includes(q),
       );
     }
+    // While a product's editor panel is open, freeze the "changed" sort criterion —
+    // otherwise the very first keystroke flips that product to "changed" and jerks the
+    // whole list to re-sort, yanking the row the user is actively typing into out from
+    // under them. Out-of-stock ordering is unaffected since it reads original product
+    // data, not the in-progress edit.
+    const isEditingAnyProduct = editingProductId !== null;
     return [...result].sort((left, right) => {
-      const leftChanged = Number(pendingChanges.has(left.productId));
-      const rightChanged = Number(pendingChanges.has(right.productId));
+      const leftChanged = isEditingAnyProduct ? 0 : Number(pendingChanges.has(left.productId));
+      const rightChanged = isEditingAnyProduct ? 0 : Number(pendingChanges.has(right.productId));
       const leftOut = Number(left.availableQuantity <= 0);
       const rightOut = Number(right.availableQuantity <= 0);
       return rightChanged - leftChanged
         || rightOut - leftOut
         || left.productName.localeCompare(right.productName, 'vi');
     });
-  }, [products, activeCategory, availabilityFilter, searchQuery, pendingChanges]);
+  }, [products, activeCategory, availabilityFilter, searchQuery, pendingChanges, editingProductId]);
 
 
   const pendingCount = pendingChanges.size;
