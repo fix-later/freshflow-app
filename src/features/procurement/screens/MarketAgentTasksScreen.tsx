@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,10 +15,12 @@ import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import { inventoryApi } from '../../inventory/api/inventoryApi';
 import {
+  getVietnamDate,
   marketProcurementApi,
   type MarketProcurementTaskDto,
   type ProcurementTaskStatus,
 } from '../api/marketProcurementApi';
+import { useMarketAgentTaskRealtime } from '../context/MarketAgentTaskRealtimeContext';
 
 type TaskFilter = 'all' | 'pending' | 'active' | 'completed';
 
@@ -33,17 +35,6 @@ const STATUS: Record<ProcurementTaskStatus, {
   HandedOff: { label: 'Đã bàn giao', color: Colors.secondary, background: Colors.secondaryContainer },
   Cancelled: { label: 'Đã huỷ', color: Colors.danger, background: Colors.dangerLight },
 };
-
-function getVietnamDate(): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
 
 function formatBatchDate(value: string): string {
   const [year, month, day] = value.split('-').map(Number);
@@ -67,13 +58,20 @@ function matchesFilter(task: MarketProcurementTaskDto, filter: TaskFilter): bool
 
 export function MarketAgentTasksScreen() {
   const navigation = useNavigation<any>();
+  const {
+    isRealtimeConnected,
+    latestAssignment,
+    revision,
+    syncNow,
+  } = useMarketAgentTaskRealtime();
   const [tasks, setTasks] = useState<MarketProcurementTaskDto[]>([]);
   const [marketNames, setMarketNames] = useState<Map<string, string>>(new Map());
   const [filter, setFilter] = useState<TaskFilter>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [dismissedAssignmentId, setDismissedAssignmentId] = useState<string | null>(null);
 
-  const fetchTasks = useCallback(async () => {
+  const fetchTasks = useCallback(async (showError = true) => {
     try {
       const [taskData, markets] = await Promise.all([
         marketProcurementApi.getTasksInNextSevenDays(getVietnamDate()),
@@ -82,21 +80,31 @@ export function MarketAgentTasksScreen() {
       setTasks(taskData);
       setMarketNames(new Map(markets.map((market) => [market.marketId, market.name])));
     } catch (error: any) {
-      Alert.alert('Không thể tải nhiệm vụ', error?.message || 'Vui lòng thử lại sau.');
+      if (showError) {
+        Alert.alert('Không thể tải nhiệm vụ', error?.message || 'Vui lòng thử lại sau.');
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useFocusEffect(useCallback(() => {
-    void fetchTasks();
-  }, [fetchTasks]));
+    void Promise.all([fetchTasks(true), syncNow()]);
+  }, [fetchTasks, syncNow]));
+
+  useEffect(() => {
+    if (revision === 0) return;
+    void fetchTasks(false);
+  }, [fetchTasks, revision]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchTasks();
+    await Promise.all([fetchTasks(true), syncNow()]);
     setRefreshing(false);
-  }, [fetchTasks]);
+  }, [fetchTasks, syncNow]);
+
+  const showNewAssignment = latestAssignment
+    && latestAssignment.batchId !== dismissedAssignmentId;
 
   const summary = useMemo(() => ({
     all: tasks.length,
@@ -170,6 +178,46 @@ export function MarketAgentTasksScreen() {
       </View>
 
       <View style={styles.content}>
+        <View style={styles.syncStatusRow}>
+          <View style={[
+            styles.syncDot,
+            { backgroundColor: isRealtimeConnected ? Colors.primary : Colors.warning },
+          ]} />
+          <Text style={styles.syncStatusText}>
+            {isRealtimeConnected ? 'Đang cập nhật trực tiếp' : 'Đang tự kiểm tra mỗi 30 giây'}
+          </Text>
+        </View>
+
+        {showNewAssignment ? (
+          <View style={styles.newTaskBanner}>
+            <View style={styles.newTaskIcon}>
+              <Ionicons name="notifications" size={19} color={Colors.deepTeal} />
+            </View>
+            <Pressable
+              style={styles.newTaskBody}
+              onPress={() => navigation.navigate('ProcurementTaskDetail', {
+                batchId: latestAssignment.batchId,
+              })}
+              accessibilityRole="button"
+              accessibilityLabel={`Mở nhiệm vụ mới ${shortBatchCode(latestAssignment.batchId)}`}
+            >
+              <Text style={styles.newTaskEyebrow}>NHIỆM VỤ MỚI TỪ ADMIN</Text>
+              <Text style={styles.newTaskTitle}>
+                Bạn vừa được giao {shortBatchCode(latestAssignment.batchId)}
+              </Text>
+              <Text style={styles.newTaskAction}>Chạm để xem và thực hiện ngay</Text>
+            </Pressable>
+            <Pressable
+              hitSlop={10}
+              onPress={() => setDismissedAssignmentId(latestAssignment.batchId)}
+              accessibilityRole="button"
+              accessibilityLabel="Ẩn thông báo nhiệm vụ mới"
+            >
+              <Ionicons name="close" size={18} color={Colors.textSecondary} />
+            </Pressable>
+          </View>
+        ) : null}
+
         <View style={styles.sectionHeading}>
           <View>
             <Text style={styles.sectionEyebrow}>BỘ LỌC TRẠNG THÁI</Text>
@@ -366,6 +414,37 @@ const styles = StyleSheet.create({
   summaryLabel: { marginTop: 4, fontSize: 7, color: Colors.white, fontFamily: Fonts.semibold },
   summaryDivider: { width: 1, height: 34, backgroundColor: 'rgba(255,255,255,0.16)' },
   content: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 32 },
+  syncStatusRow: {
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  syncDot: { width: 7, height: 7, borderRadius: 4 },
+  syncStatusText: { fontSize: 8, color: Colors.textMuted, fontFamily: Fonts.semibold },
+  newTaskBanner: {
+    marginBottom: 18,
+    padding: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    borderRadius: 18,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.primary600,
+  },
+  newTaskIcon: {
+    width: 39,
+    height: 39,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+  },
+  newTaskBody: { flex: 1, minWidth: 0 },
+  newTaskEyebrow: { fontSize: 7, letterSpacing: 0.8, color: Colors.primaryText, fontFamily: Fonts.bold },
+  newTaskTitle: { marginTop: 3, fontSize: 10, color: Colors.deepTeal, fontFamily: Fonts.bold },
+  newTaskAction: { marginTop: 3, fontSize: 8, color: Colors.textSecondary },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionEyebrow: { marginBottom: 4, fontSize: 8, letterSpacing: 1, color: Colors.primaryText, fontFamily: Fonts.bold },
   sectionTitle: { fontSize: 19, color: Colors.textPrimary, fontFamily: Fonts.bold },
