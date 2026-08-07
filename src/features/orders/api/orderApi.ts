@@ -134,16 +134,27 @@ export interface OrderConfirmationPreviewDto {
 
 export type RecurrenceType = 'daily' | 'weekly';
 
+export interface ScheduledOrderItemDto {
+  marketProductId: string;
+  quantity: number;
+}
+
+// SCRUM-386 — deliveryAddressId/items let the background job auto-confirm a real
+// order from this template at each due occurrence, instead of leaving an empty draft.
 export interface CreateScheduledOrderPayload {
   recurrenceType: RecurrenceType;
   firstRunAt: string;
   notes?: string;
+  deliveryAddressId: string;
+  items: ScheduledOrderItemDto[];
 }
 
 export interface UpdateScheduledOrderPayload {
   recurrenceType?: RecurrenceType;
   firstRunAt?: string;
   notes?: string;
+  deliveryAddressId?: string;
+  items?: ScheduledOrderItemDto[];
 }
 
 export interface ScheduledOrderDto {
@@ -154,6 +165,8 @@ export interface ScheduledOrderDto {
   lastExecutedAt: string | null;
   cancelledAt: string | null;
   notes: string | null;
+  deliveryAddressId: string | null;
+  items: ScheduledOrderItemDto[];
   createdAt: string;
   updatedAt: string;
 }

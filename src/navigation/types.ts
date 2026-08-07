@@ -78,7 +78,13 @@ export type RestaurantOrdersStackParamList = {
   AddDraftOrderItem: { orderId: string };
   OrderHistory: undefined;
   ReportIssue: { orderId: string };
-  CreateRecurringOrder: { scheduledOrderId?: string } | undefined;
+  CreateRecurringOrder:
+    | {
+        scheduledOrderId?: string;
+        /** Seeds the item picker (create mode only) — from ConfirmOrderScreen's or OrderDetailScreen's "Đặt định kỳ..." button. */
+        prefillItems?: { marketProductId: string; quantity: number }[];
+      }
+    | undefined;
   ManageRecurringOrders: undefined;
   ScheduledOrderInstances: { scheduledOrderId: string };
   DeliveryAddresses: undefined;
