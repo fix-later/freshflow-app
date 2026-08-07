@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Image,
   Modal,
@@ -263,9 +264,29 @@ export function OrderListScreen() {
     );
   }, [markets, marketSearchQuery]);
 
+  const sheetSlideAnim = useRef(new Animated.Value(400)).current;
+
+  useEffect(() => {
+    if (showMarketPicker) {
+      sheetSlideAnim.setValue(400);
+      Animated.spring(sheetSlideAnim, {
+        toValue: 0,
+        tension: 65,
+        friction: 11,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showMarketPicker, sheetSlideAnim]);
+
   const closeMarketPicker = () => {
-    setShowMarketPicker(false);
-    setMarketSearchQuery('');
+    Animated.timing(sheetSlideAnim, {
+      toValue: 400,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowMarketPicker(false);
+      setMarketSearchQuery('');
+    });
   };
 
   const filteredProducts = useMemo(() => {
@@ -929,13 +950,18 @@ export function OrderListScreen() {
 
       <Modal
         visible={showMarketPicker}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={closeMarketPicker}
       >
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={closeMarketPicker} />
-          <View style={styles.sheet}>
+          <Animated.View
+            style={[
+              styles.sheet,
+              { transform: [{ translateY: sheetSlideAnim }] },
+            ]}
+          >
             <View style={styles.sheetHandle} />
 
             <View style={styles.sheetHeaderRow}>
@@ -1016,7 +1042,7 @@ export function OrderListScreen() {
                 })
               )}
             </ScrollView>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 

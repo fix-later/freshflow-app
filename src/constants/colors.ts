@@ -68,7 +68,7 @@ export const Colors = {
   outlineVariant: '#E2E8F0',
 
   // Overlay
-  overlay: 'rgba(6, 66, 85, 0.52)',
+  overlay: 'rgba(0, 0, 0, 0.55)',
 } as const;
 
 export type ColorKey = keyof typeof Colors;

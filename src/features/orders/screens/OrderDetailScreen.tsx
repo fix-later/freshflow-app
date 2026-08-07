@@ -582,23 +582,47 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           </View>
         </View>
 
-        {/* ── Reorder Button (B2B Convenience) ── */}
+        {/* ── Reorder / Recurring Buttons (B2B Convenience) ── */}
         {canReorder ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.reorderCardBtn,
-              (pressed || reordering) && { opacity: 0.65 },
-            ]}
-            onPress={handleReorder}
-            disabled={reordering}
-          >
-            {reordering ? (
-              <ActivityIndicator size="small" color={Colors.primaryText} />
-            ) : (
-              <Ionicons name="repeat" size={18} color={Colors.primaryText} />
-            )}
-            <Text style={styles.reorderCardBtnText}>Tạo bản nháp từ đơn này</Text>
-          </Pressable>
+          <View style={styles.orderConvenienceRow}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.reorderCardBtn,
+                (pressed || reordering) && { opacity: 0.65 },
+              ]}
+              onPress={handleReorder}
+              disabled={reordering}
+            >
+              {reordering ? (
+                <ActivityIndicator size="small" color={Colors.primaryText} />
+              ) : (
+                <Ionicons name="repeat" size={18} color={Colors.primaryText} />
+              )}
+              <Text style={styles.reorderCardBtnText}>Tạo bản nháp từ đơn này</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.reorderCardBtn, pressed && { opacity: 0.65 }]}
+              onPress={() => {
+                // Merge by marketProductId — an order can carry more than one line for the same
+                // product (AddOrderItemCommandHandler sums quantities rather than rejecting a
+                // repeat add), and the schedule's item picker treats marketProductId as a unique
+                // key everywhere else.
+                const merged = new Map<string, number>();
+                for (const item of items) {
+                  merged.set(item.marketProductId, (merged.get(item.marketProductId) ?? 0) + item.quantity);
+                }
+                navigation.navigate('CreateRecurringOrder', {
+                  prefillItems: Array.from(merged, ([marketProductId, quantity]) => ({
+                    marketProductId,
+                    quantity,
+                  })),
+                });
+              }}
+            >
+              <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
+              <Text style={styles.reorderCardBtnText}>Đặt định kỳ từ đơn này</Text>
+            </Pressable>
+          </View>
         ) : null}
 
         <View style={{ height: 16 }} />
@@ -1009,7 +1033,13 @@ const styles = StyleSheet.create({
   },
   modalDangerBtnDisabled: { opacity: 0.6 },
   modalDangerBtnText: { color: Colors.onError, fontWeight: '700', fontSize: 14 },
+  orderConvenienceRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
   reorderCardBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1019,11 +1049,13 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
     borderRadius: 14,
     paddingVertical: 14,
-    marginTop: 16,
+    paddingHorizontal: 6,
   },
   reorderCardBtnText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '800',
     color: Colors.primaryText,
+    textAlign: 'center',
+    flexShrink: 1,
   },
 });

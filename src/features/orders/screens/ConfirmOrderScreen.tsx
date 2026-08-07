@@ -361,6 +361,28 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
             ItemSeparatorComponent={() => <View style={styles.separator} />}
           />
         </View>
+        <Pressable
+          style={styles.recurringLinkBtn}
+          onPress={() => {
+            // Merge by marketProductId — a draft order can carry more than one line for the same
+            // product (AddOrderItemCommandHandler sums quantities rather than rejecting a repeat
+            // add), and the schedule's item picker treats marketProductId as a unique key
+            // everywhere else (addPickedItem merges the same way).
+            const merged = new Map<string, number>();
+            for (const item of items) {
+              merged.set(item.marketProductId, (merged.get(item.marketProductId) ?? 0) + item.quantity);
+            }
+            navigation.navigate('CreateRecurringOrder', {
+              prefillItems: Array.from(merged, ([marketProductId, quantity]) => ({
+                marketProductId,
+                quantity,
+              })),
+            });
+          }}
+        >
+          <Ionicons name="repeat-outline" size={16} color={Colors.primaryText} />
+          <Text style={styles.recurringLinkBtnText}>Đặt định kỳ với các sản phẩm này</Text>
+        </Pressable>
 
         {/* ── Delivery time ── */}
         <Text style={styles.sectionTitle}>Thời gian giao hàng</Text>
@@ -574,6 +596,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryLight ?? '#f0faf4',
   },
   addAddressBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  recurringLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 10,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight ?? '#f0faf4',
+  },
+  recurringLinkBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primaryText },
 
   // Summary
   summaryRow: {
