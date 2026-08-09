@@ -140,7 +140,12 @@ export function RestaurantTabs() {
       <Tab.Screen
         name="RestaurantTracking"
         component={RestaurantOrderManagementTab}
-        options={{ headerShown: false }}
+        options={{
+          headerShown: false,
+          // Do not keep a previously opened order detail when the restaurant
+          // leaves this tab to place another order.
+          popToTopOnBlur: true,
+        }}
       />
       <Tab.Screen
         name="RestaurantProfile"

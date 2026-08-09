@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo } from '../../../components/ui/BrandLogo';
@@ -30,7 +30,7 @@ import {
   type ProductDto,
 } from '../../../types/api.types';
 import { pricingApi } from '../../pricing/api/pricingApi';
-import { notificationApi } from '../../notifications/api/notificationApi';
+import { useNotifications } from '../../notifications/context/NotificationContext';
 import { CartModal } from '../components/CartModal';
 
 type OrdersNav = NativeStackNavigationProp<RestaurantOrdersStackParamList>;
@@ -117,7 +117,7 @@ export function OrderListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const { unreadCount } = useNotifications();
 
   // Lets loadInitialData read the latest selection without depending on it —
   // adding selectedMarketId to its deps would recreate the callback (and the
@@ -176,22 +176,6 @@ export function OrderListScreen() {
       void loadProductsForMarket(selectedMarketId);
     }
   }, [loadProductsForMarket, selectedMarketId]);
-
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      notificationApi
-        .list({ pageSize: 1, isRead: false })
-        .then((page) => {
-          if (active) setHasUnreadNotifications(page.data.length > 0);
-        })
-        .catch(() => undefined);
-
-      return () => {
-        active = false;
-      };
-    }, []),
-  );
 
   const productMetadata = useMemo(
     () => new Map(catalogProducts.map((product) => [product.id, product])),
@@ -618,7 +602,7 @@ export function OrderListScreen() {
             onPress={() => navigation.navigate('Notifications')}
           >
             <Ionicons name="notifications-outline" size={22} color={Colors.deepTeal} />
-            {hasUnreadNotifications ? <View style={styles.notificationDot} /> : null}
+            {unreadCount > 0 ? <View style={styles.notificationDot} /> : null}
           </Pressable>
         </View>
       </View>

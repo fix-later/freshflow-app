@@ -195,7 +195,18 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
     navigation.getParent<any>()?.navigate('RestaurantTracking', {
         screen: 'OrderDetail',
         params: { orderId },
+        // Preserve TrackOrders as the nested stack's root even when this tab
+        // has never been opened before. Otherwise OrderDetail becomes root and
+        // cannot be popped/reset (also leaving the header without a back button).
+        initial: false,
       });
+  };
+
+  const openPlacedOrder = (orderId: string) => {
+    // The completed checkout must not remain in the shopping stack after the
+    // user opens the new order. Returning to "Mua sắm" should start at catalog.
+    navigation.popToTop();
+    openOrderManagement(orderId);
   };
 
   // Shared by refreshPreview (display-only quote) and handleSubmit (the real confirm) so the
@@ -331,7 +342,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
         <SuccessView
           orderId={placedOrderId}
           scheduledFor={placedScheduledFor}
-          onViewOrder={() => openOrderManagement(placedOrderId)}
+          onViewOrder={() => openPlacedOrder(placedOrderId)}
           onGoHome={() => navigation.popToTop()}
         />
       </SafeAreaView>

@@ -13,6 +13,7 @@ import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { type HubStackParamList, type HubTabParamList } from './types';
 import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
+import { NotificationBellButton } from '../features/notifications/components/NotificationBellButton';
 
 const Tab = createBottomTabNavigator<HubTabParamList>();
 const Stack = createNativeStackNavigator<HubStackParamList>();
@@ -91,7 +92,15 @@ function HubTabs() {
     >
       <Tab.Screen name="HubDashboard" component={HubDashboardScreen} options={{ title: 'Tổng quan' }} />
       <Tab.Screen name="InboundQueue" component={InboundQueueScreen} options={{ title: 'Lô hàng' }} />
-      <Tab.Screen name="HubProfile" component={ProfileScreen} options={{ title: 'Tài khoản', headerShown: true }} />
+      <Tab.Screen
+        name="HubProfile"
+        component={ProfileScreen}
+        options={{
+          title: 'Tài khoản',
+          headerShown: true,
+          headerRight: () => <NotificationBellButton />,
+        }}
+      />
     </Tab.Navigator>
   );
 }

@@ -2,6 +2,11 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { HubInboundTask } from '../features/hub/api/hubApi';
 import type { MarketProductTagDto } from '../types/api.types';
 
+export type RootStackParamList = {
+  RoleHome: any;
+  Notifications: undefined;
+};
+
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;

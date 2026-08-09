@@ -1,4 +1,4 @@
-import { Pressable } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -12,6 +12,7 @@ import { ReportDeliveryIssueScreen } from '../features/delivery/screens/ReportDe
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { type DriverStackParamList } from './types';
 import { Colors } from '../constants/colors';
+import { NotificationBellButton } from '../features/notifications/components/NotificationBellButton';
 
 const Stack = createNativeStackNavigator<DriverStackParamList>();
 
@@ -24,13 +25,22 @@ function ProfileHeaderButton() {
   );
 }
 
+function DriverHeaderActions() {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <NotificationBellButton />
+      <ProfileHeaderButton />
+    </View>
+  );
+}
+
 export function DriverStack() {
   return (
     <Stack.Navigator>
       <Stack.Screen
         name="DriverHome"
         component={DriverHomeScreen}
-        options={{ title: 'Trang chủ', headerRight: () => <ProfileHeaderButton /> }}
+        options={{ title: 'Trang chủ', headerRight: () => <DriverHeaderActions /> }}
       />
       <Stack.Screen
         name="PickupConfirm"
@@ -41,7 +51,11 @@ export function DriverStack() {
       <Stack.Screen name="DriverNavigation" component={NavigationScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ProofOfDelivery" component={ProofOfDeliveryScreen} options={{ title: 'Bằng chứng giao hàng' }} />
       <Stack.Screen name="ReportDeliveryIssue" component={ReportDeliveryIssueScreen} options={{ title: 'Báo cáo lỗi giao hàng' }} />
-      <Stack.Screen name="DriverProfile" component={ProfileScreen} options={{ title: 'Hồ sơ' }} />
+      <Stack.Screen
+        name="DriverProfile"
+        component={ProfileScreen}
+        options={{ title: 'Hồ sơ', headerRight: () => <NotificationBellButton /> }}
+      />
     </Stack.Navigator>
   );
 }

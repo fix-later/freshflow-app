@@ -9,7 +9,7 @@ export interface AuthStore {
   isLoading: boolean;
   sessionExpired: boolean;
   signIn: (user: User, token: string) => void;
-  signOut: () => void;
+  signOut: () => Promise<void>;
   setLoading: (loading: boolean) => void;
   clearSessionExpired: () => void;
   updateUser: (partial: Partial<User>) => void;

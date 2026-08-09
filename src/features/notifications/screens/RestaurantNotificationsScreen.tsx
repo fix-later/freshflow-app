@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -13,10 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '../../../components/ui/Text';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
-import {
-  notificationApi,
-  type NotificationDto,
-} from '../api/notificationApi';
+import { useNotifications } from '../context/NotificationContext';
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString('vi-VN', {
@@ -29,82 +26,36 @@ function formatDate(value: string) {
 }
 
 function notificationIcon(type: string): keyof typeof Ionicons.glyphMap {
-  const normalized = type.toLowerCase();
-  if (normalized.includes('order')) return 'receipt-outline';
-  if (normalized.includes('delivery')) return 'car-outline';
-  if (normalized.includes('credit')) return 'wallet-outline';
-  return 'notifications-outline';
+  switch (type.toLowerCase()) {
+    case 'order_status': return 'receipt-outline';
+    case 'delivery_update': return 'car-outline';
+    case 'credit_alert': return 'warning-outline';
+    case 'credit_statement': return 'document-text-outline';
+    default: return 'notifications-outline';
+  }
 }
 
 export function RestaurantNotificationsScreen() {
-  const [notifications, setNotifications] = useState<NotificationDto[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async (refresh = false) => {
-    if (refresh) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const page = await notificationApi.list();
-      setNotifications(page.data);
-      setNextCursor(page.meta.nextCursor);
-      setError(null);
-    } catch {
-      setError('Không thể tải thông báo.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const {
+    notifications,
+    loading,
+    refreshing,
+    loadingMore,
+    error,
+    nextCursor,
+    realtimeConnected,
+    syncInbox,
+    loadMore,
+    openNotification,
+  } = useNotifications();
 
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [load]),
+      void syncInbox(false);
+    }, [syncInbox]),
   );
 
-  const loadMore = useCallback(async () => {
-    if (!nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const page = await notificationApi.list({ cursor: nextCursor });
-      setNotifications((current) => {
-        const ids = new Set(current.map((item) => item.id));
-        return [...current, ...page.data.filter((item) => !ids.has(item.id))];
-      });
-      setNextCursor(page.meta.nextCursor);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [loadingMore, nextCursor]);
-
-  const markRead = async (item: NotificationDto) => {
-    if (item.isRead) return;
-    setNotifications((current) =>
-      current.map((notification) =>
-        notification.id === item.id ? { ...notification, isRead: true } : notification,
-      ),
-    );
-    try {
-      const updated = await notificationApi.markRead(item.id);
-      setNotifications((current) =>
-        current.map((notification) =>
-          notification.id === item.id ? updated : notification,
-        ),
-      );
-    } catch {
-      setNotifications((current) =>
-        current.map((notification) =>
-          notification.id === item.id ? item : notification,
-        ),
-      );
-    }
-  };
-
-  if (loading) {
+  if (loading && notifications.length === 0) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <View style={styles.centered}>
@@ -124,20 +75,35 @@ export function RestaurantNotificationsScreen() {
           styles.list,
           notifications.length === 0 && styles.emptyList,
         ]}
-        refreshControl={
+        refreshControl={(
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => void load(true)}
+            onRefresh={() => void syncInbox(true)}
             colors={[Colors.primary]}
             tintColor={Colors.primaryText}
           />
-        }
-        onEndReached={() => void loadMore()}
+        )}
+        onEndReached={() => {
+          if (nextCursor) void loadMore();
+        }}
         onEndReachedThreshold={0.25}
+        ListHeaderComponent={(
+          <View style={styles.connectionRow}>
+            <View style={[
+              styles.connectionDot,
+              realtimeConnected ? styles.connectionOnline : styles.connectionOffline,
+            ]} />
+            <Text style={styles.connectionText}>
+              {realtimeConnected ? 'Cập nhật realtime đang hoạt động' : 'Đang đồng bộ qua REST'}
+            </Text>
+          </View>
+        )}
         renderItem={({ item }) => (
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${item.isRead ? '' : 'Chưa đọc. '}${item.title}`}
             style={[styles.card, !item.isRead && styles.cardUnread]}
-            onPress={() => void markRead(item)}
+            onPress={() => void openNotification(item)}
           >
             <View style={[styles.icon, !item.isRead && styles.iconUnread]}>
               <Ionicons
@@ -156,24 +122,20 @@ export function RestaurantNotificationsScreen() {
             </View>
           </Pressable>
         )}
-        ListEmptyComponent={
+        ListEmptyComponent={(
           <View style={styles.centered}>
             <Ionicons name="notifications-off-outline" size={54} color={Colors.textMuted} />
-            <Text style={styles.emptyTitle}>
-              {error ?? 'Bạn chưa có thông báo nào'}
-            </Text>
+            <Text style={styles.emptyTitle}>{error ?? 'Bạn chưa có thông báo nào'}</Text>
             <Text style={styles.helperText}>
-              Cập nhật về đơn hàng và giao nhận sẽ xuất hiện tại đây.
+              Cập nhật về đơn hàng, giao nhận và công nợ sẽ xuất hiện tại đây.
             </Text>
           </View>
-        }
-        ListFooterComponent={
-          loadingMore ? (
-            <View style={styles.footer}>
-              <ActivityIndicator size="small" color={Colors.primaryText} />
-            </View>
-          ) : null
-        }
+        )}
+        ListFooterComponent={loadingMore ? (
+          <View style={styles.footer}>
+            <ActivityIndicator size="small" color={Colors.primaryText} />
+          </View>
+        ) : null}
       />
     </SafeAreaView>
   );
@@ -183,6 +145,11 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   list: { padding: 16, gap: 9 },
   emptyList: { flexGrow: 1 },
+  connectionRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 3 },
+  connectionDot: { width: 7, height: 7, borderRadius: 4 },
+  connectionOnline: { backgroundColor: Colors.success },
+  connectionOffline: { backgroundColor: Colors.textMuted },
+  connectionText: { fontSize: 10, color: Colors.textMuted },
   card: {
     flexDirection: 'row',
     alignItems: 'flex-start',
