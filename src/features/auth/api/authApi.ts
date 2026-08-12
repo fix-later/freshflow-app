@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import type { User } from '../../../types/common.types';
 import type { UserRole } from '../../../constants/roles';
 import { apiClient, TOKEN_KEY, REFRESH_TOKEN_KEY } from '../../../services/api/client';
+import { decodeJwtPayload } from '../../../utils/jwt';
 
 export { REFRESH_TOKEN_KEY };
 
@@ -32,17 +33,6 @@ function mapApprovalStatus(value: LoginResponse['approvalStatus']): ApprovalStat
   return value === null ? null : APPROVAL_STATUS_MAP[value];
 }
 
-function parseJwt(token: string): Record<string, unknown> {
-  const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-  const json = decodeURIComponent(
-    atob(base64)
-      .split('')
-      .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-      .join(''),
-  );
-  return JSON.parse(json) as Record<string, unknown>;
-}
-
 // Map BE role names (lowercase) → FE UserRole constants (UPPERCASE)
 const ROLE_MAP: Record<string, UserRole> = {
   restaurant:         'RESTAURANT',
@@ -67,7 +57,7 @@ export class UnsupportedRoleError extends Error {
 
 // Map JWT claims → User (handles both modern short-form and legacy .NET SOAP claims)
 export function userFromToken(token: string): User {
-  const c = parseJwt(token);
+  const c = decodeJwtPayload(token);
   const id =
     (c['sub'] as string) ??
     (c['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] as string) ??

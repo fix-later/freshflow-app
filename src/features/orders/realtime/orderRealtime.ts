@@ -3,9 +3,8 @@ import {
   LogLevel,
   type HubConnection,
 } from '@microsoft/signalr';
-import * as SecureStore from 'expo-secure-store';
 import { ENV, isDev } from '../../../config/env';
-import { TOKEN_KEY } from '../../../services/api/client';
+import { getValidAccessToken } from '../../../services/api/client';
 import { type OrderStatus } from '../api/orderApi';
 
 export interface OrderStatusChangedEvent {
@@ -50,7 +49,7 @@ export function createOrderStatusConnection(
   const hubBaseUrl = ENV.SIGNALR_URL.replace(/\/+$/, '');
   const connection = new HubConnectionBuilder()
     .withUrl(`${hubBaseUrl}/orders`, {
-      accessTokenFactory: async () => (await SecureStore.getItemAsync(TOKEN_KEY)) ?? '',
+      accessTokenFactory: getValidAccessToken,
     })
     .withAutomaticReconnect([0, 2_000, 5_000, 10_000, 30_000])
     .configureLogging(isDev ? LogLevel.Warning : LogLevel.Error)

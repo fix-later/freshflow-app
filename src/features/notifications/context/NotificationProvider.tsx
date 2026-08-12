@@ -24,6 +24,7 @@ import {
   presentLocalNotification,
 } from '../services/localNotification';
 import { NotificationContext } from './NotificationContext';
+import { stopAfterStart } from '../../../utils/signalr';
 
 function newestFirst(items: NotificationDto[]): NotificationDto[] {
   return [...items].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
@@ -171,6 +172,10 @@ export function NotificationProvider({ children }: PropsWithChildren) {
     const connection = createNotificationConnection(acceptRealtimeNotification);
     let disposed = false;
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    // Tracks the latest start() attempt (start() runs again on retry/AppState
+    // resume) so cleanup can wait for it to settle before stopping — see
+    // stopAfterStart().
+    let startAttempt: Promise<unknown> = Promise.resolve();
 
     const scheduleInitialRetry = () => {
       if (disposed || retryTimeout) return;
@@ -182,8 +187,10 @@ export function NotificationProvider({ children }: PropsWithChildren) {
 
     const start = async () => {
       if (disposed || connection.state !== HubConnectionState.Disconnected) return;
+      const attempt = connection.start();
+      startAttempt = attempt;
       try {
-        await connection.start();
+        await attempt;
         if (!disposed) setRealtimeConnected(true);
       } catch (startError) {
         if (!disposed) {
@@ -221,7 +228,7 @@ export function NotificationProvider({ children }: PropsWithChildren) {
       if (retryTimeout) clearTimeout(retryTimeout);
       appStateSubscription.remove();
       setRealtimeConnected(false);
-      void connection.stop();
+      stopAfterStart(connection, startAttempt);
     };
   }, [acceptRealtimeNotification, isAuthenticated, syncInbox, token, user?.id]);
 

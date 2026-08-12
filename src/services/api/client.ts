@@ -6,6 +6,7 @@ import axios, {
 } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { ENV } from '../../config/env';
+import { decodeJwtPayload } from '../../utils/jwt';
 
 export const TOKEN_KEY = 'ff_auth_token';
 export const REFRESH_TOKEN_KEY = 'ff_refresh_token';
@@ -39,6 +40,102 @@ export function registerSignOut(cb: () => void) {
   _onSignOut = cb;
 }
 
+// ─── Shared Token Refresh ───────────────────────────────────────────────────────
+// Both the response interceptor (reacting to a 401) and getValidAccessToken()
+// (proactively checked by SignalR before it negotiates) need to rotate the
+// access token. They share isRefreshing/failedQueue above so two refreshes
+// never fire concurrently regardless of which caller noticed the stale token first.
+
+interface RefreshTokenResponse {
+  success: boolean;
+  data: { accessToken: string; refreshToken: string; expiresIn: number };
+}
+
+async function performRefresh(): Promise<string> {
+  if (isRefreshing) {
+    return new Promise<string>((resolve, reject) => failedQueue.push({ resolve, reject }));
+  }
+
+  isRefreshing = true;
+  try {
+    const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    if (!refreshToken) throw new Error('no_refresh_token');
+
+    // Plain axios — bypasses apiClient interceptors to avoid re-triggering this handler
+    const { data: res } = await axios.post<RefreshTokenResponse>(
+      `${ENV.API_URL}/api/v1/auth/refresh`,
+      { refreshToken },
+      { headers: { 'Content-Type': 'application/json' } },
+    );
+
+    const newToken = res.data.accessToken;
+    await SecureStore.setItemAsync(TOKEN_KEY, newToken);
+    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, res.data.refreshToken);
+    apiClient.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+
+    processQueue(null, newToken);
+    return newToken;
+  } catch (refreshError) {
+    processQueue(refreshError, null);
+    // A network/timeout failure (no response from the server) doesn't mean the
+    // refresh token is invalid — only a server-issued rejection does. Treating
+    // it the same would force a full sign-out on a transient network blip,
+    // which is exactly when SignalR's automatic reconnect (a caller of this
+    // function via getValidAccessToken) is also likely to be firing.
+    const isNetworkFailure = axios.isAxiosError(refreshError) && !refreshError.response;
+    if (!isNetworkFailure) {
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
+      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+      _onSignOut?.();
+    }
+    throw refreshError;
+  } finally {
+    isRefreshing = false;
+  }
+}
+
+// exp is seconds-since-epoch per JWT spec; treat anything unreadable as expired
+// so callers fall through to a refresh attempt rather than trusting a bad token.
+function jwtExpiresAt(token: string): number | null {
+  try {
+    const json = decodeJwtPayload(token) as { exp?: number };
+    return typeof json.exp === 'number' ? json.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+// Buffer before the real expiry so a token that's about to die mid-negotiation
+// still gets refreshed proactively instead of round-tripping a 401 first.
+const EXPIRY_BUFFER_MS = 10_000;
+
+/**
+ * Returns a token guaranteed not to be expired, refreshing it first if needed.
+ * Unlike the request interceptor (which only reacts to a REST 401), this is for
+ * callers outside apiClient — e.g. SignalR's accessTokenFactory — that have no
+ * 401-retry path of their own and would otherwise negotiate with a dead token.
+ */
+export async function getValidAccessToken(): Promise<string> {
+  const token = await SecureStore.getItemAsync(TOKEN_KEY);
+  if (!token) return '';
+
+  const expiresAt = jwtExpiresAt(token);
+  if (expiresAt !== null && expiresAt - EXPIRY_BUFFER_MS > Date.now()) {
+    return token;
+  }
+
+  try {
+    return await performRefresh();
+  } catch {
+    // Refresh failed (network blip or a real rejection) — fall back to the
+    // cached token rather than ''. It may still have a few seconds of
+    // validity left inside EXPIRY_BUFFER_MS; if it's genuinely expired,
+    // negotiate will fail and the caller's own retry/backoff picks up a
+    // freshly refreshed token on the next attempt.
+    return token;
+  }
+}
+
 // ─── Request Interceptor ───────────────────────────────────────────────────────
 
 apiClient.interceptors.request.use(
@@ -51,11 +148,6 @@ apiClient.interceptors.request.use(
 );
 
 // ─── Response Interceptor ──────────────────────────────────────────────────────
-
-interface RefreshResponse {
-  success: boolean;
-  data: { accessToken: string; refreshToken: string; expiresIn: number };
-}
 
 interface EnvelopeAwareRequestConfig extends AxiosRequestConfig {
   preserveEnvelope?: boolean;
@@ -129,52 +221,19 @@ apiClient.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      // Queue concurrent requests until the current refresh resolves
-      if (isRefreshing) {
-        return new Promise<string>((resolve, reject) =>
-          failedQueue.push({ resolve, reject }),
-        ).then((token) => {
-          // Mark retried before replay — otherwise a request that still comes
-          // back 401 after the queued retry (e.g. that endpoint is 401 for an
-          // unrelated reason) would re-enter this branch and kick off a second,
-          // redundant refresh cycle using the token that was just rotated.
-          original._retry = true;
-          original.headers.Authorization = `Bearer ${token}`;
-          return apiClient(original);
-        });
-      }
-
+      // Mark retried before awaiting — otherwise a request that still comes back
+      // 401 after a queued refresh (e.g. that endpoint is 401 for an unrelated
+      // reason) would re-enter this branch and kick off a redundant refresh cycle
+      // using the token that was just rotated. performRefresh() itself queues
+      // concurrent callers behind a single in-flight refresh (see isRefreshing).
       original._retry = true;
-      isRefreshing = true;
 
       try {
-        const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
-        if (!refreshToken) throw new Error('no_refresh_token');
-
-        // Plain axios — bypasses apiClient interceptors to avoid re-triggering this handler
-        const { data: res } = await axios.post<RefreshResponse>(
-          `${ENV.API_URL}/api/v1/auth/refresh`,
-          { refreshToken },
-          { headers: { 'Content-Type': 'application/json' } },
-        );
-
-        const newToken = res.data.accessToken;
-        await SecureStore.setItemAsync(TOKEN_KEY, newToken);
-        await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, res.data.refreshToken);
-
-        apiClient.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+        const newToken = await performRefresh();
         original.headers.Authorization = `Bearer ${newToken}`;
-
-        processQueue(null, newToken);
         return apiClient(original);
       } catch (refreshError) {
-        processQueue(refreshError, null);
-        await SecureStore.deleteItemAsync(TOKEN_KEY);
-        await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
-        _onSignOut?.();
         return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
       }
     }
 

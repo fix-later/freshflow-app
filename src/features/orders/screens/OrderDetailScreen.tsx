@@ -35,6 +35,7 @@ import {
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 import { createOrderStatusConnection } from '../realtime/orderRealtime';
 import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
+import { stopAfterStart } from '../../../utils/signalr';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'OrderDetail'>;
 
@@ -231,12 +232,12 @@ export function OrderDetailScreen({ route, navigation }: Props) {
       const connection = createOrderStatusConnection((event) => {
         if (event.orderId === orderId) fetchOrder();
       });
-      connection.start().catch((connectionError) => {
+      const startAttempt = connection.start().catch((connectionError) => {
         console.warn('Order detail realtime connection failed:', connectionError);
       });
 
       return () => {
-        connection.stop().catch(() => undefined);
+        stopAfterStart(connection, startAttempt);
       };
     }, [fetchOrder]),
   );

@@ -20,6 +20,7 @@ import {
 } from '../../orders/api/orderApi';
 import { createOrderStatusConnection } from '../../orders/realtime/orderRealtime';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
+import { stopAfterStart } from '../../../utils/signalr';
 
 type DeliveryFilter = 'active' | 'delivering' | 'delivered';
 
@@ -140,12 +141,7 @@ export function TrackOrderScreen() {
         );
       });
 
-      connection.start().then(() => {
-        // If the screen was unmounted before start resolved, stop immediately.
-        if (!active) {
-          connection.stop().catch(() => undefined);
-        }
-      }).catch((connectionError) => {
+      const startAttempt = connection.start().catch((connectionError) => {
         if (active) {
           console.warn('Order realtime connection failed:', connectionError);
         }
@@ -153,7 +149,7 @@ export function TrackOrderScreen() {
 
       return () => {
         active = false;
-        connection.stop().catch(() => undefined);
+        stopAfterStart(connection, startAttempt);
       };
     }, [loadDeliveries]),
   );
