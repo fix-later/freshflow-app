@@ -1,5 +1,6 @@
 import { apiClient, getCursorPaged } from '../../../services/api/client';
 import {
+  findMarketProductByName,
   findUnitByProductName,
   getHubProductCatalog,
   type HubProductCatalog,
@@ -61,6 +62,14 @@ export interface LoadingLineDto {
   capacityKg: number | null;
   /** Enriched by the App because loading-manifest currently omits the catalog unit. */
   unit?: string | null;
+  /**
+   * Enriched by the App, matched by product name against the catalog — the loading-manifest
+   * response has no marketProductId either. `null` when the name didn't resolve to exactly one
+   * market listing; such lines are skipped when building an outbound request (see
+   * {@link buildOutboundItems}), since `POST /hubs/{hubId}/outbound` requires it.
+   */
+  marketProductId?: string | null;
+  productId?: string | null;
 }
 
 export interface LoadingStopDto {
@@ -100,6 +109,20 @@ export interface EligibleDriverDto {
   userId: string;
   roleName: string;
   isActive: boolean;
+}
+
+export interface RecordOutboundItemInput {
+  marketProductId: string;
+  productId: string | null;
+  quantityKg: number;
+}
+
+export interface HubOutboundEventDto {
+  outboundId: string;
+  hubId: string;
+  destinationRouteId: string;
+  totalQuantityKg: number;
+  dispatchedAt: string;
 }
 
 export interface HubDispatchPlanItem {
@@ -178,11 +201,61 @@ function enrichManifestUnits(
     ...manifest,
     stops: manifest.stops.map((stop) => ({
       ...stop,
-      lines: stop.lines.map((line) => ({
-        ...line,
-        unit: line.unit ?? findUnitByProductName(catalog, line.productName),
-      })),
+      lines: stop.lines.map((line) => {
+        const match = findMarketProductByName(catalog, line.productName);
+        return {
+          ...line,
+          unit: line.unit ?? findUnitByProductName(catalog, line.productName),
+          marketProductId: line.marketProductId ?? match?.marketProductId ?? null,
+          productId: line.productId ?? match?.productId ?? null,
+        };
+      }),
     })),
+  };
+}
+
+/**
+ * Aggregates a loading manifest's lines into `POST /hubs/{hubId}/outbound` items — one entry per
+ * distinct `marketProductId`, quantities summed across every stop/order on the route. Raw
+ * `line.quantity` (not rounded up to a whole packing case): inbound recorded the same raw
+ * quantity per `OrderItem` (`ScanInboundCommandHandler` sums `HubInboundEvent.Items[].QuantityKg`,
+ * itself built 1:1 from the procurement batch's purchased lines) — rounding up here would ask to
+ * dispatch more than was ever recorded as received, and the backend would refuse it as
+ * `INSUFFICIENT_HUB_STOCK`.
+ *
+ * A line whose product name didn't resolve to exactly one market listing (see
+ * `findMarketProductByName`) is skipped and its id returned in `unmatchedProductNames` — that
+ * product's hub stock will not be decremented by this dispatch, so the caller should surface the
+ * gap rather than silently drop it.
+ */
+export function buildOutboundItems(
+  manifest: LoadingManifestDto,
+): { items: RecordOutboundItemInput[]; unmatchedProductNames: string[] } {
+  const quantityByProduct = new Map<string, RecordOutboundItemInput>();
+  const unmatchedProductNames = new Set<string>();
+
+  for (const stop of manifest.stops) {
+    for (const line of stop.lines) {
+      if (!line.marketProductId) {
+        unmatchedProductNames.add(line.productName);
+        continue;
+      }
+      const existing = quantityByProduct.get(line.marketProductId);
+      if (existing) {
+        existing.quantityKg += line.quantity;
+      } else {
+        quantityByProduct.set(line.marketProductId, {
+          marketProductId: line.marketProductId,
+          productId: line.productId ?? null,
+          quantityKg: line.quantity,
+        });
+      }
+    }
+  }
+
+  return {
+    items: [...quantityByProduct.values()],
+    unmatchedProductNames: [...unmatchedProductNames],
   };
 }
 
@@ -341,15 +414,42 @@ export const hubDispatchApi = {
     return data.filter((driver) => driver.isActive);
   },
 
+  /**
+   * Records the goods leaving the hub for `destinationRouteId` — the counterpart to inbound
+   * scanning, so `Hub.OccupiedCapacityKg`/`HubInventory` actually decrease when a load departs
+   * instead of only ever growing. Build `items` with {@link buildOutboundItems}.
+   */
+  async recordOutbound(
+    hubId: string,
+    destinationRouteId: string,
+    items: RecordOutboundItemInput[],
+    dispatchedAt: string,
+  ): Promise<HubOutboundEventDto> {
+    const { data } = await apiClient.post<HubOutboundEventDto>(
+      `/api/v1/hubs/${hubId}/outbound`,
+      {
+        destinationRouteId,
+        items: items.map((item) => ({
+          marketProductId: item.marketProductId,
+          productId: item.productId,
+          quantityKg: item.quantityKg,
+        })),
+        dispatchedAt,
+      },
+    );
+    return data;
+  },
+
   async createHandover(
     hubId: string,
     deliveryRouteId: string,
     driverUserId: string,
+    outboundEventId: string | null,
     notes?: string,
   ): Promise<{ handoverId: string }> {
     const { data } = await apiClient.post<{ handoverId: string }>(
       `/api/v1/hubs/${hubId}/handover`,
-      { deliveryRouteId, driverUserId, outboundEventId: null, notes: notes ?? null },
+      { deliveryRouteId, driverUserId, outboundEventId, notes: notes ?? null },
     );
     return data;
   },

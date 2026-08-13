@@ -200,7 +200,8 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
   };
 
   const subtotal = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
-  const itemCount = items.reduce((sum, it) => sum + it.quantity, 0);
+  // Distinct products, not total kg — `quantity` is a weight, not a unit count.
+  const itemCount = items.length;
 
   const openOrderManagement = (orderId: string) => {
     navigation.getParent<any>()?.navigate('RestaurantTracking', {

@@ -3,16 +3,21 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, {
+  DateTimePickerAndroid,
+  type DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import { Colors } from '../../../constants/colors';
 import {
   Text,
@@ -104,13 +109,30 @@ export function CreateOrderScreen({ route, navigation }: Props) {
   }, []);
 
   const subtotal = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
-  const itemCount = items.reduce((sum, it) => sum + it.quantity, 0);
+  // Distinct products, not total kg — `quantity` is a weight, not a unit count.
+  const itemCount = items.length;
 
-  const onChangeDate = (event: DateTimePickerEvent, date?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (date) {
-      setSelectedDate(date);
+  const openPicker = () => {
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: selectedDate,
+        mode: 'date',
+        is24Hour: true,
+        minimumDate: new Date(),
+        maximumDate: getDeliveryUpperBound(deliveryWindowDays),
+        onChange: (event: DateTimePickerEvent, selected?: Date) => {
+          if (event.type !== 'dismissed' && selected) setSelectedDate(selected);
+        },
+      });
+      return;
     }
+    setShowDatePicker(true);
+  };
+
+  // iOS inline calendar fires onChange continuously while scrolling — just apply live, the
+  // modal stays open until the user taps "Xong".
+  const handleInlinePickerChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (selected) setSelectedDate(selected);
   };
 
   const handleNext = () => {
@@ -155,36 +177,16 @@ export function CreateOrderScreen({ route, navigation }: Props) {
         {/* ── Delivery date ── */}
         <Text style={styles.sectionTitle}>Ngày giao hàng</Text>
         <View style={styles.card}>
-          <View style={styles.customPickerContainer}>
-            <Pressable
-              style={styles.pickerSelector}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
-              <View>
-                <Text style={styles.pickerSelectorLabel}>Ngày giao hàng</Text>
-                <Text style={styles.pickerSelectorValue}>
-                  {selectedDate.toLocaleDateString('vi-VN')}
-                </Text>
-              </View>
-            </Pressable>
-          </View>
-          <Text style={styles.deliveryHint}>
-            Đơn hàng sẽ được giao tự động vào khung {DELIVERY_HOUR}:00 - {DELIVERY_HOUR + 2}:00 sáng
-            ngày đã chọn.
-          </Text>
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display="default"
-              minimumDate={new Date()}
-              maximumDate={getDeliveryUpperBound(deliveryWindowDays)}
-              onChange={onChangeDate}
-            />
-          )}
+          <Pressable style={[styles.dateTimeRow, styles.dateTimeRowLast]} onPress={openPicker}>
+            <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
+            <Text style={styles.dateTimeLabel}>Ngày giao hàng</Text>
+            <Text style={styles.dateTimeValue}>{selectedDate.toLocaleDateString('vi-VN')}</Text>
+          </Pressable>
         </View>
+        <Text style={styles.helperCaption}>
+          Đơn hàng sẽ được giao tự động vào khung {DELIVERY_HOUR}:00 - {DELIVERY_HOUR + 2}:00 sáng
+          ngày đã chọn.
+        </Text>
 
         {/* ── Notes ── */}
         <Text style={styles.sectionTitle}>Ghi chú đơn hàng</Text>
@@ -216,6 +218,38 @@ export function CreateOrderScreen({ route, navigation }: Props) {
           <Ionicons name="arrow-forward" size={16} color={Colors.onPrimary} />
         </Pressable>
       </View>
+
+      {/* iOS only — Android shows its own native dialog via DateTimePickerAndroid.open */}
+      <Modal
+        visible={showDatePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.pickerBackdrop}>
+          <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <View style={styles.pickerSheet}>
+            <View style={styles.pickerSheetHeader}>
+              <Text style={styles.pickerSheetTitle}>Chọn ngày</Text>
+              <Pressable onPress={() => setShowDatePicker(false)}>
+                <Text style={styles.pickerDoneText}>Xong</Text>
+              </Pressable>
+            </View>
+            {showDatePicker ? (
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display="inline"
+                minimumDate={new Date()}
+                maximumDate={getDeliveryUpperBound(deliveryWindowDays)}
+                onChange={handleInlinePickerChange}
+              />
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -253,40 +287,19 @@ const styles = StyleSheet.create({
   itemQtyLabel: { fontSize: 10, color: Colors.textMuted },
   itemQty: { fontSize: 16, fontWeight: '700', color: Colors.onSurface },
 
-  customPickerContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginHorizontal: 14,
-    marginBottom: 14,
-  },
-  pickerSelector: {
-    flex: 1,
+  dateTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: Colors.outlineVariant,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  pickerSelectorLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
-  },
-  pickerSelectorValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.onSurface,
-    marginTop: 1,
-  },
-  deliveryHint: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    gap: 10,
     paddingHorizontal: 14,
-    paddingBottom: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceVariant,
   },
+  dateTimeRowLast: { borderBottomWidth: 0 },
+  dateTimeLabel: { flex: 1, fontSize: 14, color: Colors.onSurface },
+  dateTimeValue: { fontSize: 14, fontWeight: '700', color: Colors.primaryText },
+  helperCaption: { fontSize: 11, color: Colors.textMuted, marginTop: 6, lineHeight: 15 },
 
   // Notes
   notesInput: {
@@ -326,4 +339,30 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   nextBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickerSheet: {
+    width: '88%',
+    maxWidth: 360,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 20,
+    overflow: 'hidden',
+    paddingBottom: 8,
+  },
+  pickerSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceVariant,
+  },
+  pickerSheetTitle: { fontSize: 16, fontWeight: '800', color: Colors.onSurface },
+  pickerDoneText: { fontSize: 15, fontWeight: '700', color: Colors.primaryText },
 });

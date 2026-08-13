@@ -442,7 +442,8 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const statusColor = ORDER_STATUS_COLOR[order.status] || Colors.outline;
   const code = (order.orderId || '').slice(0, 8).toUpperCase() || 'N/A';
   const items = order.items ?? [];
-  const itemCount = items.reduce((sum, it) => sum + (it.quantity ?? 0), 0);
+  // Distinct products, not total kg — `quantity` is a weight, not a unit count.
+  const itemCount = items.length;
   const canCancel = CANCELLABLE_STATUSES.includes(order.status);
   const canConfirmOrder = order.status === 'draft' && items.length > 0;
   const canConfirmReceipt = order.status === 'delivered' && !order.confirmedReceiptAt;

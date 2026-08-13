@@ -7,7 +7,7 @@ import { EmptyState, ErrorView, Loading, Text } from '../../../components/ui';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import type { HubStackParamList } from '../../../navigation/types';
-import { hubDispatchApi } from '../api/hubDispatchApi';
+import { buildOutboundItems, hubDispatchApi } from '../api/hubDispatchApi';
 import { useHubDispatch } from '../hooks/useHubDispatch';
 import { useHubWork } from '../hooks/useHubWork';
 
@@ -33,6 +33,10 @@ export function DriverHandoffScreen({ navigation, route: screenRoute }: Props) {
   const [checkedOrders, setCheckedOrders] = useState(new Set<string>());
   const [confirmedByDriver, setConfirmedByDriver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Set once recordOutbound succeeds, so a retry after createHandover fails (driver
+  // reassigned, route status changed, ...) re-sends the *same* outbound event instead of
+  // recording the dispatch — and decrementing hub stock — a second time.
+  const [recordedOutboundEventId, setRecordedOutboundEventId] = useState<string | null>(null);
   const ready = orders.length > 0
     && orders.every((order) => checkedOrders.has(order.orderId))
     && confirmedByDriver
@@ -51,10 +55,37 @@ export function DriverHandoffScreen({ navigation, route: screenRoute }: Props) {
     if (!planItem?.route.driverUserId || !ready) return;
     setSubmitting(true);
     try {
+      // Records what's leaving the hub *before* the handover, so hub capacity/stock actually
+      // frees up when a load departs instead of only ever growing (see buildOutboundItems' doc
+      // comment). Skipped entirely — handover still proceeds with no outbound event — when no
+      // line resolved to a market listing, since an empty dispatch is meaningless to record.
+      // Reuses a prior success (see `recordedOutboundEventId`'s doc comment) instead of recording
+      // the same dispatch twice on a retry.
+      let outboundEventId = recordedOutboundEventId;
+      if (!outboundEventId) {
+        const { items: outboundItems, unmatchedProductNames } = buildOutboundItems(planItem.manifest);
+        if (outboundItems.length > 0) {
+          const outbound = await hubDispatchApi.recordOutbound(
+            screenRoute.params.hubId,
+            planItem.route.id,
+            outboundItems,
+            new Date().toISOString(),
+          );
+          outboundEventId = outbound.outboundId;
+          setRecordedOutboundEventId(outbound.outboundId);
+        }
+        if (unmatchedProductNames.length > 0) {
+          console.warn(
+            `Xuất kho bỏ qua ${unmatchedProductNames.length} sản phẩm không xác định được marketProductId: ${unmatchedProductNames.join(', ')}`,
+          );
+        }
+      }
+
       await hubDispatchApi.createHandover(
         screenRoute.params.hubId,
         planItem.route.id,
         planItem.route.driverUserId,
+        outboundEventId,
         `Hub Staff xác nhận đủ ${orders.length} đơn trên App`,
       );
       Alert.alert('Bàn giao thành công', 'Tuyến đã được bàn giao cho tài xế được phân công.', [

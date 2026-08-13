@@ -3,6 +3,7 @@ import type { MarketProductDto } from '../../../types/api.types';
 
 export interface HubProductReference {
   marketProductId: string;
+  productId: string;
   productName: string;
   unit: string | null;
 }
@@ -10,6 +11,8 @@ export interface HubProductReference {
 export interface HubProductCatalog {
   byMarketProductId: ReadonlyMap<string, HubProductReference>;
   unitByProductName: ReadonlyMap<string, string>;
+  /** Same ambiguous-name exclusion as {@link unitByProductName} — see {@link findMarketProductByName}. */
+  referenceByProductName: ReadonlyMap<string, HubProductReference>;
 }
 
 const PAGE_SIZE = 100;
@@ -41,6 +44,7 @@ async function getMarketProducts(marketId: string): Promise<HubProductReference[
 
   const references = products.map((product): HubProductReference => ({
     marketProductId: product.marketProductId,
+    productId: product.productId,
     productName: product.productName,
     unit: product.unit?.trim() || null,
   }));
@@ -76,7 +80,24 @@ export async function getHubProductCatalog(marketIds: string[]): Promise<HubProd
     if (!ambiguousNames.has(name)) unitByProductName.set(name, reference.unit);
   });
 
-  return { byMarketProductId, unitByProductName };
+  // Same shape, but keyed on marketProductId agreement rather than unit agreement — two
+  // listings of "Cải ngọt" across different markets are ambiguous here even when their
+  // units match, since resolving to the wrong marketProductId misattributes hub stock.
+  const referenceByProductName = new Map<string, HubProductReference>();
+  const ambiguousIds = new Set<string>();
+
+  references.forEach((reference) => {
+    const name = normalizeProductName(reference.productName);
+    const current = referenceByProductName.get(name);
+    if (current && current.marketProductId !== reference.marketProductId) {
+      ambiguousIds.add(name);
+      referenceByProductName.delete(name);
+      return;
+    }
+    if (!ambiguousIds.has(name)) referenceByProductName.set(name, reference);
+  });
+
+  return { byMarketProductId, unitByProductName, referenceByProductName };
 }
 
 export function findUnitByProductName(
@@ -84,4 +105,12 @@ export function findUnitByProductName(
   productName: string,
 ): string | null {
   return catalog.unitByProductName.get(normalizeProductName(productName)) ?? null;
+}
+
+/** `null` when the name doesn't resolve to exactly one market listing (unmatched, or ambiguous across markets). */
+export function findMarketProductByName(
+  catalog: HubProductCatalog,
+  productName: string,
+): HubProductReference | null {
+  return catalog.referenceByProductName.get(normalizeProductName(productName)) ?? null;
 }

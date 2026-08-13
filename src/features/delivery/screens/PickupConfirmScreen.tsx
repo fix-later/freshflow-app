@@ -301,7 +301,7 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
             <Ionicons name="cube-outline" size={42} color={Colors.textMuted} />
             <Text style={styles.emptyTitle}>Chưa có đơn hàng sẵn sàng tại Hub</Text>
             <Text style={styles.emptySub}>
-              Không tìm thấy đơn hàng nào ở trạng thái "Đã về Hub" (AtHub) cho tuyến này. Vui lòng chuyển trạng thái đơn hàng sang "AtHub" trên hệ thống Admin Backend.
+              Chưa có đơn hàng nào sẵn sàng để nhận tại Hub cho tuyến này. Vui lòng đợi nhân viên Hub bàn giao.
             </Text>
           </View>
         }
