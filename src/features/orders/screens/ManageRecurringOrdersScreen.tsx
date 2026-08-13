@@ -39,6 +39,23 @@ function formatDateTime(iso: string | null): string {
     .padStart(2, '0')}`;
 }
 
+/**
+ * `firstRunAt`'s clock time is always the same fixed early-morning hour now
+ * (see `DELIVERY_HOUR` in `CreateRecurringOrderScreen.tsx`) — every run this
+ * schedule generates delivers somewhere in that window, so this shows the
+ * date plus the window instead of the stored instant's own minute, which
+ * would read as an exact time.
+ */
+function formatRunDate(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const day = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1)
+    .toString()
+    .padStart(2, '0')}/${d.getFullYear()}`;
+  return `${day} (4:00 - 6:00 sáng)`;
+}
+
 export function ManageRecurringOrdersScreen() {
   const navigation = useNavigation<Nav>();
 
@@ -154,7 +171,7 @@ export function ManageRecurringOrdersScreen() {
 
         <View style={styles.metaRow}>
           <Ionicons name="play-outline" size={13} color={Colors.textMuted} />
-          <Text style={styles.metaText}>Bắt đầu: {formatDateTime(item.firstRunAt)}</Text>
+          <Text style={styles.metaText}>Bắt đầu: {formatRunDate(item.firstRunAt)}</Text>
         </View>
         <View style={styles.metaRow}>
           <Ionicons name="time-outline" size={13} color={Colors.textMuted} />

@@ -32,6 +32,17 @@ type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'ConfirmOrde
 const CREDIT_WARNING_RATIO = 0.8;
 const CREDIT_EXCEEDED_RATIO = 1;
 
+/**
+ * `scheduledFor`'s clock time is always the same fixed early-morning hour now
+ * (see `DELIVERY_HOUR` in `CreateOrderScreen.tsx`) — the actual delivery can
+ * land anywhere in that window, so this shows the date plus the window
+ * instead of the stored instant's own minute, which would read as an exact time.
+ */
+function formatDeliveryWindow(iso: string): string {
+  const day = new Date(iso).toLocaleDateString('vi-VN');
+  return `${day} (4:00 - 6:00 sáng)`;
+}
+
 function CreditAlertBanner({ ratio, available }: { ratio: number; available: number }) {
   if (ratio < CREDIT_WARNING_RATIO) return null;
   const isDanger = ratio >= CREDIT_EXCEEDED_RATIO;
@@ -88,7 +99,7 @@ function SuccessView({
       <Text style={styles.successSub}>Mã đơn: {orderId.slice(0, 8).toUpperCase()}</Text>
       <Text style={styles.successDesc}>
         Đơn đã được xác nhận
-        {scheduledFor ? ` và dự kiến giao ${new Date(scheduledFor).toLocaleString('vi-VN')}.` : '.'}
+        {scheduledFor ? ` và dự kiến giao ${formatDeliveryWindow(scheduledFor)}.` : '.'}
       </Text>
       <Pressable style={styles.successBtn} onPress={onViewOrder}>
         <Text style={styles.successBtnText}>Xem đơn hàng</Text>

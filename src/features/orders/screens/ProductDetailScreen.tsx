@@ -31,11 +31,34 @@ interface RouteParams {
     availableQuantity: number;
     tags: MarketProductTagDto[];
     description?: string | null;
+    /**
+     * How many kg one case ("kiện") of this product weighs. Optional: a
+     * caller whose source data doesn't carry it (Favorites — its list
+     * endpoint reports no selling-unit) simply omits the field, which reads
+     * as "unknown" and falls back to a 1kg step (see `packSize`) rather than
+     * `null`, which reads as "confirmed no packing code" and blocks adding
+     * outright (see `hasNoPackingCode`).
+     */
+    sellingUnit?: { unitName: string; weightKg: number | null } | null;
   };
 }
 
 function formatPrice(p: number) {
   return p.toLocaleString("vi-VN") + "đ";
+}
+
+function packSize(product: RouteParams['product']): number {
+  const weight = product.sellingUnit?.weightKg;
+  return typeof weight === 'number' && weight > 0 ? weight : 1;
+}
+
+/** True only when the caller affirmatively reported no packing code — see the field's doc comment. */
+function hasNoPackingCode(product: RouteParams['product']): boolean {
+  if (product.sellingUnit === undefined) {
+    return false;
+  }
+  const weight = product.sellingUnit?.weightKg;
+  return !(typeof weight === 'number' && weight > 0);
 }
 
 function formatDateTime(value: string) {
@@ -59,7 +82,13 @@ export function ProductDetailScreen() {
 
   const [priceHistory, setPriceHistory] = useState<PriceHistoryItemDto[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [quantity, setQuantity] = useState(product.availableQuantity > 0 ? 1 : 0);
+
+  const step = packSize(product);
+  const maxQty = Math.floor(product.availableQuantity / step) * step;
+  // `maxQty < step` also catches stock under one whole case — just as
+  // unorderable as none, since a fresh line always seeds at one full case.
+  const disabled = hasNoPackingCode(product) || maxQty < step;
+  const [quantity, setQuantity] = useState(disabled ? 0 : step);
 
   useEffect(() => {
     navigation.setOptions({ title: product.productName });
@@ -93,9 +122,9 @@ export function ProductDetailScreen() {
   }, [product.marketId, product.productId]);
 
   const handleAddToCart = () => {
-    if (product.availableQuantity <= 0 || quantity <= 0) return;
+    if (disabled || quantity <= 0) return;
     const existing = cart.find((item) => item.id === product.marketProductId);
-    const nextQuantity = Math.min(product.availableQuantity, (existing?.qty ?? 0) + quantity);
+    const nextQuantity = Math.min(maxQty, (existing?.qty ?? 0) + quantity);
 
     if (existing) {
       updateItemQty(product.marketProductId, nextQuantity);
@@ -107,8 +136,9 @@ export function ProductDetailScreen() {
         unit: product.unit,
         price: product.currentPrice,
         image: product.imageUrl ?? '',
+        packWeightKg: product.sellingUnit?.weightKg ?? null,
       });
-      if (nextQuantity > 1) {
+      if (nextQuantity > step) {
         updateItemQty(product.marketProductId, nextQuantity);
       }
     }
@@ -206,16 +236,28 @@ export function ProductDetailScreen() {
                 <Text style={styles.factValue}>{product.marketName}</Text>
               </View>
             </View>
-            <View style={styles.fact}>
-              <Ionicons name="layers-outline" size={20} color={Colors.primaryText} />
-              <View>
-                <Text style={styles.factLabel}>Tồn khả dụng</Text>
-                <Text style={styles.factValue}>
-                  {product.availableQuantity} {product.unit}
-                </Text>
+            {step > 1 ? (
+              <View style={styles.fact}>
+                <Ionicons name="layers-outline" size={20} color={Colors.primaryText} />
+                <View>
+                  <Text style={styles.factLabel}>Quy cách đóng gói</Text>
+                  <Text style={styles.factValue}>{step} kg/kiện</Text>
+                </View>
               </View>
-            </View>
+            ) : null}
           </View>
+
+          {hasNoPackingCode(product) ? (
+            <Text style={styles.packMissingText}>
+              Sản phẩm chưa được cấu hình quy cách đóng gói, chưa thể đặt hàng.
+            </Text>
+          ) : product.availableQuantity <= 0 ? (
+            <Text style={styles.packMissingText}>Sản phẩm tạm hết hàng.</Text>
+          ) : disabled ? (
+            <Text style={styles.packMissingText}>
+              Chỉ còn {product.availableQuantity} {product.unit}, không đủ 1 kiện ({step} {product.unit}).
+            </Text>
+          ) : null}
 
           <View style={styles.historyHeader}>
             <Text style={styles.historyTitle}>Giá gần đây</Text>
@@ -247,16 +289,16 @@ export function ProductDetailScreen() {
         <View style={styles.quantity}>
           <Pressable
             style={styles.quantityButton}
-            disabled={quantity <= 1}
-            onPress={() => setQuantity((value) => Math.max(1, value - 1))}
+            disabled={quantity <= step}
+            onPress={() => setQuantity((value) => Math.max(step, value - step))}
           >
             <Ionicons name="remove" size={22} color={Colors.deepTeal} />
           </Pressable>
           <Text numeric style={styles.quantityValue}>{quantity}</Text>
           <Pressable
             style={styles.quantityButton}
-            disabled={quantity >= product.availableQuantity}
-            onPress={() => setQuantity((value) => Math.min(product.availableQuantity, value + 1))}
+            disabled={quantity >= maxQty}
+            onPress={() => setQuantity((value) => Math.min(maxQty, value + step))}
           >
             <Ionicons name="add" size={22} color={Colors.deepTeal} />
           </Pressable>
@@ -264,9 +306,9 @@ export function ProductDetailScreen() {
         <Pressable
           style={[
             styles.addButton,
-            product.availableQuantity <= 0 && styles.addButtonDisabled,
+            disabled && styles.addButtonDisabled,
           ]}
-          disabled={product.availableQuantity <= 0}
+          disabled={disabled}
           onPress={handleAddToCart}
         >
           <Ionicons name="bag-add-outline" size={20} color={Colors.onPrimary} />
@@ -497,5 +539,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
+  },
+  packMissingText: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.error,
   },
 });

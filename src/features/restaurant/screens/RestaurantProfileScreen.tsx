@@ -9,15 +9,10 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import DateTimePicker, {
-  DateTimePickerAndroid,
-  type DateTimePickerEvent,
-} from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -53,28 +48,6 @@ const APPROVAL_STATUS_COLOR: Record<ApprovalStatusDto['status'], string> = {
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
-
-const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-function validateTime(t: string): string | null {
-  if (!t) return null;
-  return TIME_REGEX.test(t) ? null : 'Định dạng HH:MM (ví dụ 08:00)';
-}
-
-function timeStringToDate(hhmm: string): Date {
-  const d = new Date();
-  const match = TIME_REGEX.exec(hhmm);
-  if (match) {
-    d.setHours(Number(hhmm.slice(0, 2)), Number(hhmm.slice(3, 5)), 0, 0);
-  } else {
-    d.setHours(8, 0, 0, 0);
-  }
-  return d;
-}
-
-function dateToTimeString(d: Date): string {
-  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-}
 
 // Mirrors UpdateMyTaxProfileCommandValidator.cs exactly (10-digit MST, optional -3-digit branch suffix).
 const TAX_CODE_REGEX = /^\d{10}(-\d{3})?$/;
@@ -158,32 +131,6 @@ function FormField({
   );
 }
 
-function TimeField({
-  label,
-  value,
-  onPress,
-  error,
-}: {
-  label: string;
-  value: string;
-  onPress: () => void;
-  error?: string | null;
-}) {
-  return (
-    <View style={field.container}>
-      <Text style={field.label}>{label}</Text>
-      <Pressable style={[field.inputWrapper, error ? field.inputError : null]} onPress={onPress}>
-        <Ionicons name="time-outline" size={18} color={Colors.textMuted} />
-        <Text style={[field.timeValue, !value && { color: Colors.textMuted }]}>
-          {value || 'Chọn giờ'}
-        </Text>
-        <Ionicons name="chevron-down" size={16} color={Colors.textMuted} />
-      </Pressable>
-      {error ? <Text style={field.errorText}>{error}</Text> : null}
-    </View>
-  );
-}
-
 const field = StyleSheet.create({
   container: { marginBottom: 16 },
   label: {
@@ -216,19 +163,21 @@ const field = StyleSheet.create({
     height: '100%',
     padding: 0,
   },
-  // Plain Text, unlike TextInput, doesn't auto-center vertically within a fixed-height
-  // box — no `height` here so the row's `alignItems: 'center'` can center it properly.
-  timeValue: {
-    flex: 1,
-    fontSize: 15,
-    color: Colors.textPrimary,
-  },
   errorText: { fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 2 },
   hintText: { fontSize: 12, color: Colors.textMuted, marginTop: 4, marginLeft: 2 },
 });
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────────
 
+/**
+ * `pickupStart`/`pickupEnd` are carried in this form purely to round-trip
+ * unchanged on save — the receiving-window feature is retired (every
+ * delivery, one-off or recurring, now uses the same fixed early-morning
+ * window; see `CreateOrderScreen.tsx`'s `DELIVERY_HOUR`), so this screen no
+ * longer renders any UI for them. Dropping them from the update payload
+ * instead would silently null out whatever a restaurant configured before,
+ * since the backend overwrites both fields unconditionally on every save.
+ */
 type RestaurantProfileForm = Pick<
   RestaurantProfileDto,
   'name' | 'address' | 'contactPerson' | 'pickupStart' | 'pickupEnd'
@@ -305,12 +254,6 @@ export function RestaurantProfileScreen() {
   const [licensePreviewVisible, setLicensePreviewVisible] = useState(false);
   const [licensePreviewFailed, setLicensePreviewFailed] = useState(false);
 
-  // ─── Pickup time pickers ─────────────────────────────────────────────────
-  // Android: DateTimePickerAndroid.open() shows the system dialog imperatively.
-  // iOS: 'default'/'compact' display renders an inline chip in-place instead of a
-  // popup, so it's driven through this state + a Modal (see pickerBackdrop below).
-  const [pickupPickerField, setPickupPickerField] = useState<'start' | 'end' | null>(null);
-
   const loadProfile = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -363,48 +306,7 @@ export function RestaurantProfileScreen() {
     setSaveError(null);
   }, [original]);
 
-  const applyPickupTime = useCallback((fieldName: 'start' | 'end', date: Date) => {
-    setField(fieldName === 'start' ? 'pickupStart' : 'pickupEnd', dateToTimeString(date));
-  }, [setField]);
-
-  const openPickupPicker = useCallback((fieldName: 'start' | 'end') => {
-    const current = fieldName === 'start' ? form.pickupStart : form.pickupEnd;
-    if (Platform.OS === 'android') {
-      DateTimePickerAndroid.open({
-        value: timeStringToDate(current),
-        mode: 'time',
-        is24Hour: true,
-        onChange: (event: DateTimePickerEvent, date?: Date) => {
-          if (event.type !== 'dismissed' && date) applyPickupTime(fieldName, date);
-        },
-      });
-      return;
-    }
-    setPickupPickerField(fieldName);
-  }, [form.pickupStart, form.pickupEnd, applyPickupTime]);
-
-  // iOS inline spinner fires onChange continuously while scrolling — just apply live, the
-  // modal stays open until the user taps "Xong".
-  const handleInlinePickupChange = useCallback((_event: DateTimePickerEvent, date?: Date) => {
-    if (pickupPickerField && date) applyPickupTime(pickupPickerField, date);
-  }, [pickupPickerField, applyPickupTime]);
-
-  const pickupStartError = validateTime(form.pickupStart);
-  const pickupEndError = validateTime(form.pickupEnd);
-  const pickupRangeError =
-    form.pickupStart &&
-    form.pickupEnd &&
-    !pickupStartError &&
-    !pickupEndError &&
-    form.pickupEnd <= form.pickupStart
-      ? 'Giờ kết thúc phải sau giờ bắt đầu'
-      : null;
-  const canSave =
-    !saveLoading &&
-    !!form.name.trim() &&
-    !pickupStartError &&
-    !pickupEndError &&
-    !pickupRangeError;
+  const canSave = !saveLoading && !!form.name.trim();
 
   const handleSave = useCallback(async () => {
     if (!canSave) return;
@@ -644,7 +546,7 @@ export function RestaurantProfileScreen() {
           <View style={styles.headerRow}>
             <View>
               <Text style={styles.pageTitle}>Thông tin nhà hàng</Text>
-              <Text style={styles.pageSub}>Cập nhật tên, địa chỉ và giờ nhận hàng</Text>
+              <Text style={styles.pageSub}>Cập nhật tên và địa chỉ</Text>
             </View>
             {!isEditing && (
               <Pressable style={styles.editBtn} onPress={enterEdit}>
@@ -752,45 +654,6 @@ export function RestaurantProfileScreen() {
                   value={form.contactPerson || '—'}
                 />
               </>
-            )}
-          </View>
-
-          {/* ─── Pickup time card ───────────────── */}
-          <View style={styles.card}>
-            <Text style={styles.cardSection}>Khung giờ nhận hàng</Text>
-
-            {isEditing ? (
-              <View style={styles.timeRow}>
-                <View style={styles.timeHalf}>
-                  <TimeField
-                    label="Từ"
-                    value={form.pickupStart}
-                    onPress={() => openPickupPicker('start')}
-                    error={pickupStartError}
-                  />
-                </View>
-                <View style={styles.timeDivider}>
-                  <Text style={styles.timeDash}>–</Text>
-                </View>
-                <View style={styles.timeHalf}>
-                  <TimeField
-                    label="Đến"
-                    value={form.pickupEnd}
-                    onPress={() => openPickupPicker('end')}
-                    error={pickupEndError || pickupRangeError}
-                  />
-                </View>
-              </View>
-            ) : (
-              <InfoView
-                icon="time-outline"
-                label="Giờ nhận hàng"
-                value={
-                  form.pickupStart && form.pickupEnd
-                    ? `${form.pickupStart} – ${form.pickupEnd}`
-                    : '—'
-                }
-              />
             )}
           </View>
 
@@ -1062,41 +925,6 @@ export function RestaurantProfileScreen() {
           )}
         </View>
       </Modal>
-
-      {/* ─── Pickup time picker (iOS only — Android uses DateTimePickerAndroid.open) ──── */}
-      <Modal
-        visible={pickupPickerField !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPickupPickerField(null)}
-      >
-        <View style={styles.pickerBackdrop}>
-          <TouchableWithoutFeedback onPress={() => setPickupPickerField(null)}>
-            <View style={StyleSheet.absoluteFill} />
-          </TouchableWithoutFeedback>
-          <View style={styles.pickerSheet}>
-            <View style={styles.pickerSheetHeader}>
-              <Text style={styles.pickerSheetTitle}>
-                {pickupPickerField === 'start' ? 'Giờ bắt đầu' : 'Giờ kết thúc'}
-              </Text>
-              <Pressable onPress={() => setPickupPickerField(null)}>
-                <Text style={styles.pickerDoneText}>Xong</Text>
-              </Pressable>
-            </View>
-            {pickupPickerField && (
-              <DateTimePicker
-                value={timeStringToDate(
-                  pickupPickerField === 'start' ? form.pickupStart : form.pickupEnd,
-                )}
-                mode="time"
-                display="spinner"
-                is24Hour
-                onChange={handleInlinePickupChange}
-              />
-            )}
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -1230,20 +1058,6 @@ const styles = StyleSheet.create({
   },
   separator: { height: 1, backgroundColor: Colors.surfaceContainerHigh },
 
-  // ─── Time row ────────────────────────────────
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 0,
-  },
-  timeHalf: { flex: 1 },
-  timeDivider: {
-    width: 24,
-    alignItems: 'center',
-    paddingTop: 36,
-  },
-  timeDash: { fontSize: 18, color: Colors.textMuted, fontWeight: '500' },
-
   // ─── Actions ─────────────────────────────────
   actionRow: {
     flexDirection: 'row',
@@ -1371,31 +1185,4 @@ const styles = StyleSheet.create({
   previewImage: { width: '100%', height: '80%' },
   previewErrorBox: { alignItems: 'center', gap: 10, paddingHorizontal: 32 },
   previewErrorText: { fontSize: 14, color: '#FFFFFF', textAlign: 'center' },
-
-  // ─── Pickup time picker sheet (iOS) ───────────
-  pickerBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pickerSheet: {
-    width: '88%',
-    maxWidth: 360,
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: 20,
-    overflow: 'hidden',
-    paddingBottom: 8,
-  },
-  pickerSheetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.outlineVariant,
-  },
-  pickerSheetTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
-  pickerDoneText: { fontSize: 15, fontWeight: '700', color: Colors.primaryText },
 });

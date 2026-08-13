@@ -53,6 +53,21 @@ function fallbackImage(index: number) {
   return FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
 }
 
+/**
+ * How many kg one case ("kiện") of this product weighs — the unit `quantity`
+ * must step and land on, since a market product is only ever picked/shipped
+ * by the case. Falls back to 1 for a product with no packing code, though
+ * such a product can't actually be added at all (see `hasNoPackingCode`).
+ */
+function packSize(product: MarketProductDto): number {
+  const weight = product.sellingUnit?.weightKg;
+  return typeof weight === 'number' && weight > 0 ? weight : 1;
+}
+
+function hasNoPackingCode(product: MarketProductDto): boolean {
+  return !product.sellingUnit?.weightKg || product.sellingUnit.weightKg <= 0;
+}
+
 function getCategoryIcon(name: string): keyof typeof Ionicons.glyphMap {
   const value = name.toLocaleLowerCase('vi-VN');
   if (value.includes('rau') || value.includes('củ') || value.includes('quả')) return 'leaf-outline';
@@ -377,10 +392,17 @@ export function OrderListScreen() {
     [marketProducts, productMetadata],
   );
 
-  const addProduct = (product: MarketProductDto, quantity = 1) => {
-    if (product.availableQuantity <= 0 || quantity <= 0) return;
+  /** `quantity` defaults to one whole case — see `packSize`. */
+  const addProduct = (product: MarketProductDto, quantity?: number) => {
+    const step = packSize(product);
+    const maxQty = Math.floor(product.availableQuantity / step) * step;
+    const amount = quantity ?? step;
+    // `maxQty < step` (not just `availableQuantity <= 0`) — stock under one full
+    // case is exactly as unorderable as no stock, since `addToCart` below always
+    // seeds a brand-new line at one whole case regardless of what's on hand.
+    if (hasNoPackingCode(product) || maxQty < step || amount <= 0) return;
     const existing = cart.find((item) => item.id === product.marketProductId);
-    const nextQuantity = Math.min(product.availableQuantity, (existing?.qty ?? 0) + quantity);
+    const nextQuantity = Math.min(maxQty, (existing?.qty ?? 0) + amount);
 
     if (existing) {
       updateItemQty(product.marketProductId, nextQuantity);
@@ -394,8 +416,9 @@ export function OrderListScreen() {
       unit: product.unit,
       price: product.currentPrice,
       image: resolveImage(product),
+      packWeightKg: product.sellingUnit?.weightKg ?? null,
     });
-    if (nextQuantity > 1) updateItemQty(product.marketProductId, nextQuantity);
+    if (nextQuantity > step) updateItemQty(product.marketProductId, nextQuantity);
   };
 
   const toggleProductFavorite = (product: MarketProductDto) => {
@@ -429,6 +452,7 @@ export function OrderListScreen() {
         unit: product.unit,
         currentPrice: product.currentPrice,
         availableQuantity: product.availableQuantity,
+        sellingUnit: product.sellingUnit ?? null,
         tags: product.tags,
         description: desc || null,
       },
@@ -462,6 +486,14 @@ export function OrderListScreen() {
     const primaryTag = [...item.tags].sort((left, right) => (
       Number(right.pinsToTop) - Number(left.pinsToTop)
     ))[0];
+    const outOfStock = item.availableQuantity <= 0;
+    const noPackingCode = hasNoPackingCode(item);
+    const step = packSize(item);
+    const maxQty = Math.floor(item.availableQuantity / step) * step;
+    // Some stock, but less than one whole case — just as unorderable as no
+    // stock, since a fresh line always seeds at one full case (see `addProduct`).
+    const insufficientStock = !outOfStock && maxQty < step;
+    const disabled = outOfStock || noPackingCode || insufficientStock;
 
     return (
       <Pressable
@@ -486,9 +518,17 @@ export function OrderListScreen() {
               color={favorite ? Colors.danger : Colors.deepTeal}
             />
           </Pressable>
-          {item.availableQuantity <= 0 ? (
+          {outOfStock ? (
             <View style={styles.soldOutBadge}>
               <Text style={styles.soldOutText}>Hết hàng</Text>
+            </View>
+          ) : noPackingCode ? (
+            <View style={styles.soldOutBadge}>
+              <Text style={styles.soldOutText}>Thiếu quy cách</Text>
+            </View>
+          ) : insufficientStock ? (
+            <View style={styles.soldOutBadge}>
+              <Text style={styles.soldOutText}>Không đủ 1 kiện</Text>
             </View>
           ) : primaryTag ? (
             <View style={[styles.productTagBadge, primaryTag.pinsToTop && styles.productTagBadgePinned]}>
@@ -514,7 +554,6 @@ export function OrderListScreen() {
           <Text style={styles.productCategory} numberOfLines={1}>
             {item.category || 'Nông sản'}
           </Text>
-          <Text style={styles.stockText}>{item.availableQuantity} {item.unit}</Text>
         </View>
         <Text style={styles.productName} numberOfLines={2}>
           {item.productName}
@@ -533,8 +572,8 @@ export function OrderListScreen() {
                 style={styles.quantityButton}
                 onPress={(event) => {
                   event.stopPropagation();
-                  if (quantity <= 1) removeFromCart(item.marketProductId);
-                  else updateItemQty(item.marketProductId, quantity - 1);
+                  if (quantity <= step) removeFromCart(item.marketProductId);
+                  else updateItemQty(item.marketProductId, quantity - step);
                 }}
               >
                 <Ionicons name="remove" size={16} color={Colors.deepTeal} />
@@ -542,7 +581,7 @@ export function OrderListScreen() {
               <Text numeric style={styles.quantityValue}>{quantity}</Text>
               <Pressable
                 style={[styles.quantityButton, styles.quantityButtonAdd]}
-                disabled={quantity >= item.availableQuantity}
+                disabled={quantity >= maxQty}
                 onPress={(event) => {
                   event.stopPropagation();
                   addProduct(item);
@@ -555,9 +594,9 @@ export function OrderListScreen() {
             <Pressable
               style={[
                 styles.addButton,
-                item.availableQuantity <= 0 && styles.addButtonDisabled,
+                disabled && styles.addButtonDisabled,
               ]}
-              disabled={item.availableQuantity <= 0}
+              disabled={disabled}
               onPress={(event) => {
                 event.stopPropagation();
                 addProduct(item);
@@ -567,7 +606,7 @@ export function OrderListScreen() {
               <Ionicons
                 name="add"
                 size={21}
-                color={item.availableQuantity > 0 ? Colors.onPrimary : Colors.textMuted}
+                color={!disabled ? Colors.onPrimary : Colors.textMuted}
               />
             </Pressable>
           )}
@@ -1474,7 +1513,6 @@ const styles = StyleSheet.create({
   priceBlock: { flex: 1, minWidth: 0 },
   productPrice: { fontSize: 14, color: Colors.deepTeal, fontFamily: Fonts.bold },
   productUnit: { marginTop: 1, fontSize: 8, color: Colors.textMuted },
-  stockText: { fontSize: 8, color: Colors.textMuted },
   addButton: {
     width: 36,
     height: 36,

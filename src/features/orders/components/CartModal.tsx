@@ -74,7 +74,13 @@ export function CartModal({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.cartScreenList}
               renderItem={({ item }) => {
-                const maxQuantity = stockByMarketProductId[item.id] ?? Number.MAX_SAFE_INTEGER;
+                // One case ("kiện") of this line's product — the stepper's unit, not 1kg.
+                // Falls back to 1 for a line whose product carried no packing data when
+                // it was added (see `CartItem.packWeightKg`'s doc comment).
+                const step = item.packWeightKg && item.packWeightKg > 0 ? item.packWeightKg : 1;
+                const rawMax = stockByMarketProductId[item.id] ?? Number.MAX_SAFE_INTEGER;
+                const maxQuantity =
+                  rawMax === Number.MAX_SAFE_INTEGER ? rawMax : Math.floor(rawMax / step) * step;
 
                 return (
                   <View style={styles.cartScreenItem}>
@@ -93,8 +99,8 @@ export function CartModal({
                         <Pressable
                           style={styles.cartScreenQtyBtn}
                           onPress={() => {
-                            if (item.qty <= 1) removeFromCart(item.id);
-                            else updateItemQty(item.id, item.qty - 1);
+                            if (item.qty <= step) removeFromCart(item.id);
+                            else updateItemQty(item.id, item.qty - step);
                           }}
                         >
                           <MaterialIcons name="remove" size={16} color={Colors.primaryText} />
@@ -103,7 +109,7 @@ export function CartModal({
                         <Pressable
                           style={styles.cartScreenQtyBtn}
                           disabled={item.qty >= maxQuantity}
-                          onPress={() => updateItemQty(item.id, Math.min(maxQuantity, item.qty + 1))}
+                          onPress={() => updateItemQty(item.id, Math.min(maxQuantity, item.qty + step))}
                         >
                           <MaterialIcons name="add" size={16} color={Colors.primaryText} />
                         </Pressable>

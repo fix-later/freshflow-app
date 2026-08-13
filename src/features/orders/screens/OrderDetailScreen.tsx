@@ -74,6 +74,22 @@ function formatDateTime(iso: string | null | undefined) {
     .padStart(2, '0')}`;
 }
 
+/**
+ * `scheduledFor`'s clock time is always the same fixed early-morning hour now
+ * (see `DELIVERY_HOUR` in `CreateOrderScreen.tsx`) — the actual delivery can
+ * land anywhere in that window, so this shows the date plus the window
+ * instead of the stored instant's own minute, which would read as an exact time.
+ */
+function formatDeliveryWindow(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const day = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1)
+    .toString()
+    .padStart(2, '0')}/${d.getFullYear()}`;
+  return `${day} (4:00 - 6:00 sáng)`;
+}
+
 function ItemRow({
   item,
   index,
@@ -363,7 +379,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
       await fetchOrder();
       Alert.alert(
         'Đã xác nhận đơn hàng',
-        `Dự kiến giao: ${formatDateTime(confirmed.scheduledFor)}`,
+        `Dự kiến giao: ${formatDeliveryWindow(confirmed.scheduledFor)}`,
       );
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -455,7 +471,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           {order.scheduledFor ? (
             <View style={styles.metaRow}>
               <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
-              <Text style={styles.metaText}>Hẹn giao {formatDateTime(order.scheduledFor)}</Text>
+              <Text style={styles.metaText}>Hẹn giao {formatDeliveryWindow(order.scheduledFor)}</Text>
             </View>
           ) : null}
           {order.confirmedReceiptAt ? (

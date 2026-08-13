@@ -32,7 +32,14 @@ import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'CreateRecurringOrder'>;
 
-type PickerMode = 'date' | 'time' | null;
+/**
+ * Every run this schedule generates delivers in the same fixed early-morning
+ * window as a one-off order (see `CreateOrderScreen.tsx`) — the restaurant
+ * only picks the first-run day, never a time.
+ */
+const DELIVERY_HOUR = 4;
+
+type PickerMode = 'date' | null;
 
 /** One line the restaurant has picked for the schedule's item template. */
 interface PickedItem {
@@ -50,18 +57,29 @@ const RECURRENCE_OPTIONS: { id: RecurrenceType; label: string; sub: string }[] =
 function getDefaultFirstRun(): Date {
   const d = new Date();
   d.setDate(d.getDate() + 1);
-  d.setHours(5, 0, 0, 0);
+  d.setHours(DELIVERY_HOUR, 0, 0, 0);
   return d;
+}
+
+/**
+ * How many kg one case ("kiện") of this product weighs — the unit a picked
+ * line's quantity must step and land on, since a market product is only ever
+ * picked/shipped by the case. Falls back to 1 for a product with no packing
+ * code, though such a product can't actually be added (see `hasNoPackingCode`).
+ */
+function packSize(product: MarketProductDto): number {
+  const weight = product.sellingUnit?.weightKg;
+  return typeof weight === 'number' && weight > 0 ? weight : 1;
+}
+
+function hasNoPackingCode(product: MarketProductDto): boolean {
+  return !product.sellingUnit?.weightKg || product.sellingUnit.weightKg <= 0;
 }
 
 function formatDate(d: Date): string {
   return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1)
     .toString()
     .padStart(2, '0')}/${d.getFullYear()}`;
-}
-
-function formatTime(d: Date): string {
-  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
 export function CreateRecurringOrderScreen({ navigation, route }: Props) {
@@ -239,24 +257,27 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
   }, [marketProducts, productQuery]);
 
   const addPickedItem = (product: MarketProductDto) => {
+    const step = packSize(product);
     setPickedItems((current) => {
       const idx = current.findIndex((item) => item.marketProductId === product.marketProductId);
       if (idx >= 0) {
         const next = [...current];
-        next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
+        next[idx] = { ...next[idx], quantity: next[idx].quantity + step };
         return next;
       }
-      return [...current, { marketProductId: product.marketProductId, quantity: 1, product }];
+      return [...current, { marketProductId: product.marketProductId, quantity: step, product }];
     });
     if (formError) setFormError(null);
   };
 
-  const changePickedQuantity = (marketProductId: string, delta: number) => {
+  /** `direction` is a step multiplier (±1), not raw kg — one call moves one whole case. */
+  const changePickedQuantity = (product: MarketProductDto, direction: 1 | -1) => {
+    const step = packSize(product);
     setPickedItems((current) =>
       current
         .map((item) =>
-          item.marketProductId === marketProductId
-            ? { ...item, quantity: item.quantity + delta }
+          item.marketProductId === product.marketProductId
+            ? { ...item, quantity: item.quantity + direction * step }
             : item,
         )
         .filter((item) => item.quantity > 0),
@@ -267,38 +288,37 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
     setPickedItems((current) => current.filter((item) => item.marketProductId !== marketProductId));
   };
 
-  const applyPicked = (mode: 'date' | 'time', selected: Date) => {
-    const merged = new Date(firstRunAt);
-    if (mode === 'date') {
-      merged.setFullYear(selected.getFullYear(), selected.getMonth(), selected.getDate());
-    } else {
-      merged.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-    }
+  // Picking a date always snaps the time to the fixed delivery hour — even a schedule loaded
+  // from before this change (whose stored `firstRunAt` may carry an old, restaurant-picked hour)
+  // normalizes the moment its date is next touched.
+  const applyPicked = (selected: Date) => {
+    const merged = new Date(selected);
+    merged.setHours(DELIVERY_HOUR, 0, 0, 0);
     setFirstRunAt(merged);
     setFirstRunAtEdited(true);
     if (formError) setFormError(null);
   };
 
-  const openPicker = (mode: 'date' | 'time') => {
+  const openPicker = () => {
     if (Platform.OS === 'android') {
       DateTimePickerAndroid.open({
         value: firstRunAt,
-        mode,
+        mode: 'date',
         is24Hour: true,
-        minimumDate: mode === 'date' ? new Date() : undefined,
+        minimumDate: new Date(),
         onChange: (event: DateTimePickerEvent, selected?: Date) => {
-          if (event.type !== 'dismissed' && selected) applyPicked(mode, selected);
+          if (event.type !== 'dismissed' && selected) applyPicked(selected);
         },
       });
       return;
     }
-    setPickerMode(mode);
+    setPickerMode('date');
   };
 
   // iOS inline spinner fires onChange continuously while scrolling — just apply live, the
   // modal stays open until the user taps "Xong".
   const handleInlinePickerChange = (_event: DateTimePickerEvent, selected?: Date) => {
-    if (pickerMode && selected) applyPicked(pickerMode, selected);
+    if (pickerMode && selected) applyPicked(selected);
   };
 
   const handleSubmit = async () => {
@@ -423,24 +443,21 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
           })}
         </View>
 
-        <Text style={styles.sectionTitle}>Thời gian chạy lần đầu *</Text>
+        <Text style={styles.sectionTitle}>Ngày chạy lần đầu *</Text>
         <View style={styles.card}>
-          <Pressable style={styles.dateTimeRow} onPress={() => openPicker('date')}>
+          <Pressable style={[styles.dateTimeRow, styles.dateTimeRowLast]} onPress={openPicker}>
             <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
             <Text style={styles.dateTimeLabel}>Ngày</Text>
             <Text style={styles.dateTimeValue}>{formatDate(firstRunAt)}</Text>
           </Pressable>
-          <Pressable style={[styles.dateTimeRow, styles.dateTimeRowLast]} onPress={() => openPicker('time')}>
-            <Ionicons name="time-outline" size={18} color={Colors.primaryText} />
-            <Text style={styles.dateTimeLabel}>Giờ</Text>
-            <Text style={styles.dateTimeValue}>{formatTime(firstRunAt)}</Text>
-          </Pressable>
         </View>
-        {isEditMode && !firstRunAtEdited ? (
-          <Text style={styles.helperCaption}>
-            Chỉ cần đổi nếu bạn muốn dời giờ chạy đầu tiên — nếu không đổi, lịch vẫn giữ nguyên.
-          </Text>
-        ) : null}
+        <Text style={styles.helperCaption}>
+          Mỗi lần đến hạn, hệ thống tự đặt đơn và giao vào khung {DELIVERY_HOUR}:00 -{' '}
+          {DELIVERY_HOUR + 2}:00 sáng.
+          {isEditMode && !firstRunAtEdited
+            ? ' Chỉ cần đổi ngày nếu bạn muốn dời lần chạy đầu tiên — nếu không đổi, lịch vẫn giữ nguyên.'
+            : ''}
+        </Text>
 
         <Text style={styles.sectionTitle}>Ghi chú</Text>
         <View style={styles.card}>
@@ -515,32 +532,46 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
                 ) : (
                   visibleProducts.map((product) => {
                     const picked = pickedItems.find((i) => i.marketProductId === product.marketProductId);
+                    const outOfStock = product.availableQuantity <= 0;
+                    const noPackingCode = hasNoPackingCode(product);
                     return (
                       <View key={product.marketProductId} style={styles.productRow}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.productName}>{product.productName}</Text>
                           <Text style={styles.productMeta}>
-                            {product.currentPrice.toLocaleString('vi-VN')}đ · Còn {product.availableQuantity} {product.unit}
+                            {product.currentPrice.toLocaleString('vi-VN')}đ
+                            {outOfStock
+                              ? ' · Hết hàng'
+                              : noPackingCode
+                                ? ' · Chưa cấu hình quy cách'
+                                : ''}
                           </Text>
                         </View>
                         {picked ? (
                           <View style={styles.quantityRow}>
                             <Pressable
                               style={styles.quantityButton}
-                              onPress={() => changePickedQuantity(product.marketProductId, -1)}
+                              onPress={() => changePickedQuantity(product, -1)}
                             >
                               <Ionicons name="remove" size={15} color={Colors.primaryText} />
                             </Pressable>
                             <Text style={styles.quantityText}>{picked.quantity}</Text>
                             <Pressable
                               style={styles.quantityButton}
-                              onPress={() => changePickedQuantity(product.marketProductId, 1)}
+                              onPress={() => changePickedQuantity(product, 1)}
                             >
                               <Ionicons name="add" size={15} color={Colors.primaryText} />
                             </Pressable>
                           </View>
                         ) : (
-                          <Pressable style={styles.addButton} onPress={() => addPickedItem(product)}>
+                          <Pressable
+                            style={[
+                              styles.addButton,
+                              (outOfStock || noPackingCode) && styles.addButtonDisabled,
+                            ]}
+                            disabled={outOfStock || noPackingCode}
+                            onPress={() => addPickedItem(product)}
+                          >
                             <Text style={styles.addButtonText}>Thêm</Text>
                           </Pressable>
                         )}
@@ -627,9 +658,7 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
           </TouchableWithoutFeedback>
           <View style={styles.pickerSheet}>
             <View style={styles.pickerSheetHeader}>
-              <Text style={styles.pickerSheetTitle}>
-                {pickerMode === 'date' ? 'Chọn ngày' : 'Chọn giờ'}
-              </Text>
+              <Text style={styles.pickerSheetTitle}>Chọn ngày</Text>
               <Pressable onPress={() => setPickerMode(null)}>
                 <Text style={styles.pickerDoneText}>Xong</Text>
               </Pressable>
@@ -637,10 +666,9 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
             {pickerMode ? (
               <DateTimePicker
                 value={firstRunAt}
-                mode={pickerMode}
-                display={pickerMode === 'date' ? 'inline' : 'spinner'}
-                is24Hour
-                minimumDate={pickerMode === 'date' ? new Date() : undefined}
+                mode="date"
+                display="inline"
+                minimumDate={new Date()}
                 onChange={handleInlinePickerChange}
               />
             ) : null}
@@ -799,6 +827,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: Colors.primary,
   },
+  addButtonDisabled: { backgroundColor: Colors.outline },
   addButtonText: { color: Colors.onPrimary, fontSize: 12, fontWeight: '800' },
   pickedRow: {
     flexDirection: 'row',

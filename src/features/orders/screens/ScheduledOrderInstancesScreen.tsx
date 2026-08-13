@@ -30,6 +30,19 @@ function formatDateTime(value: string | null): string {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('vi-VN');
 }
 
+/**
+ * `scheduledFor`'s clock time is always the same fixed early-morning hour now
+ * (see `DELIVERY_HOUR` in `CreateOrderScreen.tsx`) — the actual delivery can
+ * land anywhere in that window, so this shows the date plus the window
+ * instead of the stored instant's own minute, which would read as an exact time.
+ */
+function formatDeliveryWindow(value: string | null): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return `${date.toLocaleDateString('vi-VN')} (4:00 - 6:00 sáng)`;
+}
+
 export function ScheduledOrderInstancesScreen({ route, navigation }: Props) {
   const { scheduledOrderId } = route.params;
   const [orders, setOrders] = useState<OrderListItemDto[]>([]);
@@ -99,7 +112,7 @@ export function ScheduledOrderInstancesScreen({ route, navigation }: Props) {
           </View>
         </View>
         <Text style={styles.metaText}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
-        <Text style={styles.metaText}>Hẹn giao: {formatDateTime(item.scheduledFor)}</Text>
+        <Text style={styles.metaText}>Hẹn giao: {formatDeliveryWindow(item.scheduledFor)}</Text>
         <View style={styles.summaryRow}>
           <Text style={styles.itemCount}>{item.itemCount} sản phẩm</Text>
           <Text style={styles.total}>{item.totalAmount.toLocaleString('vi-VN')}đ</Text>

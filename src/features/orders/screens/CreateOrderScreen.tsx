@@ -23,36 +23,37 @@ import { orderApi, DEFAULT_DELIVERY_WINDOW_DAYS } from '../api/orderApi';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'CreateOrder'>;
 
-type TimeOption = 'asap' | 'tomorrow_morning' | 'custom';
+/**
+ * Every order delivers in the same fixed early-morning window — the restaurant
+ * only picks the day, never the time (matches the web checkout's `DELIVERY_HOUR`).
+ */
+const DELIVERY_HOUR = 4;
 
-const TIME_OPTIONS: { id: TimeOption; label: string; sub: string }[] = [
-  { id: 'asap', label: 'Sớm nhất có thể', sub: 'Không đặt lịch giao cụ thể' },
-  { id: 'tomorrow_morning', label: 'Sáng mai (5:00)', sub: 'Giao lúc 5:00 sáng hôm sau' },
-  { id: 'custom', label: 'Tự chọn ngày giờ', sub: 'Nhập thời gian cụ thể' },
-];
-
-function buildScheduledForCustom(date: Date, time: Date): string {
+function buildScheduledFor(date: Date): string {
   const combined = new Date(date);
-  combined.setHours(time.getHours());
-  combined.setMinutes(time.getMinutes());
-  combined.setSeconds(0);
-  combined.setMilliseconds(0);
+  combined.setHours(DELIVERY_HOUR, 0, 0, 0);
   return combined.toISOString();
 }
 
-function formatCustomLabel(date: Date, time: Date): string {
+function formatDeliveryLabel(date: Date): string {
   const dd = date.getDate().toString().padStart(2, '0');
   const mm = (date.getMonth() + 1).toString().padStart(2, '0');
   const yyyy = date.getFullYear();
-  const hh = time.getHours().toString().padStart(2, '0');
-  const min = time.getMinutes().toString().padStart(2, '0');
-  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+  return `${dd}/${mm}/${yyyy} (${DELIVERY_HOUR}:00 - ${DELIVERY_HOUR + 2}:00)`;
 }
 
+/**
+ * One day shorter than the server's own `D..D+windowDays` window
+ * (`OrderCutoffScheduler.IsWithinDeliveryWindow` on the backend): that check's
+ * upper bound is an exact midnight cutoff, not end-of-day, so the nominal last
+ * day would only ever accept a `scheduledFor` of precisely 00:00 — never
+ * `DELIVERY_HOUR` (04:00), which every order now carries. Capping the picker
+ * here keeps every day it actually offers usable.
+ */
 function getDeliveryUpperBound(deliveryWindowDays: number): Date {
   const upperBound = new Date();
   upperBound.setHours(0, 0, 0, 0);
-  upperBound.setDate(upperBound.getDate() + deliveryWindowDays);
+  upperBound.setDate(upperBound.getDate() + deliveryWindowDays - 1);
   return upperBound;
 }
 
@@ -83,7 +84,6 @@ function ItemRow({ item }: { item: CreateOrderItem }) {
 
 export function CreateOrderScreen({ route, navigation }: Props) {
   const { items } = route.params;
-  const [timeOption, setTimeOption] = useState<TimeOption>('asap');
   const [notes, setNotes] = useState('');
 
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
@@ -91,13 +91,7 @@ export function CreateOrderScreen({ route, navigation }: Props) {
     d.setDate(d.getDate() + 1); // default to tomorrow
     return d;
   });
-  const [selectedTime, setSelectedTime] = useState<Date>(() => {
-    const d = new Date();
-    d.setHours(5, 0, 0, 0); // default to 5:00 AM
-    return d;
-  });
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
   const [deliveryWindowDays, setDeliveryWindowDays] = useState(DEFAULT_DELIVERY_WINDOW_DAYS);
 
   useEffect(() => {
@@ -119,40 +113,25 @@ export function CreateOrderScreen({ route, navigation }: Props) {
     }
   };
 
-  const onChangeTime = (event: DateTimePickerEvent, date?: Date) => {
-    setShowTimePicker(Platform.OS === 'ios');
-    if (date) {
-      setSelectedTime(date);
-    }
-  };
-
   const handleNext = () => {
-    let scheduledFor: string | undefined = undefined;
-    let deliveryLabel = 'Sớm nhất có thể';
-
-    if (timeOption === 'tomorrow_morning') {
-      const d = new Date();
-      d.setDate(d.getDate() + 1);
-      d.setHours(5, 0, 0, 0);
-      scheduledFor = d.toISOString();
-      deliveryLabel = 'Sáng mai (5:00)';
-    } else if (timeOption === 'custom') {
-      const customDate = new Date(buildScheduledForCustom(selectedDate, selectedTime));
-      if (customDate <= new Date() || customDate > getDeliveryUpperBound(deliveryWindowDays)) {
-        Alert.alert(
-          'Thời gian giao không hợp lệ',
-          `Ngày giao phải ở tương lai và nằm trong cửa sổ ${deliveryWindowDays} ngày theo quy định của hệ thống.`,
-        );
-        return;
-      }
-      scheduledFor = customDate.toISOString();
-      deliveryLabel = formatCustomLabel(selectedDate, selectedTime);
+    const scheduledDate = new Date(buildScheduledFor(selectedDate));
+    // Compared as a calendar day, not the DELIVERY_HOUR-inclusive instant — the
+    // picker's own `maximumDate` is day-granular, so this must agree with what
+    // it actually let the user pick (see `getDeliveryUpperBound`'s doc comment).
+    const startOfSelectedDay = new Date(selectedDate);
+    startOfSelectedDay.setHours(0, 0, 0, 0);
+    if (scheduledDate <= new Date() || startOfSelectedDay > getDeliveryUpperBound(deliveryWindowDays)) {
+      Alert.alert(
+        'Ngày giao không hợp lệ',
+        `Ngày giao phải ở tương lai và nằm trong cửa sổ ${deliveryWindowDays} ngày theo quy định của hệ thống.`,
+      );
+      return;
     }
 
     navigation.navigate('ConfirmOrder', {
       items,
-      scheduledFor,
-      deliveryLabel,
+      scheduledFor: scheduledDate.toISOString(),
+      deliveryLabel: formatDeliveryLabel(selectedDate),
       notes: notes.trim() || undefined,
     });
   };
@@ -173,56 +152,27 @@ export function CreateOrderScreen({ route, navigation }: Props) {
           />
         </View>
 
-        {/* ── Delivery time ── */}
-        <Text style={styles.sectionTitle}>Thời gian giao hàng</Text>
+        {/* ── Delivery date ── */}
+        <Text style={styles.sectionTitle}>Ngày giao hàng</Text>
         <View style={styles.card}>
-          {TIME_OPTIONS.map(opt => {
-            const selected = timeOption === opt.id;
-            return (
-              <Pressable
-                key={opt.id}
-                style={[styles.timeRow, selected && styles.timeRowSelected]}
-                onPress={() => setTimeOption(opt.id)}
-              >
-                <View style={styles.timeText}>
-                  <Text style={[styles.timeLabel, selected && styles.timeLabelSelected]}>{opt.label}</Text>
-                  <Text style={styles.timeSub}>{opt.sub}</Text>
-                </View>
-                <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
-                  {selected && <View style={styles.radioInner} />}
-                </View>
-              </Pressable>
-            );
-          })}
-          {timeOption === 'custom' && (
-            <View style={styles.customPickerContainer}>
-              <Pressable
-                style={styles.pickerSelector}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
-                <View>
-                  <Text style={styles.pickerSelectorLabel}>Ngày giao hàng</Text>
-                  <Text style={styles.pickerSelectorValue}>
-                    {selectedDate.toLocaleDateString('vi-VN')}
-                  </Text>
-                </View>
-              </Pressable>
-
-              <Pressable
-                style={styles.pickerSelector}
-                onPress={() => setShowTimePicker(true)}
-              >
-                <Ionicons name="time-outline" size={18} color={Colors.primaryText} />
-                <View>
-                  <Text style={styles.pickerSelectorLabel}>Giờ giao hàng</Text>
-                  <Text style={styles.pickerSelectorValue}>
-                    {selectedTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
-          )}
+          <View style={styles.customPickerContainer}>
+            <Pressable
+              style={styles.pickerSelector}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
+              <View>
+                <Text style={styles.pickerSelectorLabel}>Ngày giao hàng</Text>
+                <Text style={styles.pickerSelectorValue}>
+                  {selectedDate.toLocaleDateString('vi-VN')}
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+          <Text style={styles.deliveryHint}>
+            Đơn hàng sẽ được giao tự động vào khung {DELIVERY_HOUR}:00 - {DELIVERY_HOUR + 2}:00 sáng
+            ngày đã chọn.
+          </Text>
 
           {showDatePicker && (
             <DateTimePicker
@@ -232,15 +182,6 @@ export function CreateOrderScreen({ route, navigation }: Props) {
               minimumDate={new Date()}
               maximumDate={getDeliveryUpperBound(deliveryWindowDays)}
               onChange={onChangeDate}
-            />
-          )}
-
-          {showTimePicker && (
-            <DateTimePicker
-              value={selectedTime}
-              mode="time"
-              display="default"
-              onChange={onChangeTime}
             />
           )}
         </View>
@@ -312,30 +253,6 @@ const styles = StyleSheet.create({
   itemQtyLabel: { fontSize: 10, color: Colors.textMuted },
   itemQty: { fontSize: 16, fontWeight: '700', color: Colors.onSurface },
 
-  // Time options
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  timeRowSelected: { backgroundColor: Colors.primaryLight },
-  timeText: { flex: 1 },
-  timeLabel: { fontSize: 14, fontWeight: '600', color: Colors.onSurface },
-  timeLabelSelected: { color: Colors.primaryText },
-  timeSub: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
-  radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: Colors.outline,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioOuterSelected: { borderColor: Colors.primary },
-  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary },
   customPickerContainer: {
     flexDirection: 'row',
     gap: 12,
@@ -363,6 +280,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.onSurface,
     marginTop: 1,
+  },
+  deliveryHint: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
   },
 
   // Notes

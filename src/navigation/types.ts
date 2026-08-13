@@ -1,6 +1,6 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { HubInboundTask } from '../features/hub/api/hubApi';
-import type { MarketProductTagDto } from '../types/api.types';
+import type { MarketProductTagDto, SellingUnitDto } from '../types/api.types';
 
 export type RootStackParamList = {
   RoleHome: any;
@@ -39,6 +39,8 @@ export type RestaurantFavoritesStackParamList = {
       availableQuantity: number;
       tags: MarketProductTagDto[];
       description?: string | null;
+      /** Optional — see `ProductDetailScreen.tsx`'s `RouteParams.product` doc comment. */
+      sellingUnit?: SellingUnitDto | null;
     };
   };
 };
@@ -109,6 +111,8 @@ export type RestaurantOrdersStackParamList = {
       availableQuantity: number;
       tags: MarketProductTagDto[];
       description?: string | null;
+      /** Optional — see `ProductDetailScreen.tsx`'s `RouteParams.product` doc comment. */
+      sellingUnit?: SellingUnitDto | null;
     };
   };
 };

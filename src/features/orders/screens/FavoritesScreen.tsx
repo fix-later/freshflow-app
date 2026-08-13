@@ -152,16 +152,12 @@ export function FavoritesScreen() {
           </View>
 
           <View style={styles.rightActions}>
-            <View style={styles.stockSection}>
-              <Ionicons
-                name={outOfStock ? 'alert-circle' : 'cube-outline'}
-                size={14}
-                color={outOfStock ? Colors.danger : Colors.textMuted}
-              />
-              <Text style={[styles.stockText, outOfStock && styles.stockTextDanger]}>
-                Kho: {item.availableQuantity} {item.unit}
-              </Text>
-            </View>
+            {outOfStock && (
+              <View style={styles.stockSection}>
+                <Ionicons name="alert-circle" size={14} color={Colors.danger} />
+                <Text style={[styles.stockText, styles.stockTextDanger]}>Hết hàng</Text>
+              </View>
+            )}
 
             {!outOfStock && (
               <Pressable

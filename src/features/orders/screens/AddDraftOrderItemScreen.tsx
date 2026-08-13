@@ -19,6 +19,21 @@ import { orderApi } from '../api/orderApi';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'AddDraftOrderItem'>;
 
+/**
+ * How many kg one case ("kiện") of this product weighs — the unit `quantity`
+ * must step and land on, since a market product is only ever picked/shipped
+ * by the case. Falls back to 1 for a product with no packing code, though
+ * such a product can't actually be added at all (see `hasNoPackingCode`).
+ */
+function packSize(product: MarketProductDto): number {
+  const weight = product.sellingUnit?.weightKg;
+  return typeof weight === 'number' && weight > 0 ? weight : 1;
+}
+
+function hasNoPackingCode(product: MarketProductDto): boolean {
+  return !product.sellingUnit?.weightKg || product.sellingUnit.weightKg <= 0;
+}
+
 export function AddDraftOrderItemScreen({ route, navigation }: Props) {
   const { orderId } = route.params;
   const [markets, setMarkets] = useState<MarketDto[]>([]);
@@ -79,12 +94,15 @@ export function AddDraftOrderItemScreen({ route, navigation }: Props) {
   }, [products, query]);
 
   const quantityFor = (product: MarketProductDto) =>
-    quantities[product.marketProductId] ?? 1;
+    quantities[product.marketProductId] ?? packSize(product);
 
+  /** `delta` is a step direction (±1), not raw kg — one call moves one whole case. */
   const changeQuantity = (product: MarketProductDto, delta: number) => {
+    const step = packSize(product);
+    const maxQty = Math.floor(product.availableQuantity / step) * step;
     const next = Math.min(
-      product.availableQuantity,
-      Math.max(1, quantityFor(product) + delta),
+      maxQty,
+      Math.max(step, quantityFor(product) + delta * step),
     );
     setQuantities((current) => ({ ...current, [product.marketProductId]: next }));
   };
@@ -106,15 +124,22 @@ export function AddDraftOrderItemScreen({ route, navigation }: Props) {
 
   const renderProduct = ({ item }: { item: MarketProductDto }) => {
     const quantity = quantityFor(item);
+    const step = packSize(item);
+    const maxQty = Math.floor(item.availableQuantity / step) * step;
     const outOfStock = item.availableQuantity <= 0;
+    const noPackingCode = hasNoPackingCode(item);
+    // Some stock, but less than one whole case — just as unorderable as no
+    // stock, since the quantity picker always starts at one full case.
+    const insufficientStock = !outOfStock && maxQty < step;
+    const disabled = outOfStock || noPackingCode || insufficientStock;
     const adding = addingId === item.marketProductId;
     return (
-      <View style={[styles.productCard, outOfStock && styles.productCardDisabled]}>
+      <View style={[styles.productCard, disabled && styles.productCardDisabled]}>
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{item.productName}</Text>
           <Text style={styles.productMeta}>
             {item.category} • {item.unit}
-            {item.sellingUnit?.weightKg ? ` (~${item.sellingUnit.weightKg}kg)` : ''}
+            {item.sellingUnit?.weightKg ? ` (~${item.sellingUnit.weightKg}kg/kiện)` : ''}
           </Text>
           {item.tags.length > 0 ? (
             <View style={styles.tagsRow}>
@@ -133,17 +158,21 @@ export function AddDraftOrderItemScreen({ route, navigation }: Props) {
             </View>
           ) : null}
           <Text style={styles.productPrice}>{item.currentPrice.toLocaleString('vi-VN')}đ</Text>
-          <Text style={[styles.stockText, outOfStock && styles.stockTextDanger]}>
-            Còn {item.availableQuantity} {item.unit}
-          </Text>
+          {outOfStock ? (
+            <Text style={[styles.stockText, styles.stockTextDanger]}>Hết hàng</Text>
+          ) : noPackingCode ? (
+            <Text style={[styles.stockText, styles.stockTextDanger]}>Chưa cấu hình quy cách</Text>
+          ) : insufficientStock ? (
+            <Text style={[styles.stockText, styles.stockTextDanger]}>Không đủ hàng cho 1 kiện</Text>
+          ) : null}
         </View>
-        {!outOfStock ? (
+        {!disabled ? (
           <View style={styles.productActions}>
             <View style={styles.quantityRow}>
               <Pressable
                 style={styles.quantityButton}
                 onPress={() => changeQuantity(item, -1)}
-                disabled={quantity <= 1 || adding}
+                disabled={quantity <= step || adding}
               >
                 <Ionicons name="remove" size={15} color={Colors.primaryText} />
               </Pressable>
@@ -151,7 +180,7 @@ export function AddDraftOrderItemScreen({ route, navigation }: Props) {
               <Pressable
                 style={styles.quantityButton}
                 onPress={() => changeQuantity(item, 1)}
-                disabled={quantity >= item.availableQuantity || adding}
+                disabled={quantity >= maxQty || adding}
               >
                 <Ionicons name="add" size={15} color={Colors.primaryText} />
               </Pressable>

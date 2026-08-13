@@ -9,6 +9,16 @@ export interface CartItem {
   qty: number;
   image: string;
   note?: string;
+  /**
+   * How many kg one case ("kiện") of this product weighs — `qty` may only
+   * ever be a whole multiple of this, since a market product is only
+   * picked/shipped by the case. `null`/omitted when the source screen had no
+   * selling-unit data to carry (e.g. added from Favorites, whose list
+   * endpoint doesn't report it); `addToCart`/`removeFromCart` fall back to a
+   * 1kg step in that case rather than blocking, since the loss is a display
+   * gap, not evidence the product truly has no packing code.
+   */
+  packWeightKg?: number | null;
 }
 
 export interface CartStore {
@@ -24,6 +34,7 @@ export interface CartStore {
     unit: string;
     price: number;
     image: string;
+    packWeightKg?: number | null;
   }) => void;
   removeFromCart: (itemId: string) => void;
   updateItemQty: (itemId: string, qty: number) => void;
