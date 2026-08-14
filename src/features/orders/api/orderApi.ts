@@ -37,6 +37,14 @@ export interface OrderItemDto {
   vatRatePercent: number | null;
   vatAmount: number | null;
   packingCode: string | null;
+  /**
+   * Kg per case ("kiện") — `quantity` must step and land on whole multiples of
+   * this, mirroring `CreateOrderScreen`/`AddDraftOrderItemScreen`'s `packWeightKg`.
+   * Not yet sent by the backend (`OrderItemDto` has no numeric weight field as of
+   * 14/08/2026 — only the string `packingCode`) — always `undefined` until BE adds
+   * it. Read defensively; do not assume presence.
+   */
+  packingWeightKg?: number | null;
 }
 
 /** Snapshot of the delivery address captured at order confirmation time — null on a draft. */

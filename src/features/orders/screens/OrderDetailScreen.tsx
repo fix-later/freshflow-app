@@ -109,6 +109,10 @@ function ItemRow({
   const quantity = item.quantity ?? 0;
   const unitPrice = item.unitPrice ?? 0;
   const subtotal = item.subtotal ?? unitPrice * quantity;
+  // Kg per case — same fallback-to-1 pattern as CartModal/AddDraftOrderItemScreen.
+  // Always 1 today since the backend doesn't send `packingWeightKg` yet (see the
+  // field's doc comment on `OrderItemDto`); this picks it up automatically once it does.
+  const step = item.packingWeightKg && item.packingWeightKg > 0 ? item.packingWeightKg : 1;
   return (
     <View style={styles.itemRow}>
       {item.imageUrl ? (
@@ -136,15 +140,15 @@ function ItemRow({
           <View style={styles.draftItemActions}>
             <Pressable
               style={styles.quantityButton}
-              onPress={() => onChangeQuantity(quantity - 1)}
-              disabled={busy || quantity <= 1}
+              onPress={() => onChangeQuantity(quantity - step)}
+              disabled={busy || quantity <= step}
             >
               <Ionicons name="remove" size={15} color={Colors.primaryText} />
             </Pressable>
             <Text style={styles.quantityValue}>{quantity}</Text>
             <Pressable
               style={styles.quantityButton}
-              onPress={() => onChangeQuantity(quantity + 1)}
+              onPress={() => onChangeQuantity(quantity + step)}
               disabled={busy}
             >
               <Ionicons name="add" size={15} color={Colors.primaryText} />
