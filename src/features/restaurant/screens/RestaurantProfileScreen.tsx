@@ -25,6 +25,7 @@ import {
 import { BrandButton as Button } from '../../../components/ui/BrandButton';
 import { uploadImageToCloudinary } from '../../../services/cloudinaryUpload';
 import { fetchTaxInfo } from '../../../services/taxLookup';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 import {
   restaurantApi,
   type RestaurantProfileDto,
@@ -61,13 +62,6 @@ function validateTaxCode(v: string): string | null {
 function validateTaxEmail(v: string): string | null {
   if (!v) return null;
   return EMAIL_REGEX.test(v) ? null : 'Email không hợp lệ';
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return (
-    (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-    fallback
-  );
 }
 
 function formatUpdatedAt(value: string): string {
@@ -272,7 +266,7 @@ export function RestaurantProfileScreen() {
       setApprovalStatus(statusData?.status ?? profileData.status);
     } catch (error) {
       setLoadError(
-        getErrorMessage(error, 'Không thể tải thông tin nhà hàng. Vui lòng thử lại.'),
+        getApiErrorMessage(error, 'Không thể tải thông tin nhà hàng. Vui lòng thử lại.'),
       );
     } finally {
       setLoading(false);
@@ -341,10 +335,7 @@ export function RestaurantProfileScreen() {
       setIsEditing(false);
       setSavedOk(true);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Cập nhật thất bại. Vui lòng thử lại.';
-      setSaveError(msg);
+      setSaveError(getApiErrorMessage(err, 'Cập nhật thất bại. Vui lòng thử lại.'));
     } finally {
       setSaveLoading(false);
     }
@@ -453,7 +444,7 @@ export function RestaurantProfileScreen() {
       setIsEditingTax(false);
       setTaxSavedOk(true);
     } catch (err: unknown) {
-      setTaxSaveError(getErrorMessage(err, 'Cập nhật hồ sơ thuế thất bại. Vui lòng thử lại.'));
+      setTaxSaveError(getApiErrorMessage(err, 'Cập nhật hồ sơ thuế thất bại. Vui lòng thử lại.'));
     } finally {
       setTaxSaveLoading(false);
     }
@@ -491,7 +482,7 @@ export function RestaurantProfileScreen() {
         previous ? { ...previous, businessLicenseUrl: updated.businessLicenseUrl } : previous,
       );
     } catch (err: unknown) {
-      setLicenseError(getErrorMessage(err, 'Tải giấy phép lên thất bại. Vui lòng thử lại.'));
+      setLicenseError(getApiErrorMessage(err, 'Tải giấy phép lên thất bại. Vui lòng thử lại.'));
     } finally {
       setLicenseUploading(false);
     }

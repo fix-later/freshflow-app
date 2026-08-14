@@ -25,6 +25,7 @@ import {
   type CreditStatementSummaryDto,
 } from '../api/creditApi';
 import { type RestaurantProfileStackParamList } from '../../../navigation/types';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<RestaurantProfileStackParamList, 'CreditStatements'>;
 
@@ -263,9 +264,7 @@ export function CreditStatementsScreen({ route }: Props) {
               });
               Alert.alert('Thành công', `Đã tạo sao kê Tháng ${defaultTargetMonth}/${defaultTargetYear}`);
             } catch (err: unknown) {
-              const message =
-                (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-              Alert.alert('Không thể tạo sao kê', message ?? 'Đã xảy ra lỗi. Vui lòng thử lại.');
+              Alert.alert('Không thể tạo sao kê', getApiErrorMessage(err, 'Đã xảy ra lỗi. Vui lòng thử lại.'));
             } finally {
               setGenerating(false);
             }

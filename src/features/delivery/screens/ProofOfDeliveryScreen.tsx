@@ -18,6 +18,7 @@ import { type DriverStackParamList } from '../../../navigation/types';
 import { driverApi } from '../api/driverApi';
 import { uploadProofOfDelivery } from '../services/proofOfDeliveryUpload';
 import { driverRouteStore } from '../store/driverRouteStore';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'ProofOfDelivery'>;
 
@@ -134,8 +135,8 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
         ' · ' + now.toLocaleDateString('vi-VN'),
       );
       setSuccess(true);
-    } catch {
-      Alert.alert('Lỗi', 'Không thể xác nhận giao hàng. Vui lòng thử lại.');
+    } catch (submitError) {
+      Alert.alert('Lỗi', getApiErrorMessage(submitError, 'Không thể xác nhận giao hàng. Vui lòng thử lại.'));
     } finally {
       setSubmitting(false);
     }

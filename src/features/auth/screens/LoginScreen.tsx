@@ -18,6 +18,7 @@ import { useAuthStore } from "../../../store/authStore";
 import { Button } from "../../../components/ui/Button";
 import { Logo } from "../../../components/ui/Logo";
 import { authApi, UnsupportedRoleError } from "../api/authApi";
+import { getApiErrorMessage } from "../../../services/errors/apiErrorMessages";
 
 // BE sends "Account locked until {ISO 8601 UTC}." (LoginCommandHandler.cs) —
 // pull just the timestamp out and render it in Vietnamese instead of echoing
@@ -87,6 +88,8 @@ export function LoginScreen() {
       } else if (!err?.response) {
         title = "Không có kết nối mạng";
         body = "Vui lòng kiểm tra kết nối internet và thử lại.";
+      } else {
+        body = getApiErrorMessage(err, body);
       }
 
       Alert.alert(title, body, [{ text: "Đã hiểu" }]);

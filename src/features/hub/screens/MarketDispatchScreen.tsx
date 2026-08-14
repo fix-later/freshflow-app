@@ -28,6 +28,7 @@ import {
 import { useHubDispatch } from '../hooks/useHubDispatch';
 import { useHubWork } from '../hooks/useHubWork';
 import { hubApi, type HubDiscrepancyDto } from '../api/hubApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type VehicleChoice = {
   vehicle: HubVehicleDto;
@@ -120,12 +121,6 @@ export function estimateManifestLoad(manifest: LoadingManifestDto): ManifestLoad
 
 function countManifestOrders(manifest: LoadingManifestDto): number {
   return new Set(manifest.stops.flatMap((stop) => stop.lines.map((line) => line.orderId))).size;
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  const message = (error as { response?: { data?: { message?: string } } })
-    ?.response?.data?.message;
-  return message || (error instanceof Error ? error.message : fallback);
 }
 
 export function MarketDispatchScreen() {
@@ -249,7 +244,7 @@ export function MarketDispatchScreen() {
       }));
       setEligibleDrivers(drivers);
     } catch (loadError) {
-      Alert.alert('Không thể tải dữ liệu điều phối', getErrorMessage(loadError, 'Vui lòng thử lại.'));
+      Alert.alert('Không thể tải dữ liệu điều phối', getApiErrorMessage(loadError, 'Vui lòng thử lại.'));
     } finally {
       setCheckingVehicles(false);
     }
@@ -285,7 +280,7 @@ export function MarketDispatchScreen() {
     } catch (assignError) {
       Alert.alert(
         'Không thể phân xe',
-        getErrorMessage(assignError, 'Xe có thể vừa được gán cho tuyến khác. Vui lòng tải lại.'),
+        getApiErrorMessage(assignError, 'Xe có thể vừa được gán cho tuyến khác. Vui lòng tải lại.'),
       );
     } finally {
       setAssigningVehicleId(null);

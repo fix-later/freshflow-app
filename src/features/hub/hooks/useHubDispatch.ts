@@ -5,6 +5,7 @@ import {
   type HubDispatchPlan,
 } from '../api/hubDispatchApi';
 import type { AssignedHubDto } from '../api/hubApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type HubDispatchState = {
   plan: HubDispatchPlan | null;
@@ -40,11 +41,7 @@ function getDispatchServiceDates(): string[] {
 }
 
 function readErrorMessage(error: unknown): string {
-  const serverMessage = (error as { response?: { data?: { message?: string } } })
-    ?.response?.data?.message;
-  if (serverMessage) return serverMessage;
-  if (error instanceof Error && error.message) return error.message;
-  return 'Không thể tải kế hoạch phân xe trong 7 ngày. Vui lòng thử lại.';
+  return getApiErrorMessage(error, 'Không thể tải kế hoạch phân xe trong 7 ngày. Vui lòng thử lại.');
 }
 
 export function useHubDispatch(assignedHubs: AssignedHubDto[], allDates = false): HubDispatchState {

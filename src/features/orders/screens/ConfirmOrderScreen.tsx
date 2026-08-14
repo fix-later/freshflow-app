@@ -24,6 +24,7 @@ import { useCartStore } from '../../../store/cartStore';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';
 import { creditApi } from '../../credit/api/creditApi';
 import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
+import { describeApiCode, getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'ConfirmOrder'>;
 
@@ -205,13 +206,13 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
 
   const openOrderManagement = (orderId: string) => {
     navigation.getParent<any>()?.navigate('RestaurantTracking', {
-        screen: 'OrderDetail',
-        params: { orderId },
-        // Preserve TrackOrders as the nested stack's root even when this tab
-        // has never been opened before. Otherwise OrderDetail becomes root and
-        // cannot be popped/reset (also leaving the header without a back button).
-        initial: false,
-      });
+      screen: 'OrderDetail',
+      params: { orderId },
+      // Preserve TrackOrders as the nested stack's root even when this tab
+      // has never been opened before. Otherwise OrderDetail becomes root and
+      // cannot be popped/reset (also leaving the header without a back button).
+      initial: false,
+    });
   };
 
   const openPlacedOrder = (orderId: string) => {
@@ -289,7 +290,9 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
       // longer succeed" case before wasting the actual confirm attempt.
       const confirmPreview = await orderApi.previewConfirmation(currentDraftId, selectedAddress.id);
       if (!confirmPreview.wouldSucceed) {
-        const issues = confirmPreview.issues.map((issue) => `• ${issue.message}`).join('\n');
+        const issues = confirmPreview.issues
+          .map((issue) => `• ${describeApiCode(issue.code, issue.message)}`)
+          .join('\n');
         Alert.alert(
           'Chưa thể xác nhận đơn',
           `${issues || 'Đơn hàng chưa đáp ứng điều kiện xác nhận.'}\n\nBản nháp đã được lưu trong lịch sử đơn hàng.`,
@@ -305,10 +308,9 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
       setPlacedOrderId(confirmed.orderId);
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       const buttons = buildFailureAlertButtons(currentDraftId);
       if (code === 'INSUFFICIENT_STOCK') {
-        Alert.alert('Không đủ hàng', message ?? 'Một hoặc nhiều sản phẩm không đủ số lượng tồn kho.', buttons);
+        Alert.alert('Không đủ hàng', getApiErrorMessage(err, 'Một hoặc nhiều sản phẩm không đủ số lượng tồn kho.'), buttons);
       } else if (code === 'RESTAURANT_NOT_APPROVED' || code === 'RESTAURANT_NOT_ACTIVE') {
         Alert.alert('Tài khoản chưa được duyệt', 'Nhà hàng cần được Admin phê duyệt trước khi đặt hàng.', buttons);
       } else if (code === 'DELIVERY_DATE_OUT_OF_WINDOW') {
@@ -317,18 +319,14 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
           `Ngày giao phải từ hiện tại đến tối đa ${deliveryWindowDays} ngày tiếp theo.`,
           buttons,
         );
-      } else if (
-        code === 'CREDIT_LIMIT_EXCEEDED' ||
-        code === 'INSUFFICIENT_CREDIT' ||
-        (message ?? '').toLowerCase().includes('credit')
-      ) {
+      } else if (code === 'CREDIT_LIMIT_EXCEEDED') {
         Alert.alert(
           'Hạn mức tín dụng không đủ',
           'Đơn hàng vượt quá hạn mức tín dụng hiện tại của nhà hàng. Vui lòng liên hệ FreshFlow để được cấp hạn mức.',
           buttons,
         );
       } else {
-        Alert.alert('Không thể đặt hàng', message ?? 'Đã xảy ra lỗi. Vui lòng thử lại.', buttons);
+        Alert.alert('Không thể đặt hàng', getApiErrorMessage(err, 'Đã xảy ra lỗi. Vui lòng thử lại.'), buttons);
       }
     } finally {
       setLoading(false);
@@ -341,9 +339,9 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
     (currentDraftId: string | null) =>
       currentDraftId
         ? [
-            { text: 'Xem bản nháp', onPress: () => openOrderManagement(currentDraftId) },
-            { text: 'Đóng', style: 'cancel' as const },
-          ]
+          { text: 'Xem bản nháp', onPress: () => openOrderManagement(currentDraftId) },
+          { text: 'Đóng', style: 'cancel' as const },
+        ]
         : undefined,
     [openOrderManagement],
   );

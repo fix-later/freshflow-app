@@ -186,8 +186,11 @@ apiClient.interceptors.response.use(
 
   // ── Error: transform envelope + 401 refresh logic ─────────────────────────────
   async (error: AxiosError) => {
-    // Transform error envelope { success: false, error: { code, message } }
-    // into the legacy flat shape { code, message } so existing handlers still work.
+    // Transform error envelope { success: false, error: { code, message, details? } }
+    // into the legacy flat shape { code, message, details } so existing handlers still work.
+    // `details` (field-level ValidationException entries) is preserved so callers can show
+    // the specific per-field reason instead of the generic top-level message — see
+    // services/errors/apiErrorMessages.ts.
     if (error.response?.data && typeof error.response.data === 'object') {
       const body = error.response.data as Record<string, unknown>;
       if (body.success === false && body.error) {
@@ -195,6 +198,7 @@ apiClient.interceptors.response.use(
         error.response.data = {
           code: errDetail.code ?? '',
           message: errDetail.message ?? '',
+          details: errDetail.details,
         };
       }
     }

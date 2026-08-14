@@ -25,6 +25,7 @@ import {
 } from '../../../components/ui/Text';
 import { profileApi } from '../api/profileApi';
 import { uploadImageToCloudinary } from '../../../services/cloudinaryUpload';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -219,11 +220,7 @@ export function ProfileScreen() {
       setIsEditing(false);
       setEditAvatarUri(null);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        (err instanceof Error ? err.message : null) ??
-        'Cập nhật thất bại. Vui lòng thử lại.';
-      setSaveError(msg);
+      setSaveError(getApiErrorMessage(err, 'Cập nhật thất bại. Vui lòng thử lại.'));
     } finally {
       setSaveLoading(false);
     }
@@ -277,10 +274,9 @@ export function ProfileScreen() {
       void signOut();
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
-      const fallback =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Đổi mật khẩu thất bại. Vui lòng thử lại.';
-      setChangePwError(CHANGE_PW_ERRORS[code ?? ''] ?? fallback);
+      setChangePwError(
+        CHANGE_PW_ERRORS[code ?? ''] ?? getApiErrorMessage(err, 'Đổi mật khẩu thất bại. Vui lòng thử lại.'),
+      );
     } finally {
       setChangePwLoading(false);
     }

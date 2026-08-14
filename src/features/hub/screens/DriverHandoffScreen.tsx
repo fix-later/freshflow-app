@@ -10,6 +10,7 @@ import type { HubStackParamList } from '../../../navigation/types';
 import { buildOutboundItems, hubDispatchApi } from '../api/hubDispatchApi';
 import { useHubDispatch } from '../hooks/useHubDispatch';
 import { useHubWork } from '../hooks/useHubWork';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<HubStackParamList, 'DriverHandoff'>;
 
@@ -92,8 +93,7 @@ export function DriverHandoffScreen({ navigation, route: screenRoute }: Props) {
         { text: 'Về tổng quan', onPress: () => navigation.navigate('HubTabs', { screen: 'HubDashboard' }) },
       ]);
     } catch (error) {
-      const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      Alert.alert('Không thể bàn giao', message ?? 'Vui lòng kiểm tra trạng thái tuyến và tài xế rồi thử lại.');
+      Alert.alert('Không thể bàn giao', getApiErrorMessage(error, 'Vui lòng kiểm tra trạng thái tuyến và tài xế rồi thử lại.'));
     } finally {
       setSubmitting(false);
     }

@@ -9,6 +9,7 @@ import { type DriverStackParamList } from '../../../navigation/types';
 import { driverApi } from '../api/driverApi';
 import { driverRouteStore } from '../store/driverRouteStore';
 import { type LoadingLineDto, type LoadingManifestDto } from '../types/delivery.types';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'PickupConfirm'>;
 
@@ -143,8 +144,8 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
         driverRouteStore.setManifestStops(manifest.stops);
       }
       setItems(buildPickupItems(manifest));
-    } catch {
-      setError('Không thể tải danh sách hàng cần nhận. Vui lòng thử lại.');
+    } catch (loadError) {
+      setError(getApiErrorMessage(loadError, 'Không thể tải danh sách hàng cần nhận. Vui lòng thử lại.'));
     } finally {
       setLoading(false);
     }
@@ -197,8 +198,11 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
                 driverRouteStore.setRouteStatus('in_progress');
               }
               navigation.replace('StopList', { routeId });
-            } catch {
-              Alert.alert('Lỗi', 'Không thể xác nhận nhận hàng hoặc bắt đầu tuyến đường. Vui lòng thử lại.');
+            } catch (confirmError) {
+              Alert.alert(
+                'Lỗi',
+                getApiErrorMessage(confirmError, 'Không thể xác nhận nhận hàng hoặc bắt đầu tuyến đường. Vui lòng thử lại.'),
+              );
             } finally {
               setConfirming(false);
             }

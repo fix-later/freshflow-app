@@ -36,6 +36,7 @@ import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 import { createOrderStatusConnection } from '../realtime/orderRealtime';
 import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
 import { stopAfterStart } from '../../../utils/signalr';
+import { describeApiCode, getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'OrderDetail'>;
 
@@ -200,8 +201,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         ],
       );
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      Alert.alert('Không thể đặt lại đơn', message ?? 'Sản phẩm hiện không còn đủ điều kiện để đặt lại.');
+      Alert.alert('Không thể đặt lại đơn', getApiErrorMessage(err, 'Sản phẩm hiện không còn đủ điều kiện để đặt lại.'));
     } finally {
       setReordering(false);
     }
@@ -268,8 +268,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
       setCancelModalVisible(false);
       Alert.alert('Đã hủy đơn', 'Đơn hàng của bạn đã được hủy thành công.');
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      Alert.alert('Không thể hủy đơn', message ?? 'Đơn hàng không còn ở trạng thái cho phép hủy.');
+      Alert.alert('Không thể hủy đơn', getApiErrorMessage(err, 'Đơn hàng không còn ở trạng thái cho phép hủy.'));
     } finally {
       setCancelling(false);
     }
@@ -306,8 +305,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
       await fetchOrder();
       Alert.alert('Đã xác nhận', 'Bạn đã xác nhận nhận hàng cho đơn này.');
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      Alert.alert('Không thể xác nhận', message ?? 'Đơn hàng chưa ở trạng thái đã giao.');
+      Alert.alert('Không thể xác nhận', getApiErrorMessage(err, 'Đơn hàng chưa ở trạng thái đã giao.'));
     } finally {
       setConfirmingReceipt(false);
     }
@@ -331,8 +329,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
       await orderApi.updateItem(orderId, item.orderItemId, quantity);
       await fetchOrder();
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      Alert.alert('Không thể cập nhật sản phẩm', message ?? 'Vui lòng kiểm tra tồn kho và thử lại.');
+      Alert.alert('Không thể cập nhật sản phẩm', getApiErrorMessage(err, 'Vui lòng kiểm tra tồn kho và thử lại.'));
     } finally {
       setUpdatingItemId(null);
     }
@@ -353,8 +350,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
               await orderApi.removeItem(orderId, item.orderItemId);
               await fetchOrder();
             } catch (err: unknown) {
-              const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-              Alert.alert('Không thể xóa sản phẩm', message ?? 'Vui lòng thử lại.');
+              Alert.alert('Không thể xóa sản phẩm', getApiErrorMessage(err, 'Vui lòng thử lại.'));
             } finally {
               setUpdatingItemId(null);
             }
@@ -370,7 +366,9 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     try {
       const preview = await orderApi.previewConfirmation(orderId, selectedAddress.id);
       if (!preview.wouldSucceed) {
-        const issueText = preview.issues.map((issue) => `• ${issue.message}`).join('\n');
+        const issueText = preview.issues
+          .map((issue) => `• ${describeApiCode(issue.code, issue.message)}`)
+          .join('\n');
         Alert.alert('Chưa thể xác nhận đơn', issueText || 'Đơn hàng chưa đáp ứng điều kiện xác nhận.');
         return;
       }
@@ -382,8 +380,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         `Dự kiến giao: ${formatDeliveryWindow(confirmed.scheduledFor)}`,
       );
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      Alert.alert('Không thể xác nhận đơn', message ?? 'Vui lòng thử lại.');
+      Alert.alert('Không thể xác nhận đơn', getApiErrorMessage(err, 'Vui lòng thử lại.'));
     } finally {
       setConfirmingOrder(false);
     }

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { hubApi, type AssignedHubDto, type HubInboundTask } from '../api/hubApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type HubWorkState = {
   assignedHubs: AssignedHubDto[];
@@ -16,11 +17,7 @@ type HubWorkState = {
 const AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 function readErrorMessage(error: unknown): string {
-  const serverMessage = (error as { response?: { data?: { message?: unknown } } })
-    ?.response?.data?.message;
-  if (typeof serverMessage === 'string' && serverMessage.length > 0) return serverMessage;
-  if (error instanceof Error && error.message) return error.message;
-  return 'Không thể tải công việc được phân công. Vui lòng thử lại.';
+  return getApiErrorMessage(error, 'Không thể tải công việc được phân công. Vui lòng thử lại.');
 }
 
 export function useHubWork(): HubWorkState {

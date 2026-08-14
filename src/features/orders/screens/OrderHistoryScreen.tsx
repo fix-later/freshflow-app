@@ -24,6 +24,7 @@ import {
   ORDER_STATUS_LABEL,
 } from '../api/orderApi';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type HistoryNav = NativeStackNavigationProp<RestaurantOrdersStackParamList, 'OrderHistory'>;
 
@@ -167,8 +168,7 @@ export function OrderHistoryScreen() {
         { text: 'Xem đơn mới', onPress: () => navigation.navigate('OrderDetail', { orderId: newOrder.orderId }) },
       ]);
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      Alert.alert('Không thể đặt lại đơn', message ?? 'Đơn hàng này hiện không thể đặt lại.');
+      Alert.alert('Không thể đặt lại đơn', getApiErrorMessage(err, 'Đơn hàng này hiện không thể đặt lại.'));
     } finally {
       setReorderingId(null);
     }

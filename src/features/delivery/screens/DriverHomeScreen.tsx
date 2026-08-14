@@ -129,8 +129,10 @@ export function DriverHomeScreen() {
 
   const [draggingIdx, setDraggingIdx] = useState(-1);
   const [insertIdx, setInsertIdx] = useState(-1);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const reorderModeRef = useRef(false);
+  const savingOrderRef = useRef(false);
   const orderIdsRef = useRef<string[]>([]);
   const draggingIdxRef = useRef(-1);
   const insertIdxRef = useRef(-1);
@@ -141,6 +143,7 @@ export function DriverHomeScreen() {
   const itemHeightRef = useRef(ITEM_HEIGHT);
 
   useEffect(() => { reorderModeRef.current = reorderMode; }, [reorderMode]);
+  useEffect(() => { savingOrderRef.current = savingOrder; }, [savingOrder]);
   useEffect(() => { orderIdsRef.current = orderIds; }, [orderIds]);
 
   useEffect(() => {
@@ -317,8 +320,8 @@ export function DriverHomeScreen() {
 
   const listPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => reorderModeRef.current,
-      onMoveShouldSetPanResponder: () => reorderModeRef.current,
+      onStartShouldSetPanResponder: () => reorderModeRef.current && !savingOrderRef.current,
+      onMoveShouldSetPanResponder: () => reorderModeRef.current && !savingOrderRef.current,
 
       onPanResponderGrant: (e) => {
         const relY = e.nativeEvent.pageY - listPageYRef.current;
@@ -386,15 +389,39 @@ export function DriverHomeScreen() {
     }
   };
 
-  const handleReorderDone = () => {
-    commitOrder(orderIds);
-    setMapOrderIds([...orderIds]);
-    setReorderMode(false);
+  /**
+   * Persists the new stop order before leaving reorder mode. The server call must be
+   * awaited (not fire-and-forget) — if it fails, the driver must not see "Xong" succeed
+   * while the backend (and anything reading `Delivery.SequenceNumber`, e.g. Hub) still
+   * has the old order, since `driverRouteStore` falls back to the local preview order
+   * for display and would silently mask the desync otherwise.
+   */
+  const handleReorderDone = async () => {
     const route = driverRouteStore.getRoute();
-    if (route && !hasPickupStarted && route.status === 'assigned') {
+    const needsServerSave = !!route && !hasPickupStarted && route.status === 'assigned';
+
+    if (!needsServerSave) {
+      commitOrder(orderIds);
+      setMapOrderIds([...orderIds]);
+      setReorderMode(false);
+      return;
+    }
+
+    setSavingOrder(true);
+    try {
       const hubStop = driverRouteStore.getHubStop();
       const fullStopOrder = hubStop ? [hubStop.entityId, ...orderIds] : orderIds;
-      driverApi.reorderRoute(route.routeId, fullStopOrder).catch(() => { });
+      await driverApi.reorderRoute(route!.routeId, fullStopOrder);
+      commitOrder(orderIds);
+      setMapOrderIds([...orderIds]);
+      setReorderMode(false);
+    } catch {
+      Alert.alert(
+        'Lưu thứ tự thất bại',
+        'Không thể lưu thứ tự điểm giao mới lên hệ thống. Vui lòng kiểm tra kết nối mạng và bấm "Xong" để thử lại.',
+      );
+    } finally {
+      setSavingOrder(false);
     }
   };
 
@@ -582,9 +609,17 @@ export function DriverHomeScreen() {
           </View>
           {!hasPickupStarted && (
             reorderMode ? (
-              <TouchableOpacity style={styles.reorderDoneBtn} onPress={handleReorderDone}>
-                <Ionicons name="checkmark" size={13} color={Colors.driverOnPrimary} />
-                <Text style={styles.reorderDoneBtnText}>Xong</Text>
+              <TouchableOpacity
+                style={[styles.reorderDoneBtn, savingOrder && { opacity: 0.7 }]}
+                onPress={savingOrder ? undefined : handleReorderDone}
+                disabled={savingOrder}
+              >
+                {savingOrder ? (
+                  <ActivityIndicator size="small" color={Colors.driverOnPrimary} />
+                ) : (
+                  <Ionicons name="checkmark" size={13} color={Colors.driverOnPrimary} />
+                )}
+                <Text style={styles.reorderDoneBtnText}>{savingOrder ? 'Đang lưu...' : 'Xong'}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={styles.reorderToggleBtn} onPress={() => setReorderMode(true)}>

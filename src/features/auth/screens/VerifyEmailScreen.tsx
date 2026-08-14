@@ -18,6 +18,7 @@ import { Colors } from '../../../constants/colors';
 import { Button } from '../../../components/ui/Button';
 import { authApi } from '../api/authApi';
 import type { AuthStackParamList } from '../../../navigation/types';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'VerifyEmail'>;
 
@@ -135,6 +136,8 @@ export function VerifyEmailScreen({ route, navigation }: Props) {
         body = 'Mã xác thực không đúng hoặc đã hết hạn. Vui lòng kiểm tra lại hoặc gửi mã mới.';
       } else if (!err?.response) {
         body = 'Không có kết nối mạng. Vui lòng kiểm tra internet và thử lại.';
+      } else {
+        body = getApiErrorMessage(err, body);
       }
       Alert.alert('Xác thực thất bại', body, [{ text: 'Đã hiểu' }]);
       // Reset OTP on error

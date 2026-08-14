@@ -25,6 +25,7 @@ import {
 } from '../api/assistantApi';
 import { useCartStore } from '../../../store/cartStore';
 import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
+import { describeApiCode } from '../../../services/errors/apiErrorMessages';
 
 interface ChatMessage {
   id: string;
@@ -520,7 +521,11 @@ function OrderPreviewCard({
             <View style={styles.previewWarningBox}>
               <Ionicons name="warning-outline" size={14} color={Colors.warning} />
               <Text style={styles.previewWarningText}>
-                {preview.issues[0]?.message ?? 'Có vấn đề cần kiểm tra trước khi xác nhận.'}
+                {describeApiCode(
+                  preview.issues[0]?.code,
+                  preview.issues[0]?.message,
+                  'Có vấn đề cần kiểm tra trước khi xác nhận.',
+                )}
               </Text>
             </View>
           ) : null}

@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../../constants/colors';
 import { Button } from '../../../components/ui/Button';
 import { authApi } from '../api/authApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 export function ForgotPasswordScreen() {
   const navigation = useNavigation();
@@ -31,10 +32,7 @@ export function ForgotPasswordScreen() {
       await authApi.forgotPassword(email.trim());
       setSent(true);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Không thể gửi email. Vui lòng kiểm tra lại địa chỉ email.';
-      setError(msg);
+      setError(getApiErrorMessage(err, 'Không thể gửi email. Vui lòng kiểm tra lại địa chỉ email.'));
     } finally {
       setLoading(false);
     }

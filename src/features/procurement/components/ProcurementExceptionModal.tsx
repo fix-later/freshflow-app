@@ -24,6 +24,7 @@ import {
   type ProcurementExceptionType,
   type ProcurementTaskItemDto,
 } from '../api/marketProcurementApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 const EXCEPTION_TYPES: Array<{
   value: ProcurementExceptionType;
@@ -46,9 +47,7 @@ interface Props {
 }
 
 function readError(error: unknown): string {
-  const message = (error as { response?: { data?: { message?: string } } })
-    ?.response?.data?.message;
-  return message || (error instanceof Error ? error.message : 'Không thể gửi báo cáo sự cố.');
+  return getApiErrorMessage(error, 'Không thể gửi báo cáo sự cố.');
 }
 
 export function ProcurementExceptionModal({

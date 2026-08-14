@@ -18,6 +18,7 @@ import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import { inventoryApi } from '../api/inventoryApi';
 import type { MarketProductDto } from '../../../types/api.types';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,8 +50,8 @@ export function MarketKiosksScreen() {
       setError(null);
       const result = await inventoryApi.getMarketProducts(marketId, { pageSize: 50 });
       setProducts(Array.isArray(result) ? result : result.items ?? []);
-    } catch (err: any) {
-      setError(err?.message || 'Không thể tải dữ liệu. Vui lòng thử lại.');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Không thể tải dữ liệu. Vui lòng thử lại.'));
     }
   }, [marketId]);
 

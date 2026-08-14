@@ -30,6 +30,7 @@ import { useHubDispatch } from '../hooks/useHubDispatch';
 import { useHubProcurementWeek } from '../hooks/useHubProcurementWeek';
 import { useHubSortingWeek } from '../hooks/useHubSortingWeek';
 import { useHubWork } from '../hooks/useHubWork';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Navigation = NativeStackNavigationProp<HubStackParamList>;
 
@@ -254,10 +255,9 @@ export function SortingScreen() {
       sessionSortedItemIds.delete(line.orderItemId);
       setLocalSortedItems(new Set(sessionSortedItemIds));
     } catch (error) {
-      const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
       Alert.alert(
         'Không thể lưu phân loại',
-        message ?? 'Vui lòng kiểm tra lại dòng hàng và thử lại.',
+        getApiErrorMessage(error, 'Vui lòng kiểm tra lại dòng hàng và thử lại.'),
       );
     } finally {
       setSavingItems((current) => {

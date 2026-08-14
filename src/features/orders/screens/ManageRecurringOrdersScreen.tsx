@@ -16,6 +16,7 @@ import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
 import { Text } from '../../../components/ui/Text';
 import { orderApi, type ScheduledOrderDto } from '../api/orderApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 
 type Nav = NativeStackNavigationProp<RestaurantOrdersStackParamList, 'ManageRecurringOrders'>;
@@ -126,8 +127,7 @@ export function ManageRecurringOrdersScreen() {
       const updated = await orderApi.cancelScheduledOrder(scheduledOrderId);
       setItems((prev) => prev.map((it) => (it.scheduledOrderId === scheduledOrderId ? updated : it)));
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      Alert.alert('Không thể hủy lịch', message ?? 'Vui lòng thử lại sau.');
+      Alert.alert('Không thể hủy lịch', getApiErrorMessage(err, 'Vui lòng thử lại sau.'));
     } finally {
       setCancellingId(null);
     }

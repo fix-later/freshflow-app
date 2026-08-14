@@ -21,6 +21,7 @@ import {
 import { createOrderStatusConnection } from '../../orders/realtime/orderRealtime';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 import { stopAfterStart } from '../../../utils/signalr';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type DeliveryFilter = 'active' | 'delivering' | 'delivered';
 
@@ -117,7 +118,7 @@ export function TrackOrderScreen() {
       setOrders(response.data.filter((order) => DELIVERY_STATUSES.includes(order.status)));
     } catch (loadError) {
       console.error('Error fetching restaurant deliveries:', loadError);
-      setError('Không thể tải tiến độ giao hàng. Vui lòng thử lại.');
+      setError(getApiErrorMessage(loadError, 'Không thể tải tiến độ giao hàng. Vui lòng thử lại.'));
     } finally {
       setLoading(false);
       setRefreshing(false);

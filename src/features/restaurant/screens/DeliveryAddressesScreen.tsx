@@ -24,6 +24,7 @@ import {
   type DeliveryAddressDto,
   type CreateDeliveryAddressPayload,
 } from '../api/restaurantApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 // ─── Form state ─────────────────────────────────────────────────────────────
 
@@ -295,10 +296,7 @@ export function DeliveryAddressesScreen() {
       closeForm();
       setSavedOk(true);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Lưu không thành công. Vui lòng thử lại.';
-      setSaveError(msg);
+      setSaveError(getApiErrorMessage(err, 'Lưu không thành công. Vui lòng thử lại.'));
     } finally {
       setSaveLoading(false);
     }

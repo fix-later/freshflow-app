@@ -25,6 +25,7 @@ import {
   TextInput,
 } from '../../../components/ui/Text';
 import { orderApi, type RecurrenceType, type ScheduledOrderItemDto } from '../api/orderApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 import { pricingApi } from '../../pricing/api/pricingApi';
 import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
 import { type MarketDto, type MarketProductDto } from '../../../types/api.types';
@@ -383,10 +384,9 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
         ]);
       }
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       Alert.alert(
         editingId ? 'Không thể lưu thay đổi' : 'Không thể tạo lịch đặt hàng',
-        message ?? 'Vui lòng kiểm tra lại thông tin và thử lại.',
+        getApiErrorMessage(err, 'Vui lòng kiểm tra lại thông tin và thử lại.'),
       );
     } finally {
       setSubmitting(false);

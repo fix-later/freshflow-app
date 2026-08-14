@@ -15,6 +15,7 @@ import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import { useAuthStore } from '../../../store/authStore';
 import { inventoryApi, type AssignedMarketDto } from '../api/inventoryApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 export function MarketAgentHomeScreen() {
   const navigation = useNavigation<any>();
@@ -26,8 +27,8 @@ export function MarketAgentHomeScreen() {
   const fetchOverview = useCallback(async () => {
     try {
       setAssignedMarkets(await inventoryApi.getAssignedMarkets());
-    } catch (error: any) {
-      Alert.alert('Không thể tải tổng quan', error?.message || 'Vui lòng thử lại sau.');
+    } catch (error: unknown) {
+      Alert.alert('Không thể tải tổng quan', getApiErrorMessage(error, 'Vui lòng thử lại sau.'));
     } finally {
       setLoading(false);
     }

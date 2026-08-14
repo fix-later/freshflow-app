@@ -16,6 +16,7 @@ import { Colors } from '../../../constants/colors';
 import { Button } from '../../../components/ui/Button';
 import { authApi } from '../api/authApi';
 import { type AuthStackParamList } from '../../../navigation/types';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type RouteProps = RouteProp<AuthStackParamList, 'ResetPassword'>;
 
@@ -62,10 +63,9 @@ export function ResetPasswordScreen() {
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string; message?: string } } })
         ?.response?.data?.code;
-      const fallback =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Đặt lại mật khẩu thất bại. Vui lòng thử lại.';
-      setError(ERROR_MESSAGES[code ?? ''] ?? fallback);
+      setError(
+        ERROR_MESSAGES[code ?? ''] ?? getApiErrorMessage(err, 'Đặt lại mật khẩu thất bại. Vui lòng thử lại.'),
+      );
     } finally {
       setLoading(false);
     }

@@ -18,6 +18,7 @@ import { type DriverStackParamList } from '../../../navigation/types';
 import { driverApi } from '../api/driverApi';
 import { driverRouteStore } from '../store/driverRouteStore';
 import { type DeliveryIssueType } from '../types/delivery.types';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'ReportDeliveryIssue'>;
 
@@ -85,8 +86,8 @@ export function ReportDeliveryIssueScreen({ route, navigation }: Props) {
               await driverApi.updateDeliveryStatus(deliveryId, 'FAILED', description);
               driverRouteStore.setDeliveryStatus(deliveryId, 'failed');
               navigation.goBack();
-            } catch {
-              Alert.alert('Lỗi', 'Không thể gửi báo cáo. Vui lòng thử lại.');
+            } catch (submitError) {
+              Alert.alert('Lỗi', getApiErrorMessage(submitError, 'Không thể gửi báo cáo. Vui lòng thử lại.'));
             } finally {
               setSubmitting(false);
             }

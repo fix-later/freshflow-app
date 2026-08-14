@@ -12,6 +12,7 @@ import { orderApi, type OrderItemDto } from '../../orders/api/orderApi';
 import { driverApi } from '../api/driverApi';
 import { driverRouteStore, type DeliveryStop } from '../store/driverRouteStore';
 import { type DeliveryStatus } from '../types/delivery.types';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'DriverNavigation'>;
 
@@ -186,8 +187,8 @@ export function NavigationScreen({ route, navigation }: Props) {
       await driverApi.updateDeliveryStatus(stop.deliveryId, 'ARRIVED');
       driverRouteStore.setDeliveryStatus(stop.deliveryId, 'arrived');
       setLocalStatus('arrived');
-    } catch {
-      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái. Vui lòng thử lại.');
+    } catch (arrivalError) {
+      Alert.alert('Lỗi', getApiErrorMessage(arrivalError, 'Không thể cập nhật trạng thái. Vui lòng thử lại.'));
     } finally {
       setUpdatingArrival(false);
     }

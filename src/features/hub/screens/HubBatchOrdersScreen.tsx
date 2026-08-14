@@ -13,6 +13,7 @@ import {
   type HubProcurementBatchDto,
   type HubProcurementOrderDto,
 } from '../api/hubApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<HubStackParamList, 'HubBatchOrders'>;
 
@@ -40,11 +41,7 @@ function formatQuantity(value: number): string {
 }
 
 function readErrorMessage(error: unknown): string {
-  const serverMessage = (error as { response?: { data?: { message?: string } } })
-    ?.response?.data?.message;
-  if (serverMessage) return serverMessage;
-  if (error instanceof Error && error.message) return error.message;
-  return 'Không thể tải danh sách đơn hàng trong lô. Vui lòng thử lại.';
+  return getApiErrorMessage(error, 'Không thể tải danh sách đơn hàng trong lô. Vui lòng thử lại.');
 }
 
 export function HubBatchOrdersScreen({ route }: Props) {

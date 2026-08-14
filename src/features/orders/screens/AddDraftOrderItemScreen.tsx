@@ -16,6 +16,7 @@ import { pricingApi } from '../../pricing/api/pricingApi';
 import { type MarketDto, type MarketProductDto } from '../../../types/api.types';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 import { orderApi } from '../api/orderApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'AddDraftOrderItem'>;
 
@@ -115,8 +116,7 @@ export function AddDraftOrderItemScreen({ route, navigation }: Props) {
         { text: 'Xong', onPress: () => navigation.goBack() },
       ]);
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      Alert.alert('Không thể thêm sản phẩm', message ?? 'Vui lòng kiểm tra tồn kho và thử lại.');
+      Alert.alert('Không thể thêm sản phẩm', getApiErrorMessage(err, 'Vui lòng kiểm tra tồn kho và thử lại.'));
     } finally {
       setAddingId(null);
     }

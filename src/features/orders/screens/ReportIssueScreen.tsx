@@ -23,6 +23,7 @@ import {
   ISSUE_TYPE_LABEL,
 } from '../api/orderApi';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'ReportIssue'>;
 
@@ -144,10 +145,9 @@ export function ReportIssueScreen({ route, navigation }: Props) {
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       Alert.alert(
         'Không thể gửi báo cáo',
-        message ?? 'Chỉ có thể báo sự cố cho đơn đã giao. Các sản phẩm chưa gửi vẫn còn trong danh sách.',
+        getApiErrorMessage(err, 'Chỉ có thể báo sự cố cho đơn đã giao. Các sản phẩm chưa gửi vẫn còn trong danh sách.'),
       );
     } finally {
       setSubmitting(false);

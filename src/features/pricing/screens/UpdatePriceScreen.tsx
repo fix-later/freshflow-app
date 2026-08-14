@@ -25,6 +25,7 @@ import type { MarketProductDto, ProductDto } from '../../../types/api.types';
 import type { PriceHistoryEntry } from '../../inventory/api/inventoryApi';
 import { PriceDashboardHeader } from '../components/PriceDashboardHeader';
 import { pricingApi } from '../api/pricingApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -363,8 +364,8 @@ export function UpdatePriceScreen() {
       if (targetMarketId && !selectedMarketId) {
         setSelectedMarketId(targetMarketId);
       }
-    } catch (err: any) {
-      setError(err?.message || 'Không thể tải dữ liệu');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Không thể tải dữ liệu'));
     }
   }, []);
 
@@ -375,8 +376,8 @@ export function UpdatePriceScreen() {
         setError(null);
         setLoadingProducts(true);
         setProducts(await inventoryApi.getAllMarketProducts(marketId));
-      } catch (err: any) {
-        setError(err?.message || 'Không thể tải sản phẩm');
+      } catch (err: unknown) {
+        setError(getApiErrorMessage(err, 'Không thể tải sản phẩm'));
       } finally {
         setLoadingProducts(false);
       }

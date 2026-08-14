@@ -19,6 +19,7 @@ import { Button } from '../../../components/ui/Button';
 import { Logo } from '../../../components/ui/Logo';
 import { authApi } from '../api/authApi';
 import { fetchTaxInfo } from '../../../services/taxLookup';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 // Password must match backend: min 8 chars, 1 uppercase, 1 digit, 1 special char
 function isPasswordStrong(pw: string): boolean {
@@ -114,7 +115,6 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
       navigation.navigate('VerifyEmail' as never, { email: email.trim() } as never);
     } catch (err: any) {
       const code: string = err?.response?.data?.code ?? '';
-      const serverMsg: string = err?.response?.data?.message ?? '';
 
       let title = 'Đăng ký thất bại';
       let body = 'Đã có lỗi xảy ra. Vui lòng thử lại sau.';
@@ -131,8 +131,8 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
       } else if (!err?.response) {
         title = 'Không có kết nối mạng';
         body = 'Vui lòng kiểm tra kết nối internet và thử lại.';
-      } else if (serverMsg) {
-        body = serverMsg;
+      } else {
+        body = getApiErrorMessage(err, body);
       }
 
       Alert.alert(title, body, [{ text: 'Đã hiểu' }]);

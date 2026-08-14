@@ -1,4 +1,5 @@
 import { driverApi } from '../api/driverApi';
+import { UntrustedUploadError } from '../../../services/errors/apiErrorMessages';
 
 /**
  * Uploads a proof-of-delivery asset (camera photo URI or signature-canvas PNG
@@ -39,7 +40,7 @@ export async function uploadProofOfDelivery(deliveryId: string, localUri: string
 
   const uploadData = (await res.json()) as { secure_url: string; error?: { message: string } };
   if (!res.ok) {
-    throw new Error(uploadData.error?.message ?? 'Tải bằng chứng giao hàng thất bại.');
+    throw new UntrustedUploadError(uploadData.error?.message ?? 'Tải bằng chứng giao hàng thất bại.');
   }
 
   await driverApi.attachProofOfDelivery(deliveryId, uploadData.secure_url);

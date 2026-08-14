@@ -18,11 +18,14 @@ import { Fonts } from '../../../constants/fonts';
 import type { MarketTasksStackParamList } from '../../../navigation/types';
 import { ProcurementExceptionModal } from '../components/ProcurementExceptionModal';
 import { ProcurementPurchaseProofCard } from '../components/ProcurementPurchaseProofCard';
+import { useAuthStore } from '../../../store/authStore';
 import {
   marketProcurementApi,
   type MarketProcurementTaskDto,
+  type ProcurementTaskItemDto,
   type ProcurementTaskStatus,
 } from '../api/marketProcurementApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<MarketTasksStackParamList, 'ProcurementTaskDetail'>;
 type PurchaseInput = { quantity: string; price: string };
@@ -97,9 +100,17 @@ function formatDateTime(value: string): string {
 }
 
 function readError(error: unknown): string {
-  const message = (error as { response?: { data?: { message?: string } } })
-    ?.response?.data?.message;
-  return message || (error instanceof Error ? error.message : 'Không thể xử lý nhiệm vụ thu mua.');
+  return getApiErrorMessage(error, 'Không thể xử lý nhiệm vụ thu mua.');
+}
+
+/**
+ * Whether `item` is one of this agent's own lines — a batch split across multiple agents only
+ * lets each confirm/hand off/report on their own assigned lines (see
+ * `ProcurementTaskItemDto.assignedAgentUserId`'s doc comment). Strict equality, no fallback for
+ * `null`: an unassigned item belongs to nobody yet, not to whoever happens to open the batch.
+ */
+function isMine(item: ProcurementTaskItemDto, currentUserId: string | null): boolean {
+  return currentUserId !== null && item.assignedAgentUserId === currentUserId;
 }
 
 function createInputs(task: MarketProcurementTaskDto): Record<string, PurchaseInput> {
@@ -117,6 +128,8 @@ function createInputs(task: MarketProcurementTaskDto): Record<string, PurchaseIn
 }
 
 export function ProcurementTaskDetailScreen({ route }: Props) {
+  const { user } = useAuthStore();
+  const currentUserId = user?.id ?? null;
   const [task, setTask] = useState<MarketProcurementTaskDto | null>(null);
   const [inputs, setInputs] = useState<Record<string, PurchaseInput>>({});
   const [loading, setLoading] = useState(true);
@@ -165,7 +178,16 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
   const confirmPurchase = async () => {
     if (!task || !canEdit) return;
 
-    const requiredItems = task.items.filter((item) => !unavailableProductIds.has(item.marketProductId));
+    // Only this agent's own assigned lines — the backend now matches strictly on
+    // `AssignedAgentUserId` (see `isMine`'s doc comment) and rejects the whole request if the
+    // line set doesn't match exactly, whether items are missing OR extra.
+    const requiredItems = task.items.filter((item) => (
+      isMine(item, currentUserId) && !unavailableProductIds.has(item.marketProductId)
+    ));
+    if (requiredItems.length === 0) {
+      Alert.alert('Chưa có mặt hàng được giao', 'Bạn chưa được giao mặt hàng nào trong lô này để xác nhận thu mua.');
+      return;
+    }
     const lines = requiredItems.map((item) => ({
       marketProductId: item.marketProductId,
       actualQuantity: Number(inputs[item.marketProductId]?.quantity),
@@ -284,9 +306,10 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
         <View style={styles.itemList}>
           {task.items.map((item, index) => {
             const unavailable = unavailableProductIds.has(item.marketProductId);
+            const notMine = !isMine(item, currentUserId);
             const input = inputs[item.marketProductId] ?? { quantity: '', price: '' };
             return (
-              <View key={item.marketProductId} style={[styles.itemCard, unavailable && styles.itemUnavailable]}>
+              <View key={item.marketProductId} style={[styles.itemCard, (unavailable || notMine) && styles.itemUnavailable]}>
                 <View style={styles.itemHeader}>
                   <View style={styles.sequence}><Text style={styles.sequenceText}>{index + 1}</Text></View>
                   <View style={styles.itemCopy}>
@@ -299,7 +322,14 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
                   </View>
                 </View>
 
-                {unavailable ? (
+                {notMine ? (
+                  <View style={styles.unavailableNotice}>
+                    <Ionicons name="lock-closed-outline" size={16} color={Colors.textMuted} />
+                    <Text style={styles.unavailableText}>
+                      {item.assignedAgentUserId ? 'Được giao cho market agent khác.' : 'Chưa được giao cho ai — chờ Admin phân công.'}
+                    </Text>
+                  </View>
+                ) : unavailable ? (
                   <View style={styles.unavailableNotice}>
                     <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
                     <Text style={styles.unavailableText}>Đã báo không có hàng — không cần nhập dòng này.</Text>
@@ -336,7 +366,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
                   </View>
                 )}
 
-                {canEdit ? (
+                {canEdit && !notMine ? (
                   <Pressable
                     disabled={submitting}
                     style={({ pressed }) => [styles.reportIssueButton, pressed && styles.buttonPressed]}

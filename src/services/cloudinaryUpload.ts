@@ -3,6 +3,7 @@
 // .getAvatarUploadSignature / restaurantApi.getLicenseUploadSignature). Mirrors the
 // working pattern in features/delivery/services/proofOfDeliveryUpload.ts — do not fall
 // back to an unsigned upload_preset; that path has been retired.
+import { UntrustedUploadError } from './errors/apiErrorMessages';
 export interface CloudinaryUploadSignature {
   signature: string;
   timestamp: number;
@@ -38,7 +39,7 @@ export async function uploadImageToCloudinary(
 
   const data = (await res.json()) as CloudinaryUploadResponse & { error?: { message: string } };
   if (!res.ok) {
-    throw new Error(data.error?.message ?? 'Tải ảnh lên thất bại.');
+    throw new UntrustedUploadError(data.error?.message ?? 'Tải ảnh lên thất bại.');
   }
 
   return data.secure_url;

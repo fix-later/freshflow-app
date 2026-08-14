@@ -21,6 +21,7 @@ import {
   type ProcurementTaskStatus,
 } from '../api/marketProcurementApi';
 import { useMarketAgentTaskRealtime } from '../context/MarketAgentTaskRealtimeContext';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type TaskFilter = 'all' | 'pending' | 'active' | 'completed';
 
@@ -90,9 +91,9 @@ export function MarketAgentTasksScreen() {
       ]);
       setTasks(taskData);
       setMarketNames(new Map(markets.map((market) => [market.marketId, market.name])));
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (showError) {
-        Alert.alert('Không thể tải nhiệm vụ', error?.message || 'Vui lòng thử lại sau.');
+        Alert.alert('Không thể tải nhiệm vụ', getApiErrorMessage(error, 'Vui lòng thử lại sau.'));
       }
     } finally {
       setLoading(false);

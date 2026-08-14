@@ -17,6 +17,14 @@ export interface ProcurementTaskItemDto {
   actualQuantity: number | null;
   actualUnitPrice: number | null;
   purchasedAt: string | null;
+  /**
+   * Which market agent this line is assigned to — a batch split across multiple agents only
+   * lets each one confirm/hand off their own assigned lines (`ProcurementBatch.ConfirmPurchase`
+   * matches strictly on `AssignedAgentUserId == agentUserId`, no fallback for `null`). The
+   * batch-level `MarketProcurementTaskDto.assignedAgentUserId` is the backend's own deprecated
+   * predecessor of this field — item-level is the one that actually gates actions now.
+   */
+  assignedAgentUserId: string | null;
 }
 
 export interface ProcurementTaskMemberDto {
@@ -41,6 +49,7 @@ export interface MarketProcurementTaskDto {
   marketId: string;
   status: ProcurementTaskStatus;
   manifestedAt: string | null;
+  /** Deprecated on the backend in favor of per-item assignment — see `ProcurementTaskItemDto.assignedAgentUserId`. */
   assignedAgentUserId: string | null;
   assignedAt: string | null;
   handedOffAt: string | null;

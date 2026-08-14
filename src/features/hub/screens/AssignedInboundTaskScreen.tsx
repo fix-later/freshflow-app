@@ -23,6 +23,7 @@ import {
   type HubInboundTask,
   type HubProcurementBatchDto,
 } from '../api/hubApi';
+import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Navigation = NativeStackNavigationProp<HubStackParamList, 'CheckIn'>;
 
@@ -91,12 +92,7 @@ function normalizeProductName(value: string): string {
 }
 
 function getErrorMessage(error: unknown): string {
-  const responseMessage = (error as {
-    response?: { data?: { message?: unknown } };
-  })?.response?.data?.message;
-  if (typeof responseMessage === 'string' && responseMessage.length > 0) return responseMessage;
-  if (error instanceof Error && error.message) return error.message;
-  return 'Không thể lưu kết quả kiểm đếm. Vui lòng thử lại.';
+  return getApiErrorMessage(error, 'Không thể lưu kết quả kiểm đếm. Vui lòng thử lại.');
 }
 
 function toBackendCondition(status: ReviewStatus): HubDiscrepancyCondition {
