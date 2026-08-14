@@ -36,6 +36,7 @@ export interface OrderItemDto {
   vatRateCode: string | null;
   vatRatePercent: number | null;
   vatAmount: number | null;
+  packingCode: string | null;
 }
 
 /** Snapshot of the delivery address captured at order confirmation time — null on a draft. */

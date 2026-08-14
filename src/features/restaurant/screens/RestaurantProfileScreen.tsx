@@ -26,6 +26,7 @@ import { BrandButton as Button } from '../../../components/ui/BrandButton';
 import { uploadImageToCloudinary } from '../../../services/cloudinaryUpload';
 import { fetchTaxInfo } from '../../../services/taxLookup';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import { useAuthStore } from '../../../store/authStore';
 import {
   restaurantApi,
   type RestaurantProfileDto,
@@ -209,17 +210,25 @@ const EMPTY_TAX_FORM: TaxProfileForm = {
   invoiceEmail: '',
 };
 
-function toTaxForm(profile: RestaurantProfileDto): TaxProfileForm {
+/**
+ * `invoiceEmail` is never seeded on the backend — it stays `null` until the
+ * restaurant explicitly saves a tax profile (`UpdateMyTaxProfileCommandHandler`
+ * is the only writer). Defaulting the form to the account's login email here
+ * is FE-only and still editable/overridable before save; nothing is persisted
+ * until the restaurant actually submits the tax profile form.
+ */
+function toTaxForm(profile: RestaurantProfileDto, loginEmail: string): TaxProfileForm {
   return {
     taxCode: profile.taxCode,
     legalName: profile.invoiceLegalName,
     invoiceAddress: profile.invoiceAddress,
-    invoiceEmail: profile.invoiceEmail,
+    invoiceEmail: profile.invoiceEmail || loginEmail,
   };
 }
 
 export function RestaurantProfileScreen() {
   const navigation = useNavigation<Nav>();
+  const { user } = useAuthStore();
   const [form, setForm] = useState<RestaurantProfileForm>(EMPTY_FORM);
   const [original, setOriginal] = useState<RestaurantProfileForm>(EMPTY_FORM);
   const [profile, setProfile] = useState<RestaurantProfileDto | null>(null);
@@ -257,7 +266,7 @@ export function RestaurantProfileScreen() {
         restaurantApi.getApprovalStatus().catch(() => null),
       ]);
       const nextForm = toForm(profileData);
-      const nextTaxForm = toTaxForm(profileData);
+      const nextTaxForm = toTaxForm(profileData, user?.email ?? '');
       setProfile(profileData);
       setForm(nextForm);
       setOriginal(nextForm);
@@ -271,7 +280,7 @@ export function RestaurantProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.email]);
 
   useFocusEffect(
     useCallback(() => {
@@ -952,13 +961,20 @@ const info = StyleSheet.create({
     paddingVertical: 13,
     gap: 8,
   },
-  left: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // `flexShrink: 0` keeps the icon+label from being compressed by a long value
+  // sharing the row — without it, a short-but-wide value (e.g. an email with no
+  // wrap points) could push `left` and `value` past the card's right edge
+  // instead of `value` wrapping within its own space.
+  left: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 },
   label: { fontSize: 14, color: Colors.textSecondary },
+  // `flex: 1` (not a fixed `maxWidth: '55%'`) so the value always wraps inside
+  // whatever space is actually left after the label, rather than being allowed
+  // to claim up to 55% of the row regardless of how wide the label already is.
   value: {
+    flex: 1,
     fontSize: 14,
     fontWeight: '500',
     color: Colors.textPrimary,
-    maxWidth: '55%',
     textAlign: 'right',
   },
 });

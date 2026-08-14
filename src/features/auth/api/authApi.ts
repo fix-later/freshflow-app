@@ -127,21 +127,30 @@ export const authApi = {
     });
   },
 
+  /**
+   * `invoiceLegalName`/`invoiceAddress` map 1:1 to `RegisterRestaurantCommand`'s
+   * `InvoiceLegalName`/`InvoiceAddress` (both optional, but `NotEmpty()` when sent —
+   * see `RegisterRestaurantCommandValidator`). They are distinct from a restaurant's
+   * operating `address` (set later via `RestaurantProfileScreen`) — the command has
+   * no generic `Address` field at registration time.
+   */
   async register(
     email: string,
     password: string,
     restaurantName: string,
     phone: string,
     taxCode?: string,
-    address?: string,
+    invoiceAddress?: string,
+    invoiceLegalName?: string,
   ): Promise<void> {
     await apiClient.post('/api/v1/auth/register', {
       email,
       password,
       restaurantName,
       phone,
-      ...(taxCode ? { taxCode, taxNumber: taxCode } : {}),
-      ...(address ? { address } : {}),
+      ...(taxCode ? { taxCode } : {}),
+      ...(invoiceAddress ? { invoiceAddress } : {}),
+      ...(invoiceLegalName ? { invoiceLegalName } : {}),
     });
   },
 

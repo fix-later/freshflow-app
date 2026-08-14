@@ -35,6 +35,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
   const [email, setEmail] = useState('');
   const [restaurantAddress, setRestaurantAddress] = useState('');
   const [taxCode, setTaxCode] = useState('');
+  const [invoiceLegalName, setInvoiceLegalName] = useState('');
   const [taxLookupLoading, setTaxLookupLoading] = useState(false);
   const [taxVerified, setTaxVerified] = useState(false);
   const [taxLookupError, setTaxLookupError] = useState('');
@@ -48,11 +49,14 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
   // Only auto-fills the address — restaurantName is typed upfront (first field on
   // the form now) before the user ever reaches this section, so overwriting it
   // here would clobber what they already entered. The lookup result's `name` is
-  // the business's legal name (tên pháp lý), shown only as a verification hint.
+  // the business's legal name (tên pháp lý) — captured into `invoiceLegalName` and
+  // sent to BE alongside `invoiceAddress` (RegisterRestaurantCommand.InvoiceLegalName
+  // / .InvoiceAddress, added 14/08/2026), not just shown as a hint.
   const handleTaxCodeChange = async (code: string) => {
     setTaxCode(code);
     setTaxVerified(false);
     setTaxLookupError('');
+    setInvoiceLegalName('');
     taxCodeRequestRef.current = code;
     // MST cá nhân: 10 số, MST chi nhánh: 13 số
     if (code.length === 10 || code.length === 13) {
@@ -62,6 +66,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
       if (taxCodeRequestRef.current !== code) return; // superseded by a newer edit — discard
       if (info) {
         setRestaurantAddress(info.address);
+        setInvoiceLegalName(info.name);
         setTaxVerified(true);
       } else {
         setTaxLookupError('Không tìm thấy thông tin doanh nghiệp với mã số thuế này.');
@@ -111,6 +116,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
         normalizedPhone,
         taxCode.trim(),
         restaurantAddress.trim(),
+        invoiceLegalName.trim(),
       );
       navigation.navigate('VerifyEmail' as never, { email: email.trim() } as never);
     } catch (err: any) {
@@ -294,6 +300,17 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
               'location-outline',
               'Tự động điền từ mã số thuế',
               { autoCapitalize: 'sentences' },
+            )}
+
+            <View style={styles.fieldGap} />
+
+            {renderInput(
+              'Tên pháp lý doanh nghiệp',
+              invoiceLegalName,
+              setInvoiceLegalName,
+              'business-outline',
+              'Tự động điền từ mã số thuế',
+              { autoCapitalize: 'words' },
             )}
 
             {/* ═══ SECTION: BẢO MẬT ═══ */}
