@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import {
   Text,
   TextInput,
@@ -19,23 +22,25 @@ import {
   orderApi,
   type IssueType,
   type OrderDto,
+  type OrderItemDto,
   type ReportIssuePayload,
-  ISSUE_TYPE_LABEL,
 } from '../api/orderApi';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'ReportIssue'>;
 
-const ISSUE_TYPE_OPTIONS: { id: IssueType; label: string }[] = (
-  Object.keys(ISSUE_TYPE_LABEL) as IssueType[]
-).map((id) => ({ id, label: ISSUE_TYPE_LABEL[id] }));
+const ISSUE_OPTIONS: { id: IssueType; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'missing', label: 'Thiếu hàng', icon: 'cube-outline' },
+  { id: 'damaged', label: 'Hư hỏng', icon: 'alert-circle-outline' },
+  { id: 'wrong', label: 'Sai hàng', icon: 'close-circle-outline' },
+];
 
-// One API call only reports a single order item, so multi-item reports are queued here
-// and submitted with one POST /issues request per entry.
-interface DraftIssue extends ReportIssuePayload {
-  key: string;
-  productName: string;
+interface ItemIssueForm {
+  enabled: boolean;
+  issueType: IssueType;
+  affectedQuantity: number;
+  description: string;
 }
 
 export function ReportIssueScreen({ route, navigation }: Props) {
@@ -45,13 +50,8 @@ export function ReportIssueScreen({ route, navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [draftIssues, setDraftIssues] = useState<DraftIssue[]>([]);
-
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [selectedIssueType, setSelectedIssueType] = useState<IssueType | null>(null);
-  const [affectedQuantityText, setAffectedQuantityText] = useState('');
-  const [description, setDescription] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
+  // Map of orderItemId -> ItemIssueForm
+  const [issueForms, setIssueForms] = useState<Record<string, ItemIssueForm>>({});
   const [submitting, setSubmitting] = useState(false);
 
   const fetchOrder = useCallback(async () => {
@@ -59,6 +59,18 @@ export function ReportIssueScreen({ route, navigation }: Props) {
     try {
       const data = await orderApi.getById(orderId);
       setOrder(data);
+
+      // Initialize issue forms for all items
+      const initialMap: Record<string, ItemIssueForm> = {};
+      (data.items ?? []).forEach((it) => {
+        initialMap[it.orderItemId] = {
+          enabled: false,
+          issueType: 'missing',
+          affectedQuantity: 1,
+          description: '',
+        };
+      });
+      setIssueForms(initialMap);
     } catch {
       setError('Không thể tải thông tin đơn hàng');
     } finally {
@@ -71,83 +83,93 @@ export function ReportIssueScreen({ route, navigation }: Props) {
     fetchOrder();
   }, [fetchOrder]);
 
-  const resetForm = () => {
-    setSelectedItemId(null);
-    setSelectedIssueType(null);
-    setAffectedQuantityText('');
-    setDescription('');
+  const toggleItemEnabled = (orderItemId: string) => {
+    setIssueForms((prev) => {
+      const current = prev[orderItemId] ?? {
+        enabled: false,
+        issueType: 'missing',
+        affectedQuantity: 1,
+        description: '',
+      };
+      return {
+        ...prev,
+        [orderItemId]: {
+          ...current,
+          enabled: !current.enabled,
+        },
+      };
+    });
   };
 
-  const handleAddToList = () => {
-    if (!selectedItemId) {
-      setFormError('Vui lòng chọn sản phẩm có vấn đề.');
-      return;
-    }
-    if (!selectedIssueType) {
-      setFormError('Vui lòng chọn loại vấn đề.');
-      return;
-    }
-    const affectedQuantity = parseInt(affectedQuantityText, 10);
-    const targetItem = order?.items.find((it) => it.orderItemId === selectedItemId);
-    if (!affectedQuantity || affectedQuantity <= 0) {
-      setFormError('Vui lòng nhập số lượng bị ảnh hưởng hợp lệ.');
-      return;
-    }
-    if (targetItem && affectedQuantity > targetItem.quantity) {
-      setFormError(`Số lượng vượt quá số lượng đã đặt (${targetItem.quantity}).`);
-      return;
-    }
-    const trimmedDescription = description.trim();
-    if (!trimmedDescription) {
-      setFormError('Vui lòng mô tả chi tiết vấn đề.');
-      return;
-    }
-
-    setDraftIssues((prev) => [
-      ...prev,
-      {
-        key: `${selectedItemId}-${Date.now()}`,
-        orderItemId: selectedItemId,
-        issueType: selectedIssueType,
-        affectedQuantity,
-        description: trimmedDescription,
-        productName: targetItem?.productNameSnapshot || 'Sản phẩm',
-      },
-    ]);
-    resetForm();
+  const updateItemForm = (orderItemId: string, patch: Partial<ItemIssueForm>) => {
+    setIssueForms((prev) => {
+      const current = prev[orderItemId] ?? {
+        enabled: true,
+        issueType: 'missing',
+        affectedQuantity: 1,
+        description: '',
+      };
+      return {
+        ...prev,
+        [orderItemId]: {
+          ...current,
+          ...patch,
+        },
+      };
+    });
   };
 
-  const handleRemoveFromList = (key: string) => {
-    setDraftIssues((prev) => prev.filter((d) => d.key !== key));
+  const handleQtyChange = (it: OrderItemDto, delta: number) => {
+    const current = issueForms[it.orderItemId];
+    if (!current) return;
+    const nextQty = Math.max(1, Math.min(it.quantity, current.affectedQuantity + delta));
+    updateItemForm(it.orderItemId, { affectedQuantity: nextQty });
   };
+
+  const activeIssueItems = (order?.items ?? []).filter(
+    (it) => issueForms[it.orderItemId]?.enabled,
+  );
 
   const handleSubmitAll = async () => {
-    if (draftIssues.length === 0) {
-      setFormError('Vui lòng thêm ít nhất một sản phẩm cần báo cáo vào danh sách.');
+    if (activeIssueItems.length === 0) {
+      Alert.alert('Chưa chọn sản phẩm', 'Vui lòng chọn ít nhất một sản phẩm để báo sự cố.');
       return;
+    }
+
+    // Validate that all enabled items have a non-empty description
+    for (const it of activeIssueItems) {
+      const form = issueForms[it.orderItemId];
+      if (!form.description.trim()) {
+        Alert.alert(
+          'Thiếu mô tả chi tiết',
+          `Vui lòng nhập mô tả sự cố cho món "${it.productNameSnapshot || 'Sản phẩm'}".`,
+        );
+        return;
+      }
     }
 
     setSubmitting(true);
-    const remaining = [...draftIssues];
     try {
-      while (remaining.length > 0) {
-        const next = remaining[0];
-        await orderApi.reportIssue(orderId, {
-          orderItemId: next.orderItemId,
-          issueType: next.issueType,
-          affectedQuantity: next.affectedQuantity,
-          description: next.description,
-        });
-        remaining.shift();
-        setDraftIssues((prev) => prev.filter((d) => d.key !== next.key));
+      for (const it of activeIssueItems) {
+        const form = issueForms[it.orderItemId];
+        const payload: ReportIssuePayload = {
+          orderItemId: it.orderItemId,
+          issueType: form.issueType,
+          affectedQuantity: form.affectedQuantity,
+          description: form.description.trim(),
+        };
+        await orderApi.reportIssue(orderId, payload);
       }
-      Alert.alert('Đã gửi báo cáo', 'Báo cáo sự cố của bạn đã được ghi nhận.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+
+      Alert.alert(
+        'Đã gửi báo cáo thành công',
+        `Đã ghi nhận báo cáo sự cố cho ${activeIssueItems.length} sản phẩm. Bộ phận hỗ trợ sẽ phản hồi sớm nhất.`,
+        [{ text: 'Hoàn tất', onPress: () => navigation.goBack() }],
+      );
     } catch (err: unknown) {
       Alert.alert(
         'Không thể gửi báo cáo',
-        getApiErrorMessage(err, 'Chỉ có thể báo sự cố cho đơn đã giao. Các sản phẩm chưa gửi vẫn còn trong danh sách.'),
+        getApiErrorMessage(err, 'Đã xảy ra lỗi khi gửi sự cố. Vui lòng thử lại.'),
       );
     } finally {
       setSubmitting(false);
@@ -169,9 +191,9 @@ export function ReportIssueScreen({ route, navigation }: Props) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <View style={styles.centered}>
-          <Ionicons name="alert-circle-outline" size={48} color={Colors.error} />
+          <Ionicons name="alert-circle-outline" size={44} color={Colors.danger} />
           <Text style={styles.errorText}>{error ?? 'Không tìm thấy đơn hàng'}</Text>
-          <Pressable style={styles.retryBtn} onPress={() => { setLoading(true); fetchOrder(); }}>
+          <Pressable style={styles.retryBtn} onPress={() => { setLoading(true); void fetchOrder(); }}>
             <Text style={styles.retryBtnText}>Thử lại</Text>
           </Pressable>
         </View>
@@ -183,9 +205,9 @@ export function ReportIssueScreen({ route, navigation }: Props) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <View style={styles.centered}>
-          <Ionicons name="time-outline" size={48} color={Colors.warning} />
+          <Ionicons name="time-outline" size={44} color={Colors.warning} />
           <Text style={styles.errorText}>
-            Chỉ có thể báo sự cố sau khi đơn hàng đã chuyển sang trạng thái Đã giao.
+            Chỉ có thể báo sự cố sau khi đơn hàng đã giao thành công.
           </Text>
           <Pressable style={styles.retryBtn} onPress={() => navigation.goBack()}>
             <Text style={styles.retryBtnText}>Quay lại</Text>
@@ -196,149 +218,160 @@ export function ReportIssueScreen({ route, navigation }: Props) {
   }
 
   const items = order.items ?? [];
-  const code = (order.orderId || '').slice(0, 8).toUpperCase() || 'N/A';
+  const orderCode = (order.orderId || '').replaceAll('-', '').slice(0, 8).toUpperCase();
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <View style={styles.warningBox}>
-          <Ionicons name="warning-outline" size={16} color={Colors.warning} />
-          <Text style={styles.warningText}>
-            Báo sự cố cho đơn #{code}. Có thể báo nhiều sản phẩm khác nhau — thêm từng sản phẩm vào danh sách rồi gửi cùng lúc.
-          </Text>
-        </View>
-
-        {/* ── Queued issues ── */}
-        {draftIssues.length > 0 ? (
-          <>
-            <Text style={styles.sectionTitle}>Danh sách đã thêm ({draftIssues.length})</Text>
-            <View style={styles.card}>
-              {draftIssues.map((draft) => (
-                <View key={draft.key} style={styles.draftRow}>
-                  <View style={styles.draftInfo}>
-                    <Text style={styles.draftName} numberOfLines={1}>{draft.productName}</Text>
-                    <Text style={styles.draftMeta}>
-                      {ISSUE_TYPE_LABEL[draft.issueType]} • SL: {draft.affectedQuantity}
-                    </Text>
-                    <Text style={styles.draftDescription} numberOfLines={2}>{draft.description}</Text>
-                  </View>
-                  <Pressable style={styles.draftRemoveBtn} onPress={() => handleRemoveFromList(draft.key)}>
-                    <Ionicons name="close-circle" size={22} color={Colors.error} />
-                  </Pressable>
-                </View>
-              ))}
+      <KeyboardAvoidingView
+        style={styles.flexOne}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <ScrollView
+          contentContainerStyle={styles.body}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
+          {/* Order Header Summary */}
+          <View style={styles.orderSummaryCard}>
+            <Ionicons name="receipt-outline" size={20} color={Colors.deepTeal} />
+            <View style={styles.orderSummaryMeta}>
+              <Text style={styles.orderCodeText}>Báo sự cố đơn hàng #{orderCode}</Text>
+              <Text style={styles.orderSubText}>Bật chọn các món gặp sự cố trong danh sách bên dưới</Text>
             </View>
-          </>
-        ) : null}
+          </View>
 
-        {/* ── Add new issue form ── */}
-        <Text style={styles.sectionTitle}>Thêm sản phẩm có vấn đề *</Text>
-        <View style={styles.card}>
-          {items.map((item) => {
-            const selected = selectedItemId === item.orderItemId;
-            const addedCount = draftIssues.filter((d) => d.orderItemId === item.orderItemId).length;
-            return (
-              <Pressable
-                key={item.orderItemId}
-                style={styles.reasonRow}
-                onPress={() => {
-                  setSelectedItemId(item.orderItemId);
-                  if (formError) setFormError(null);
-                }}
-              >
-                <Ionicons
-                  name={selected ? 'radio-button-on' : 'radio-button-off'}
-                  size={20}
-                  color={selected ? Colors.primaryText : Colors.outline}
-                />
-                <Text style={styles.reasonText}>
-                  {item.productNameSnapshot || 'Sản phẩm'} (SL: {item.quantity})
-                </Text>
-                {addedCount > 0 ? (
-                  <View style={styles.addedBadge}>
-                    <Text style={styles.addedBadgeText}>Đã thêm x{addedCount}</Text>
-                  </View>
-                ) : null}
-              </Pressable>
-            );
-          })}
-        </View>
+          {/* List of All Items in Order */}
+          <View style={styles.itemListWrap}>
+            {items.map((it) => {
+              const form = issueForms[it.orderItemId] ?? {
+                enabled: false,
+                issueType: 'missing',
+                affectedQuantity: 1,
+                description: '',
+              };
 
-        <Text style={styles.sectionTitle}>Loại vấn đề *</Text>
-        <View style={styles.card}>
-          {ISSUE_TYPE_OPTIONS.map((option) => {
-            const selected = selectedIssueType === option.id;
-            return (
-              <Pressable
-                key={option.id}
-                style={styles.reasonRow}
-                onPress={() => {
-                  setSelectedIssueType(option.id);
-                  if (formError) setFormError(null);
-                }}
-              >
-                <Ionicons
-                  name={selected ? 'radio-button-on' : 'radio-button-off'}
-                  size={20}
-                  color={selected ? Colors.primaryText : Colors.outline}
-                />
-                <Text style={styles.reasonText}>{option.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+              return (
+                <View key={it.orderItemId} style={[styles.itemCard, form.enabled && styles.itemCardEnabled]}>
+                  {/* Header Row of Item Card */}
+                  <Pressable style={styles.itemCardHeader} onPress={() => toggleItemEnabled(it.orderItemId)}>
+                    <View style={[styles.checkbox, form.enabled && styles.checkboxChecked]}>
+                      {form.enabled ? (
+                        <Ionicons name="checkmark" size={16} color={Colors.onPrimary} />
+                      ) : null}
+                    </View>
+                    <View style={styles.itemHeaderMeta}>
+                      <Text style={styles.itemNameText} numberOfLines={1}>
+                        {it.productNameSnapshot || 'Sản phẩm'}
+                      </Text>
+                      <Text style={styles.itemOrderQtyText}>Số lượng trong đơn: {it.quantity} kg / đơn vị</Text>
+                    </View>
+                    <Text style={[styles.toggleText, form.enabled && styles.toggleTextActive]}>
+                      {form.enabled ? 'Đang báo lỗi' : '+ Báo sự cố'}
+                    </Text>
+                  </Pressable>
 
-        <Text style={styles.sectionTitle}>Số lượng bị ảnh hưởng *</Text>
-        <View style={styles.card}>
-          <TextInput
-            style={styles.smallInput}
-            placeholder="Ví dụ: 2"
-            placeholderTextColor={Colors.outline}
-            value={affectedQuantityText}
-            onChangeText={(text) => {
-              setAffectedQuantityText(text.replace(/[^0-9]/g, ''));
-              if (formError) setFormError(null);
-            }}
-            keyboardType="number-pad"
-          />
-        </View>
+                  {/* Expanded Issue Sub-Form when Enabled */}
+                  {form.enabled ? (
+                    <View style={styles.expandedSubForm}>
+                      <View style={styles.divider} />
 
-        <Text style={styles.sectionTitle}>Mô tả chi tiết *</Text>
-        <View style={styles.card}>
-          <TextInput
-            style={styles.textArea}
-            placeholder="Mô tả vấn đề gặp phải..."
-            placeholderTextColor={Colors.outline}
-            value={description}
-            onChangeText={(text) => {
-              setDescription(text);
-              if (formError) setFormError(null);
-            }}
-            multiline
-            maxLength={1000}
-          />
-        </View>
+                      {/* Issue Type Selector */}
+                      <Text style={styles.subLabel}>Loại sự cố</Text>
+                      <View style={styles.issueChipsRow}>
+                        {ISSUE_OPTIONS.map((opt) => {
+                          const active = form.issueType === opt.id;
+                          return (
+                            <Pressable
+                              key={opt.id}
+                              style={[styles.chip, active && styles.chipActive]}
+                              onPress={() => updateItemForm(it.orderItemId, { issueType: opt.id })}
+                            >
+                              <Ionicons
+                                name={opt.icon}
+                                size={14}
+                                color={active ? Colors.primaryText : Colors.textMuted}
+                              />
+                              <Text
+                                style={[styles.chipText, active && styles.chipTextActive]}
+                                numberOfLines={1}
+                              >
+                                {opt.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
 
-        {formError ? <Text style={styles.errorMsgText}>{formError}</Text> : null}
+                      {/* Affected Quantity Stepper */}
+                      <View style={styles.rowBetween}>
+                        <Text style={styles.subLabel}>Số lượng bị ảnh hưởng</Text>
+                        <Text style={styles.qtyLimitText}>Tối đa {it.quantity} kg</Text>
+                      </View>
 
-        <Pressable style={styles.addBtn} onPress={handleAddToList}>
-          <Ionicons name="add-circle-outline" size={18} color={Colors.primaryText} />
-          <Text style={styles.addBtnText}>Thêm vào danh sách</Text>
-        </Pressable>
+                      <View style={styles.stepperWrap}>
+                        <Pressable
+                          style={[styles.stepBtn, form.affectedQuantity <= 1 && styles.stepBtnDisabled]}
+                          onPress={() => handleQtyChange(it, -1)}
+                          disabled={form.affectedQuantity <= 1}
+                        >
+                          <Ionicons name="remove" size={16} color={form.affectedQuantity <= 1 ? Colors.textMuted : Colors.textPrimary} />
+                        </Pressable>
 
-        <View style={{ height: 16 }} />
-      </ScrollView>
+                        <Text style={styles.stepValText} numeric>{form.affectedQuantity} kg</Text>
 
+                        <Pressable
+                          style={[styles.stepBtn, form.affectedQuantity >= it.quantity && styles.stepBtnDisabled]}
+                          onPress={() => handleQtyChange(it, 1)}
+                          disabled={form.affectedQuantity >= it.quantity}
+                        >
+                          <Ionicons name="add" size={16} color={form.affectedQuantity >= it.quantity ? Colors.textMuted : Colors.textPrimary} />
+                        </Pressable>
+                      </View>
+
+                      {/* Description Textarea */}
+                      <Text style={styles.subLabel}>Mô tả sự cố món này *</Text>
+                      <TextInput
+                        style={styles.textArea}
+                        placeholder="Mô tả chi tiết tình trạng (ví dụ: Giao thiếu 1kg, bao bị rách)..."
+                        placeholderTextColor={Colors.textMuted}
+                        value={form.description}
+                        onChangeText={(text) => updateItemForm(it.orderItemId, { description: text })}
+                        multiline
+                        maxLength={200}
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Bottom Action Footer */}
       <View style={styles.footer}>
         <Pressable
-          style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
-          onPress={handleSubmitAll}
-          disabled={submitting}
+          style={[
+            styles.submitBtn,
+            (activeIssueItems.length === 0 || submitting) && styles.submitBtnDisabled,
+          ]}
+          onPress={() => void handleSubmitAll()}
+          disabled={activeIssueItems.length === 0 || submitting}
         >
-          {submitting
-            ? <ActivityIndicator color={Colors.onError} size="small" />
-            : <Text style={styles.submitBtnText}>GỬI BÁO CÁO ({draftIssues.length})</Text>
-          }
+          {submitting ? (
+            <ActivityIndicator color={Colors.onPrimary} size="small" />
+          ) : (
+            <>
+              <Ionicons name="paper-plane-outline" size={18} color={Colors.onPrimary} />
+              <Text style={styles.submitBtnText}>
+                {activeIssueItems.length > 0
+                  ? `GỬI BÁO CÁO (${activeIssueItems.length} SẢN PHẨM)`
+                  : 'CHỌN SẢN PHẨM CẦN BÁO LỖI'}
+              </Text>
+            </>
+          )}
         </Pressable>
       </View>
     </SafeAreaView>
@@ -346,120 +379,162 @@ export function ReportIssueScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
-  body: { padding: 16 },
+  flexOne: { flex: 1 },
+  screen: { flex: 1, backgroundColor: '#F8FAFC' },
+  body: { padding: 16, gap: 14, paddingBottom: 180 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
-  loadingText: { fontSize: 14, color: Colors.outline, fontWeight: '500' },
-  errorText: { fontSize: 14, color: Colors.error, textAlign: 'center', maxWidth: 260 },
+  loadingText: { fontSize: 13, color: Colors.textMuted, fontFamily: Fonts.medium },
+  errorText: { fontSize: 13, color: Colors.danger, textAlign: 'center', maxWidth: 280, lineHeight: 18 },
   retryBtn: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 12,
-    marginTop: 8,
+    marginTop: 6,
   },
-  retryBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 14 },
+  retryBtnText: { color: Colors.onPrimary, fontFamily: Fonts.bold, fontSize: 13 },
 
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: Colors.warningLight,
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 8,
-  },
-  warningText: { flex: 1, fontSize: 12, color: Colors.textSecondary, lineHeight: 17 },
-
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  card: {
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  reasonRow: {
+  // Order summary card
+  orderSummaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceVariant,
-  },
-  reasonText: { flex: 1, fontSize: 14, color: Colors.onSurface },
-  addedBadge: {
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  addedBadgeText: { fontSize: 11, fontWeight: '700', color: Colors.primaryText },
-
-  smallInput: {
-    height: 48,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    color: Colors.onSurface,
-  },
-  textArea: {
-    minHeight: 90,
     padding: 14,
-    fontSize: 14,
-    color: Colors.onSurface,
-    textAlignVertical: 'top',
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  errorMsgText: { fontSize: 12, color: Colors.error, marginTop: 8 },
+  orderSummaryMeta: { flex: 1 },
+  orderCodeText: { fontSize: 14, fontFamily: Fonts.bold, color: Colors.deepTeal },
+  orderSubText: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
 
-  addBtn: {
+  // Item List
+  itemListWrap: { gap: 12 },
+  itemCard: {
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  itemCardEnabled: {
+    borderColor: Colors.primary,
+    backgroundColor: '#FAFCF9',
+  },
+  itemCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: Colors.textMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  itemHeaderMeta: { flex: 1 },
+  itemNameText: { fontSize: 14, fontFamily: Fonts.bold, color: Colors.textPrimary },
+  itemOrderQtyText: { fontSize: 11, color: Colors.textMuted, marginTop: 2, fontFamily: Fonts.medium },
+  toggleText: { fontSize: 11, fontFamily: Fonts.bold, color: Colors.textMuted },
+  toggleTextActive: { color: Colors.primaryText },
+
+  // Expanded Form
+  expandedSubForm: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    gap: 10,
+  },
+  divider: { height: 1, backgroundColor: Colors.border, marginBottom: 4 },
+  subLabel: { fontSize: 11, fontFamily: Fonts.bold, color: Colors.textPrimary },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  qtyLimitText: { fontSize: 10, color: Colors.textMuted, fontFamily: Fonts.monoSemibold },
+
+  // Chips
+  issueChipsRow: { flexDirection: 'row', gap: 6 },
+  chip: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: Colors.primary,
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
     borderRadius: 12,
-    paddingVertical: 12,
-    marginTop: 14,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  addBtnText: { color: Colors.primaryText, fontWeight: '700', fontSize: 14 },
+  chipActive: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.primary,
+  },
+  chipText: { fontSize: 11, color: Colors.textSecondary, fontFamily: Fonts.semibold },
+  chipTextActive: { color: Colors.primaryText, fontFamily: Fonts.bold },
 
-  // Queued draft issues
-  draftRow: {
+  // Stepper
+  stepperWrap: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceVariant,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  draftInfo: { flex: 1 },
-  draftName: { fontSize: 14, fontWeight: '600', color: Colors.onSurface },
-  draftMeta: { fontSize: 12, color: Colors.primaryText, fontWeight: '600', marginTop: 2 },
-  draftDescription: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
-  draftRemoveBtn: { padding: 2 },
+  stepBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  stepBtnDisabled: { opacity: 0.3 },
+  stepValText: { fontSize: 15, fontFamily: Fonts.monoBold, color: Colors.textPrimary },
+
+  // Textarea
+  textArea: {
+    minHeight: 64,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    fontSize: 12,
+    color: Colors.textPrimary,
+    fontFamily: Fonts.medium,
+    textAlignVertical: 'top',
+  },
 
   footer: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    padding: 14,
+    backgroundColor: Colors.surface,
     borderTopWidth: 1,
-    borderTopColor: Colors.surfaceVariant,
-    backgroundColor: Colors.surfaceContainerLowest,
+    borderTopColor: Colors.border,
   },
   submitBtn: {
+    minHeight: 48,
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: Colors.error,
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
   },
-  submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { color: Colors.onError, fontWeight: '700', fontSize: 15 },
+  submitBtnDisabled: { opacity: 0.4 },
+  submitBtnText: { fontSize: 13, fontFamily: Fonts.bold, color: Colors.onPrimary },
 });

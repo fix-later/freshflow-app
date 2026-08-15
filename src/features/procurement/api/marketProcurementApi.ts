@@ -25,11 +25,14 @@ export interface ProcurementTaskItemDto {
    * predecessor of this field — item-level is the one that actually gates actions now.
    */
   assignedAgentUserId: string | null;
+  packingCapacityKg?: number | null;
+  packingCode?: string | null;
 }
 
 export interface ProcurementTaskMemberDto {
   orderId: string;
   status: string;
+  restaurantName?: string | null;
 }
 
 export interface ProcurementExceptionDto {

@@ -17,6 +17,7 @@ import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import type { MarketTasksStackParamList } from '../../../navigation/types';
 import { ProcurementExceptionModal } from '../components/ProcurementExceptionModal';
+import { ProcurementLabelsModal } from '../components/ProcurementLabelsModal';
 import { ProcurementPurchaseProofCard } from '../components/ProcurementPurchaseProofCard';
 import { useAuthStore } from '../../../store/authStore';
 import {
@@ -137,6 +138,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reportingItemId, setReportingItemId] = useState<string | null>(null);
+  const [labelsModalVisible, setLabelsModalVisible] = useState(false);
   const [purchaseProofUri, setPurchaseProofUri] = useState<string | null>(null);
 
   const load = useCallback(async (refresh = false) => {
@@ -302,7 +304,16 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
           </Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Danh sách cần thu mua</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitleNoMargin}>Danh sách cần thu mua</Text>
+          <Pressable
+            style={({ pressed }) => [styles.viewLabelsBtn, pressed && { opacity: 0.7 }]}
+            onPress={() => setLabelsModalVisible(true)}
+          >
+            <Ionicons name="pricetags-outline" size={14} color={Colors.primaryText} />
+            <Text style={styles.viewLabelsBtnText}>Xem nhãn dán</Text>
+          </Pressable>
+        </View>
         <View style={styles.itemList}>
           {task.items.map((item, index) => {
             const unavailable = unavailableProductIds.has(item.marketProductId);
@@ -491,6 +502,12 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
         onClose={() => setReportingItemId(null)}
         onSaved={(updated) => setTask(updated)}
       />
+
+      <ProcurementLabelsModal
+        task={task}
+        visible={labelsModalVisible}
+        onClose={() => setLabelsModalVisible(false)}
+      />
     </ScreenContainer>
   );
 }
@@ -505,6 +522,34 @@ function HeaderMetric({ value, label }: { value: number; label: string }) {
 }
 
 const styles = StyleSheet.create({
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    marginTop: 2,
+  },
+  sectionTitleNoMargin: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  viewLabelsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  viewLabelsBtnText: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+    color: Colors.primaryText,
+  },
   header: {
     backgroundColor: Colors.deepTeal,
     paddingHorizontal: 18,

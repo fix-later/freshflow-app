@@ -30,16 +30,19 @@ function validatePassword(pw: string): string | null {
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
-  RESET_TOKEN_INVALID: 'Liên kết đặt lại không hợp lệ. Vui lòng yêu cầu lại.',
-  RESET_TOKEN_EXPIRED: 'Liên kết đã hết hạn (15 phút). Vui lòng yêu cầu lại.',
+  RESET_OTP_INVALID: 'Mã xác thực OTP không đúng, đã hết hạn hoặc đã được sử dụng.',
+  RESET_TOKEN_INVALID: 'Mã xác thực OTP không hợp lệ. Vui lòng kiểm tra lại.',
+  RESET_TOKEN_EXPIRED: 'Mã xác thực OTP đã hết hạn (15 phút). Vui lòng yêu cầu mã mới.',
   WEAK_PASSWORD: 'Mật khẩu không đủ mạnh. Vui lòng kiểm tra lại.',
 };
 
 export function ResetPasswordScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProps>();
-  const token = route.params?.token ?? '';
+  const initialIdentifier = route.params?.identifier ?? '';
 
+  const [identifier, setIdentifier] = useState(initialIdentifier);
+  const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNew, setShowNew] = useState(false);
@@ -48,23 +51,32 @@ export function ResetPasswordScreen() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  const codeError = code && code.trim().length !== 6 ? 'Mã OTP phải có đúng 6 chữ số.' : null;
   const passwordError = newPassword ? validatePassword(newPassword) : null;
   const confirmError =
     confirmPassword && newPassword !== confirmPassword ? 'Mật khẩu xác nhận không khớp.' : null;
-  const canSubmit = !loading && !passwordError && !confirmError && !!newPassword && !!confirmPassword;
+  const canSubmit =
+    !loading &&
+    !!identifier.trim() &&
+    code.trim().length === 6 &&
+    !passwordError &&
+    !confirmError &&
+    !!newPassword &&
+    !!confirmPassword;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setLoading(true);
     setError(null);
     try {
-      await authApi.resetPassword(token, newPassword);
+      await authApi.resetPassword(identifier.trim(), code.trim(), newPassword);
       setDone(true);
     } catch (err: unknown) {
-      const code = (err as { response?: { data?: { code?: string; message?: string } } })
+      const errCode = (err as { response?: { data?: { code?: string; message?: string } } })
         ?.response?.data?.code;
       setError(
-        ERROR_MESSAGES[code ?? ''] ?? getApiErrorMessage(err, 'Đặt lại mật khẩu thất bại. Vui lòng thử lại.'),
+        ERROR_MESSAGES[errCode ?? ''] ??
+          getApiErrorMessage(err, 'Đặt lại mật khẩu thất bại. Vui lòng kiểm tra lại mã OTP.'),
       );
     } finally {
       setLoading(false);
@@ -93,7 +105,7 @@ export function ResetPasswordScreen() {
             </View>
             <Text style={styles.brandName}>Đặt lại mật khẩu</Text>
             <Text style={styles.brandSub}>
-              {done ? 'Mật khẩu đã được cập nhật' : 'Tạo mật khẩu mới cho tài khoản'}
+              {done ? 'Mật khẩu đã được cập nhật' : 'Nhập mã OTP 6 số và mật khẩu mới'}
             </Text>
           </View>
 
@@ -121,9 +133,9 @@ export function ResetPasswordScreen() {
             ) : (
               /* ── Input state ── */
               <>
-                <Text style={styles.cardTitle}>Tạo mật khẩu mới</Text>
+                <Text style={styles.cardTitle}>Nhập OTP & Mật khẩu mới</Text>
                 <Text style={styles.cardDesc}>
-                  Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, số và ký tự đặc biệt.
+                  Nhập mã OTP 6 số đã được gửi tới email của bạn và thiết lập mật khẩu mới.
                 </Text>
 
                 {/* API / token error */}
@@ -134,8 +146,40 @@ export function ResetPasswordScreen() {
                   </View>
                 )}
 
+                {/* Email / Identifier */}
+                <Text style={styles.label}>Email / Tên tài khoản</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="mail-outline" size={18} color={Colors.textMuted} />
+                  <TextInput
+                    style={styles.input}
+                    value={identifier}
+                    onChangeText={setIdentifier}
+                    placeholder="your@email.com"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                {/* OTP Code */}
+                <Text style={[styles.label, { marginTop: 16 }]}>Mã xác nhận OTP (6 chữ số)</Text>
+                <View style={[styles.inputWrapper, codeError ? styles.inputError : null]}>
+                  <Ionicons name="key-outline" size={18} color={Colors.textMuted} />
+                  <TextInput
+                    style={[styles.input, { letterSpacing: 4, fontWeight: '700' }]}
+                    value={code}
+                    onChangeText={(val) => setCode(val.replace(/[^0-9]/g, ''))}
+                    placeholder="123456"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                  />
+                </View>
+                {codeError && <Text style={styles.fieldError}>{codeError}</Text>}
+
                 {/* New password */}
-                <Text style={styles.label}>Mật khẩu mới</Text>
+                <Text style={[styles.label, { marginTop: 16 }]}>Mật khẩu mới</Text>
                 <View style={[styles.inputWrapper, passwordError ? styles.inputError : null]}>
                   <Ionicons name="lock-closed-outline" size={18} color={Colors.textMuted} />
                   <TextInput

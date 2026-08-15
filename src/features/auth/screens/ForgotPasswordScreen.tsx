@@ -12,13 +12,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
 import { Button } from '../../../components/ui/Button';
 import { authApi } from '../api/authApi';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import type { AuthStackParamList } from '../../../navigation/types';
+
+type NavigationProp = NativeStackNavigationProp<AuthStackParamList, 'ForgotPassword'>;
 
 export function ForgotPasswordScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -76,10 +80,22 @@ export function ForgotPasswordScreen() {
                 </View>
                 <Text style={styles.successTitle}>Email đã được gửi!</Text>
                 <Text style={styles.successDesc}>
-                  Chúng tôi đã gửi hướng dẫn đặt lại mật khẩu đến{' '}
+                  Chúng tôi đã gửi mã xác thực OTP 6 số đến{' '}
                   <Text style={styles.successEmail}>{email}</Text>. Vui lòng kiểm tra hộp
                   thư (kể cả thư mục spam).
                 </Text>
+
+                <Button
+                  title="NHẬP MÃ OTP ĐẶT LẠI MẬT KHẨU"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  onPress={() =>
+                    navigation.navigate('ResetPassword', { identifier: email.trim() })
+                  }
+                  style={styles.submitBtn}
+                />
+
                 <Button
                   title="Gửi lại email"
                   variant="secondary"
@@ -94,7 +110,7 @@ export function ForgotPasswordScreen() {
               <>
                 <Text style={styles.cardTitle}>Đặt lại mật khẩu</Text>
                 <Text style={styles.cardDesc}>
-                  Nhập địa chỉ email đã đăng ký. Chúng tôi sẽ gửi đường dẫn để bạn tạo
+                  Nhập địa chỉ email đã đăng ký. Chúng tôi sẽ gửi mã xác thực OTP 6 số để bạn tạo
                   mật khẩu mới.
                 </Text>
 
@@ -121,7 +137,7 @@ export function ForgotPasswordScreen() {
                 )}
 
                 <Button
-                  title="GỬI EMAIL ĐẶT LẠI"
+                  title="GỬI MÃ OTP"
                   variant="primary"
                   size="lg"
                   fullWidth
