@@ -455,6 +455,7 @@ export function RestaurantAssistantScreen() {
         />
 
         <View style={styles.composer}>
+          <Text style={styles.disclaimer}>AI luôn yêu cầu bạn xác nhận trước khi chốt đơn.</Text>
           <View style={styles.inputWrap}>
             <TextInput
               value={input}
@@ -477,7 +478,6 @@ export function RestaurantAssistantScreen() {
               )}
             </Pressable>
           </View>
-          <Text style={styles.disclaimer}>AI luôn yêu cầu bạn xác nhận trước khi chốt đơn.</Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -730,8 +730,8 @@ const styles = StyleSheet.create({
   latestDraftText: { fontSize: 11, color: Colors.primaryText, fontFamily: Fonts.semibold },
   composer: {
     paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 10,
     backgroundColor: Colors.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
@@ -760,5 +760,5 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   sendButtonDisabled: { opacity: 0.42 },
-  disclaimer: { marginTop: 5, fontSize: 9, textAlign: 'center', color: Colors.textMuted },
+  disclaimer: { marginBottom: 6, fontSize: 10, fontFamily: Fonts.medium, textAlign: 'center', color: Colors.textMuted },
 });

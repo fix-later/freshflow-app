@@ -84,6 +84,8 @@ export interface OrderDto {
   updatedAt: string;
   // Null until the order is confirmed (backend captures the snapshot at confirm time).
   deliveryAddress: DeliveryAddressSnapshotDto | null;
+  // Populate by GET /orders/{id} when order status is 'delivered' (Proof of Delivery photo URL).
+  proofUrl?: string | null;
   // BE record fields have C# default values (= 0m), so these are always present as
   // real numbers on the wire — never null/missing — regardless of order status.
   subtotalAmount: number;

@@ -1,4 +1,5 @@
-import { View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +11,7 @@ import { RestaurantFavoritesTab } from './RestaurantFavoritesTab';
 import { RestaurantAssistantTab } from './RestaurantAssistantTab';
 import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
+import { restaurantApi } from '../features/restaurant/api/restaurantApi';
 import { type RestaurantTabParamList } from './types';
 
 const Tab = createBottomTabNavigator<RestaurantTabParamList>();
@@ -44,9 +46,47 @@ const TAB_CONFIG = {
 
 export function RestaurantTabs() {
   const insets = useSafeAreaInsets();
+  const [initialRoute, setInitialRoute] = useState<keyof RestaurantTabParamList | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    restaurantApi
+      .getApprovalStatus()
+      .then((statusData) => {
+        if (!isMounted) return;
+        if (statusData.status === 'pending') {
+          setInitialRoute('RestaurantProfile');
+        } else {
+          setInitialRoute('RestaurantOrders');
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setInitialRoute('RestaurantOrders');
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (!initialRoute) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: Colors.surface,
+        }}
+      >
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <Tab.Navigator
+      initialRouteName={initialRoute}
       screenOptions={({ route }) => {
         const config = TAB_CONFIG[route.name as keyof typeof TAB_CONFIG];
         const isAssistant = route.name === 'RestaurantAssistant';

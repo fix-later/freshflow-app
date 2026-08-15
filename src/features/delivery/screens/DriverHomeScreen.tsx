@@ -111,7 +111,15 @@ function StopOrderCard({
 export function DriverHomeScreen() {
   const navigation = useNavigation<Nav>();
 
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const getTodayString = (): string => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayString);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [routeStatus, setRouteStatus] = useState<RouteStatus | null>(null);
@@ -220,6 +228,7 @@ export function DriverHomeScreen() {
   const [tempDate, setTempDate] = useState<Date>(() => new Date());
 
   const parseDateString = (str: string): Date => {
+    if (!str) return new Date();
     const [y, m, d] = str.split('-').map(Number);
     if (y && m && d) {
       return new Date(y, m - 1, d, 12, 0, 0);
@@ -244,6 +253,21 @@ export function DriverHomeScreen() {
   const openDatePicker = () => {
     const currentDate = parseDateString(selectedDate);
     setTempDate(currentDate);
+
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: currentDate,
+        mode: 'date',
+        is24Hour: true,
+        onChange: (event: DateTimePickerEvent, selected?: Date) => {
+          if (event.type !== 'dismissed' && selected) {
+            handleDatePicked(selected);
+          }
+        },
+      });
+      return;
+    }
+
     setShowDatePickerModal(true);
   };
 
@@ -265,58 +289,64 @@ export function DriverHomeScreen() {
     </View>
   );
 
-  const renderDatePickerModal = () => (
-    <Modal
-      visible={showDatePickerModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowDatePickerModal(false)}
-    >
-      <View style={styles.dateModalBackdrop}>
-        <TouchableWithoutFeedback onPress={() => setShowDatePickerModal(false)}>
-          <View style={StyleSheet.absoluteFill} />
-        </TouchableWithoutFeedback>
+  const renderDatePickerModal = () => {
+    if (Platform.OS === 'android') return null;
 
-        <View style={styles.dateModalCard}>
-          <View style={styles.dateModalHeader}>
-            <Text style={styles.dateModalTitle}>Chọn ngày giao hàng</Text>
-            <TouchableOpacity onPress={() => setShowDatePickerModal(false)} hitSlop={8}>
-              <Ionicons name="close" size={20} color={Colors.textPrimary} />
-            </TouchableOpacity>
-          </View>
+    return (
+      <Modal
+        visible={showDatePickerModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDatePickerModal(false)}
+      >
+        <View style={styles.dateModalBackdrop}>
+          <TouchableWithoutFeedback onPress={() => setShowDatePickerModal(false)}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
 
-          <DateTimePicker
-            value={tempDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            onChange={(_event: DateTimePickerEvent, selected?: Date) => {
-              if (selected) {
-                setTempDate(selected);
-              }
-            }}
-          />
+          <View style={styles.dateModalCard}>
+            <View style={styles.dateModalHeader}>
+              <Text style={styles.dateModalTitle}>Chọn ngày giao hàng</Text>
+              <TouchableOpacity onPress={() => setShowDatePickerModal(false)} hitSlop={8}>
+                <Ionicons name="close" size={20} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
 
-          <View style={styles.dateModalFooter}>
-            <TouchableOpacity
-              style={styles.dateModalCancelBtn}
-              onPress={() => setShowDatePickerModal(false)}
-            >
-              <Text style={styles.dateModalCancelText}>Hủy</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.dateModalConfirmBtn}
-              onPress={() => {
-                setShowDatePickerModal(false);
-                handleDatePicked(tempDate);
-              }}
-            >
-              <Text style={styles.dateModalConfirmText}>Xác nhận</Text>
-            </TouchableOpacity>
+            {showDatePickerModal ? (
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="inline"
+                onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                  if (selected) {
+                    setTempDate(selected);
+                  }
+                }}
+              />
+            ) : null}
+
+            <View style={styles.dateModalFooter}>
+              <TouchableOpacity
+                style={styles.dateModalCancelBtn}
+                onPress={() => setShowDatePickerModal(false)}
+              >
+                <Text style={styles.dateModalCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.dateModalConfirmBtn}
+                onPress={() => {
+                  setShowDatePickerModal(false);
+                  handleDatePicked(tempDate);
+                }}
+              >
+                <Text style={styles.dateModalConfirmText}>Xác nhận</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
-  );
+      </Modal>
+    );
+  };
 
   const listPanResponder = useRef(
     PanResponder.create({

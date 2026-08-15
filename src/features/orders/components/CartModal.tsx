@@ -126,21 +126,6 @@ export function CartModal({
                   </View>
                 );
               }}
-              ListHeaderComponent={
-                <View style={styles.cartScreenVoucherSection}>
-                  <View style={styles.cartScreenVoucherRow}>
-                    <MaterialIcons name="discount" size={18} color={Colors.outline} />
-                    <TextInput
-                      style={styles.cartScreenVoucherInput}
-                      placeholder="Nhập mã giảm giá"
-                      placeholderTextColor={Colors.outline}
-                    />
-                    <Pressable style={styles.cartScreenVoucherBtn}>
-                      <Text style={styles.cartScreenVoucherBtnText}>Áp dụng</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              }
               ListFooterComponent={
                 <View style={styles.cartScreenSummary}>
                   <View style={styles.cartScreenSummaryRow}>
@@ -152,15 +137,6 @@ export function CartModal({
                   <View style={styles.cartScreenSummaryRow}>
                     <Text style={styles.cartScreenSummaryLabel}>Phí vận chuyển</Text>
                     <Text style={styles.cartScreenSummaryValue}>Sẽ xác nhận sau</Text>
-                  </View>
-                  <View style={styles.cartScreenSummaryRow}>
-                    <Text style={styles.cartScreenSummaryLabel}>Giảm giá</Text>
-                    <Text
-                      numeric
-                      style={[styles.cartScreenSummaryValue, { color: Colors.error }]}
-                    >
-                      – 0đ
-                    </Text>
                   </View>
                   <View style={styles.cartScreenSummaryDivider} />
                   <View style={styles.cartScreenSummaryRow}>
@@ -318,37 +294,6 @@ const styles = StyleSheet.create({
     color: Colors.onSurface,
     minWidth: 24,
     textAlign: 'center',
-  },
-  cartScreenVoucherSection: {
-    backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.outlineVariant,
-  },
-  cartScreenVoucherRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  cartScreenVoucherInput: {
-    flex: 1,
-    height: 40,
-    backgroundColor: Colors.surfaceContainerHigh,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    fontFamily: Fonts.regular,
-    color: Colors.onSurface,
-  },
-  cartScreenVoucherBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  cartScreenVoucherBtnText: {
-    color: Colors.onPrimary,
-    fontFamily: Fonts.bold,
-    fontSize: 13,
   },
   cartScreenSummary: {
     backgroundColor: Colors.surface,

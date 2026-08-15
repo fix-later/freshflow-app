@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Colors } from '../../../constants/colors';
 import { UserRole } from '../../../constants/roles';
 import { useAuthStore } from '../../../store/authStore';
@@ -24,6 +24,7 @@ import {
   TextInput,
 } from '../../../components/ui/Text';
 import { profileApi } from '../api/profileApi';
+import { restaurantApi } from '../../restaurant/api/restaurantApi';
 import { uploadImageToCloudinary } from '../../../services/cloudinaryUpload';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
@@ -134,6 +135,9 @@ export function ProfileScreen() {
   const [changePwError, setChangePwError] = useState<string | null>(null);
   const [changePwDone, setChangePwDone] = useState(false);
 
+  // Approval status for restaurant user
+  const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
+
   useEffect(() => {
     profileApi
       .getProfile()
@@ -147,6 +151,17 @@ export function ProfileScreen() {
       .catch(() => {})
       .finally(() => setIsFetching(false));
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.role === UserRole.RESTAURANT) {
+        restaurantApi
+          .getApprovalStatus()
+          .then((res) => setApprovalStatus(res.status))
+          .catch(() => {});
+      }
+    }, [user?.role]),
+  );
 
   // ─── Edit mode handlers ────────────────────────────────────────────────────
 
@@ -474,6 +489,7 @@ export function ProfileScreen() {
                   styles.card,
                   styles.restaurantCard,
                   styles.navRow,
+                  approvalStatus === 'pending' && styles.pendingNavRow,
                   pressed && { opacity: 0.7 },
                 ]}
                 onPress={() => navigation.navigate('RestaurantProfileEdit' as never)}
@@ -484,9 +500,23 @@ export function ProfileScreen() {
                     size={18}
                     color={Colors.primaryText}
                   />
-                  <Text style={styles.changePwTitle}>Thông tin nhà hàng</Text>
+                  <View style={{ gap: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.changePwTitle}>Thông tin nhà hàng</Text>
+                      {approvalStatus === 'pending' && (
+                        <View style={styles.pendingItemBadge}>
+                          <Text style={styles.pendingItemBadgeText}>Cập nhật ngay</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.navRowSub}>Tên nhà hàng, địa chỉ, MST & giấy phép</Text>
+                  </View>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={approvalStatus === 'pending' ? '#D97706' : Colors.textMuted}
+                />
               </Pressable>
               <Pressable
                 style={({ pressed }) => [
@@ -909,4 +939,24 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   navRowSub: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
+
+  // ─── Pending alert styles ─────────────────────
+  pendingNavRow: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+    backgroundColor: Colors.surface,
+  },
+  pendingItemBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  pendingItemBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#D97706',
+  },
 });

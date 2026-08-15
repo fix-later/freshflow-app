@@ -556,6 +556,19 @@ export function RestaurantProfileScreen() {
             )}
           </View>
 
+          {/* ─── Pending approval banner ────────── */}
+          {approvalStatus === 'pending' && (
+            <View style={styles.pendingCard}>
+              <Ionicons name="time-outline" size={22} color="#D97706" />
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={styles.pendingCardTitle}>Tài khoản đang chờ duyệt</Text>
+                <Text style={styles.pendingCardSub}>
+                  Hệ thống đang xem xét hồ sơ nhà hàng của bạn. Bạn có thể kiểm tra và bổ sung đầy đủ thông tin, MST và tải lên Giấy phép kinh doanh bên dưới trong thời gian chờ đợi.
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* ─── Success banner ─────────────────── */}
           {savedOk && (
             <View style={styles.successBanner}>
@@ -1192,4 +1205,26 @@ const styles = StyleSheet.create({
   previewImage: { width: '100%', height: '80%' },
   previewErrorBox: { alignItems: 'center', gap: 10, paddingHorizontal: 32 },
   previewErrorText: { fontSize: 14, color: '#FFFFFF', textAlign: 'center' },
+
+  pendingCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    marginBottom: 12,
+  },
+  pendingCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  pendingCardSub: {
+    fontSize: 11,
+    color: '#78350F',
+    lineHeight: 16,
+  },
 });

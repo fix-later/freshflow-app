@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   Alert,
   Image,
@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
-import { WebView } from 'react-native-webview';
 import { Colors } from '../../../constants/colors';
 import { type DriverStackParamList } from '../../../navigation/types';
 import { driverApi } from '../api/driverApi';
@@ -22,86 +21,17 @@ import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'ProofOfDelivery'>;
 
-type ProofMethod = 'photo' | 'signature';
-
-const METHODS: { id: ProofMethod; icon: React.ComponentProps<typeof Ionicons>['name']; label: string }[] = [
-  { id: 'photo', icon: 'camera', label: 'Ảnh' },
-  { id: 'signature', icon: 'create', label: 'Chữ ký' },
-];
-
-// ── Signature canvas (WebView) ──────────────────────────────────────────────
-const SIGNATURE_HTML = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:100%;height:100%;background:#F8F9FA;}canvas{display:block;width:100%;height:100%;touch-action:none;}</style></head><body><canvas id="c"></canvas><script>
-var canvas=document.getElementById('c');
-var ctx=canvas.getContext('2d');
-var drawing=false;
-function resize(){canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;}
-resize();
-ctx.strokeStyle='#1a1a2e';ctx.lineWidth=2.5;ctx.lineCap='round';ctx.lineJoin='round';
-function pos(e){var r=canvas.getBoundingClientRect();var t=e.touches?e.touches[0]:e;return{x:(t.clientX-r.left)*(canvas.width/r.width),y:(t.clientY-r.top)*(canvas.height/r.height)};}
-canvas.addEventListener('mousedown',function(e){drawing=true;var p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);});
-canvas.addEventListener('mousemove',function(e){if(!drawing)return;var p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();});
-canvas.addEventListener('mouseup',function(){drawing=false;notify();});
-canvas.addEventListener('touchstart',function(e){e.preventDefault();drawing=true;var p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);});
-canvas.addEventListener('touchmove',function(e){e.preventDefault();if(!drawing)return;var p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();});
-canvas.addEventListener('touchend',function(){drawing=false;notify();});
-function notify(){var data=canvas.toDataURL('image/png');window.ReactNativeWebView.postMessage(JSON.stringify({type:'signature',data:data}));}
-function clear(){ctx.clearRect(0,0,canvas.width,canvas.height);window.ReactNativeWebView.postMessage(JSON.stringify({type:'clear'}));}
-document.addEventListener('message',function(e){if(e.data==='clear')clear();});
-window.addEventListener('message',function(e){if(e.data==='clear')clear();});
-</script></body></html>`;
-
-function SignatureCanvas({ onCapture, onClear }: { onCapture: (data: string) => void; onClear: () => void }) {
-  const webRef = useRef<WebView>(null);
-
-  const handleMessage = (event: { nativeEvent: { data: string } }) => {
-    try {
-      const msg = JSON.parse(event.nativeEvent.data);
-      if (msg.type === 'signature') onCapture(msg.data);
-      else if (msg.type === 'clear') onClear();
-    } catch {}
-  };
-
-  const handleClear = () => {
-    webRef.current?.injectJavaScript("clear(); true;");
-    onClear();
-  };
-
-  return (
-    <View style={styles.sigWrap}>
-      <View style={styles.sigCanvas}>
-        <WebView
-          ref={webRef}
-          source={{ html: SIGNATURE_HTML }}
-          style={{ flex: 1, borderRadius: 12 }}
-          scrollEnabled={false}
-          onMessage={handleMessage}
-          javaScriptEnabled
-          originWhitelist={['*']}
-        />
-      </View>
-      <Pressable style={styles.clearBtn} onPress={handleClear}>
-        <Ionicons name="refresh-outline" size={14} color={Colors.textMuted} />
-        <Text style={styles.clearBtnText}>Xoá chữ ký</Text>
-      </Pressable>
-    </View>
-  );
-}
-
 // ── Main Screen ─────────────────────────────────────────────────────────────
 export function ProofOfDeliveryScreen({ route, navigation }: Props) {
   const { deliveryId } = route.params;
   const stop = driverRouteStore.getStop(deliveryId);
 
-  const [method, setMethod] = useState<ProofMethod>('photo');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [signatureData, setSignatureData] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [deliveredAt, setDeliveredAt] = useState<string>('');
 
-  const proofReady =
-    (method === 'photo' && photoUri !== null) ||
-    (method === 'signature' && signatureData !== null);
+  const proofReady = photoUri !== null;
 
   const handleTakePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -120,12 +50,11 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
   };
 
   const handleSubmit = async () => {
-    const localUri = method === 'photo' ? photoUri : signatureData;
-    if (!localUri) return;
+    if (!photoUri) return;
 
     setSubmitting(true);
     try {
-      await uploadProofOfDelivery(deliveryId, localUri);
+      await uploadProofOfDelivery(deliveryId, photoUri);
       await driverApi.updateDeliveryStatus(deliveryId, 'DELIVERED');
       driverRouteStore.setDeliveryStatus(deliveryId, 'delivered');
 
@@ -165,19 +94,13 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
           <Text style={styles.successSub}>{stop.restaurantName}</Text>
           <Text style={styles.successTime}>{deliveredAt}</Text>
 
-          {method === 'photo' && photoUri && (
+          {photoUri ? (
             <Image source={{ uri: photoUri }} style={styles.successPhoto} resizeMode="cover" />
-          )}
+          ) : null}
 
           <View style={styles.methodBadge}>
-            <Ionicons
-              name={METHODS.find(m => m.id === method)?.icon ?? 'checkmark-circle-outline'}
-              size={14}
-              color={Colors.success}
-            />
-            <Text style={styles.methodBadgeText}>
-              Bằng chứng: {METHODS.find(m => m.id === method)?.label}
-            </Text>
+            <Ionicons name="checkmark-circle-outline" size={14} color={Colors.success} />
+            <Text style={styles.methodBadgeText}>Bằng chứng: Ảnh giao hàng</Text>
           </View>
 
           <Pressable
@@ -212,63 +135,32 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Chọn phương thức xác nhận</Text>
+        <Text style={styles.sectionTitle}>Hình ảnh bằng chứng giao hàng</Text>
 
-        {/* ── Method tabs ── */}
-        <View style={styles.methodRow}>
-          {METHODS.map(m => (
-            <Pressable
-              key={m.id}
-              style={[styles.methodTab, method === m.id && styles.methodTabActive]}
-              onPress={() => setMethod(m.id)}
-            >
-              <Ionicons
-                name={m.icon}
-                size={20}
-                color={method === m.id ? Colors.driverPrimary : Colors.textMuted}
-              />
-              <Text style={[styles.methodLabel, method === m.id && styles.methodLabelActive]}>
-                {m.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {/* ── Method content ── */}
+        {/* ── Photo content ── */}
         <View style={styles.contentCard}>
-          {method === 'photo' && (
-            <>
-              {photoUri ? (
-                <View style={styles.photoPreviewWrap}>
-                  <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
-                  <Pressable style={styles.retakeBtn} onPress={handleTakePhoto}>
-                    <Ionicons name="refresh" size={14} color={Colors.driverPrimary} />
-                    <Text style={styles.retakeBtnText}>Chụp lại</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable style={styles.photoCapturePlaceholder} onPress={handleTakePhoto}>
-                  <View style={styles.cameraIconWrap}>
-                    <Ionicons name="camera" size={40} color={Colors.driverPrimary} />
-                  </View>
-                  <Text style={styles.placeholderTitle}>Chụp ảnh bằng chứng giao hàng</Text>
-                  <Text style={styles.placeholderSub}>
-                    Chụp ảnh gói hàng, chứng từ hoặc khu vực giao hàng để làm bằng chứng.
-                  </Text>
-                  <View style={styles.cameraBtn}>
-                    <Ionicons name="camera-outline" size={16} color={Colors.driverOnPrimary} />
-                    <Text style={styles.cameraBtnText}>Mở camera</Text>
-                  </View>
-                </Pressable>
-              )}
-            </>
-          )}
-
-          {method === 'signature' && (
-            <SignatureCanvas
-              onCapture={data => setSignatureData(data)}
-              onClear={() => setSignatureData(null)}
-            />
+          {photoUri ? (
+            <View style={styles.photoPreviewWrap}>
+              <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
+              <Pressable style={styles.retakeBtn} onPress={handleTakePhoto}>
+                <Ionicons name="refresh" size={14} color={Colors.driverPrimary} />
+                <Text style={styles.retakeBtnText}>Chụp lại</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable style={styles.photoCapturePlaceholder} onPress={handleTakePhoto}>
+              <View style={styles.cameraIconWrap}>
+                <Ionicons name="camera" size={40} color={Colors.driverPrimary} />
+              </View>
+              <Text style={styles.placeholderTitle}>Chụp ảnh xác nhận giao hàng</Text>
+              <Text style={styles.placeholderSub}>
+                Chụp ảnh gói hàng, chứng từ hoặc khu vực giao hàng tại nhà hàng để làm bằng chứng.
+              </Text>
+              <View style={styles.cameraBtn}>
+                <Ionicons name="camera-outline" size={16} color={Colors.driverOnPrimary} />
+                <Text style={styles.cameraBtnText}>Mở camera</Text>
+              </View>
+            </Pressable>
           )}
         </View>
 
@@ -276,10 +168,7 @@ export function ProofOfDeliveryScreen({ route, navigation }: Props) {
         {!proofReady && (
           <View style={styles.hintBox}>
             <Ionicons name="alert-circle-outline" size={14} color={Colors.warning} />
-            <Text style={styles.hintText}>
-              {method === 'photo' && 'Chụp ảnh để tiếp tục xác nhận giao hàng.'}
-              {method === 'signature' && 'Ký tên vào khung bên trên để tiếp tục.'}
-            </Text>
+            <Text style={styles.hintText}>Vui lòng chụp ảnh để tiếp tục xác nhận giao hàng.</Text>
           </View>
         )}
 
@@ -332,20 +221,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
 
-  methodRow: { flexDirection: 'row', gap: 8 },
-  methodTab: {
-    flex: 1, alignItems: 'center', gap: 5,
-    paddingVertical: 10,
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: 12, borderWidth: 1.5, borderColor: Colors.outlineVariant,
-  },
-  methodTabActive: {
-    borderColor: Colors.driverPrimary,
-    backgroundColor: Colors.driverPrimaryLight,
-  },
-  methodLabel: { fontSize: 11, fontWeight: '600', color: Colors.textMuted },
-  methodLabelActive: { color: Colors.driverPrimary },
-
   contentCard: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: 16, borderWidth: 1, borderColor: Colors.outlineVariant,
@@ -378,16 +253,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: Colors.outlineVariant,
   },
   retakeBtnText: { fontSize: 13, fontWeight: '600', color: Colors.driverPrimary },
-
-  // Signature
-  sigWrap: { gap: 0 },
-  sigCanvas: { height: 320, borderRadius: 12, overflow: 'hidden' },
-  clearBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 5, padding: 10,
-    borderTopWidth: 1, borderTopColor: Colors.outlineVariant,
-  },
-  clearBtnText: { fontSize: 12, color: Colors.textMuted },
 
   // Hint
   hintBox: {

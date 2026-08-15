@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors } from '../../../constants/colors';
+import { Fonts } from '../../../constants/fonts';
 import {
   Text,
   TextInput,
@@ -176,6 +177,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [proofModalVisible, setProofModalVisible] = useState(false);
   const [selectedReasonId, setSelectedReasonId] = useState<string | null>(null);
   const [customReason, setCustomReason] = useState('');
   const [cancelReasonError, setCancelReasonError] = useState<string | null>(null);
@@ -547,6 +549,40 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           </>
         ) : null}
 
+        {/* ── Proof of Delivery Photo ── */}
+        {order.proofUrl ? (
+          <>
+            <Text style={styles.sectionTitle}>Hình ảnh xác thực giao hàng (POD)</Text>
+            <View style={[styles.card, styles.proofCardFull]}>
+              <Pressable style={styles.proofImageWrapperFull} onPress={() => setProofModalVisible(true)}>
+                <Image source={{ uri: order.proofUrl }} style={styles.proofImage} resizeMode="cover" />
+                <View style={styles.proofBadgeOverlay}>
+                  <Ionicons name="checkmark-circle" size={15} color="#10B981" />
+                  <Text style={styles.proofBadgeOverlayText}>Đã xác nhận bởi tài xế</Text>
+                </View>
+                <View style={styles.proofZoomOverlay}>
+                  <Ionicons name="expand-outline" size={18} color="#FFFFFF" />
+                </View>
+              </Pressable>
+            </View>
+
+            {/* Proof image zoom modal */}
+            <Modal
+              visible={proofModalVisible}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setProofModalVisible(false)}
+            >
+              <View style={styles.proofModalOverlay}>
+                <Pressable style={styles.proofModalCloseBtn} onPress={() => setProofModalVisible(false)}>
+                  <Ionicons name="close" size={24} color="#FFFFFF" />
+                </Pressable>
+                <Image source={{ uri: order.proofUrl }} style={styles.proofModalImage} resizeMode="contain" />
+              </View>
+            </Modal>
+          </>
+        ) : null}
+
         {/* ── Notes ── */}
         {order.notes ? (
           <>
@@ -607,20 +643,26 @@ export function OrderDetailScreen({ route, navigation }: Props) {
             <Pressable
               style={({ pressed }) => [
                 styles.reorderCardBtn,
-                (pressed || reordering) && { opacity: 0.65 },
+                (pressed || reordering) && { opacity: 0.7 },
               ]}
               onPress={handleReorder}
               disabled={reordering}
             >
-              {reordering ? (
-                <ActivityIndicator size="small" color={Colors.primaryText} />
-              ) : (
-                <Ionicons name="repeat" size={18} color={Colors.primaryText} />
-              )}
-              <Text style={styles.reorderCardBtnText}>Tạo bản nháp từ đơn này</Text>
+              <View style={styles.reorderIconWrap}>
+                {reordering ? (
+                  <ActivityIndicator size="small" color={Colors.primaryText} />
+                ) : (
+                  <Ionicons name="repeat" size={18} color={Colors.primaryText} />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.reorderCardBtnTitle}>Tạo bản nháp mới</Text>
+                <Text style={styles.reorderCardBtnSub}>Từ sản phẩm đơn này</Text>
+              </View>
             </Pressable>
+
             <Pressable
-              style={({ pressed }) => [styles.reorderCardBtn, pressed && { opacity: 0.65 }]}
+              style={({ pressed }) => [styles.reorderCardBtn, pressed && { opacity: 0.7 }]}
               onPress={() => {
                 // Merge by marketProductId — an order can carry more than one line for the same
                 // product (AddOrderItemCommandHandler sums quantities rather than rejecting a
@@ -638,8 +680,13 @@ export function OrderDetailScreen({ route, navigation }: Props) {
                 });
               }}
             >
-              <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
-              <Text style={styles.reorderCardBtnText}>Đặt định kỳ từ đơn này</Text>
+              <View style={styles.reorderIconWrap}>
+                <Ionicons name="calendar-outline" size={18} color={Colors.primaryText} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.reorderCardBtnTitle}>Đặt lịch định kỳ</Text>
+                <Text style={styles.reorderCardBtnSub}>Giao tự động hàng tuần</Text>
+              </View>
             </Pressable>
           </View>
         ) : null}
@@ -958,31 +1005,53 @@ const styles = StyleSheet.create({
   cancelBtnText: { color: Colors.error, fontWeight: '700', fontSize: 15 },
 
   // Confirm receipt / report issue footer
-  footerRow: { flexDirection: 'row', gap: 12 },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   confirmReceiptBtn: {
-    flex: 1,
+    flex: 1.4,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
     backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  confirmReceiptBtnDisabled: { opacity: 0.6 },
-  confirmReceiptBtnText: { color: Colors.onPrimary, fontWeight: '700', fontSize: 15 },
+  confirmReceiptBtnDisabled: { opacity: 0.5 },
+  confirmReceiptBtnText: {
+    color: Colors.onPrimary,
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+  },
   reportIssueBtn: {
     flex: 1,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: Colors.warning,
-    borderRadius: 12,
-    paddingVertical: 14,
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: '#FCD34D',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
   },
-  reportIssueBtnText: { color: Colors.warning, fontWeight: '700', fontSize: 15 },
+  reportIssueBtnText: {
+    color: '#D97706',
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+  },
 
   // Cancel modal
   modalBackdrop: {
@@ -1054,27 +1123,110 @@ const styles = StyleSheet.create({
   modalDangerBtnText: { color: Colors.onError, fontWeight: '700', fontSize: 14 },
   orderConvenienceRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
     marginTop: 16,
   },
   reorderCardBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.primaryLight,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 6,
+    gap: 10,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    padding: 12,
+    shadowColor: Colors.deepTeal,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  reorderCardBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.primaryText,
-    textAlign: 'center',
-    flexShrink: 1,
+  reorderIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reorderCardBtnTitle: {
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+    color: Colors.textPrimary,
+  },
+  reorderCardBtnSub: {
+    fontSize: 10,
+    fontFamily: Fonts.medium,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+  // ─── Proof of Delivery styles ─────────────────
+  proofCardFull: {
+    padding: 0,
+    overflow: 'hidden',
+    borderRadius: 16,
+  },
+  proofImageWrapperFull: {
+    width: '100%',
+    height: 220,
+    position: 'relative',
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  proofBadgeOverlay: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  proofBadgeOverlayText: {
+    fontSize: 12,
+    fontFamily: Fonts.semibold,
+    color: '#FFFFFF',
+  },
+  proofImage: {
+    width: '100%',
+    height: '100%',
+  },
+  proofZoomOverlay: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proofModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proofModalCloseBtn: {
+    position: 'absolute',
+    top: 56,
+    right: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proofModalImage: {
+    width: '92%',
+    height: '80%',
   },
 });
