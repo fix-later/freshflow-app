@@ -558,11 +558,17 @@ export function OrderListScreen() {
         <Text style={styles.productName} numberOfLines={2}>
           {item.productName}
         </Text>
+        <View style={styles.productSpecRow}>
+          <Ionicons name="cube-outline" size={13} color="#64748B" />
+          <Text style={styles.productSpecText}>
+            {item.sellingUnit?.weightKg ? `${item.sellingUnit.weightKg} kg mỗi kiện` : 'Theo kiện'}
+          </Text>
+        </View>
         <View style={styles.productFooter}>
           <View style={styles.priceBlock}>
             <Text numeric style={styles.productPrice}>{formatPrice(item.currentPrice)}</Text>
             <Text style={styles.productUnit}>
-              /{item.unit}{item.sellingUnit?.weightKg ? ` (~${item.sellingUnit.weightKg}kg)` : ''}
+              /{item.unit}
             </Text>
           </View>
 
@@ -1495,12 +1501,24 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   productName: {
-    minHeight: 38,
+    minHeight: 34,
     marginTop: 4,
-    fontSize: 12,
+    fontSize: 13,
     lineHeight: 17,
-    color: Colors.textPrimary,
-    fontFamily: Fonts.semibold,
+    color: '#0F172A',
+    fontFamily: Fonts.bold,
+  },
+  productSpecRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  productSpecText: {
+    fontSize: 10.5,
+    color: '#64748B',
+    fontFamily: Fonts.medium,
   },
   productFooter: {
     minHeight: 36,
