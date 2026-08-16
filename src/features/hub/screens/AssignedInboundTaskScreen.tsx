@@ -46,6 +46,8 @@ type OrderLine = {
   orderId: string;
   orderItemId: string;
   restaurantName: string;
+  marketProductId: string;
+  productName: string;
   quantity: number;
   unit: string | null;
 };
@@ -83,14 +85,6 @@ function readQuantity(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function normalizeProductName(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLocaleLowerCase('vi-VN');
-}
-
 function getErrorMessage(error: unknown): string {
   return getApiErrorMessage(error, 'Không thể lưu kết quả kiểm đếm. Vui lòng thử lại.');
 }
@@ -103,9 +97,21 @@ function toBackendCondition(status: ReviewStatus): HubDiscrepancyCondition {
   return 'MISSING';
 }
 
-function buildInitialReviews(task: HubInboundTask): Record<string, ItemReview> {
-  return Object.fromEntries(task.items.map((item) => [item.marketProductId, {
-    status: 'PENDING',
+function getOrderLines(batch: HubProcurementBatchDto | null): OrderLine[] {
+  return batch?.orders?.flatMap((order) => order.items.map((item) => ({
+    orderId: order.orderId,
+    orderItemId: item.orderItemId,
+    restaurantName: order.restaurantName,
+    marketProductId: item.marketProductId ?? '',
+    productName: item.productName,
+    quantity: item.quantity,
+    unit: item.unit,
+  }))) ?? [];
+}
+
+function buildInitialReviews(lines: OrderLine[], completed: boolean): Record<string, ItemReview> {
+  return Object.fromEntries(lines.map((line) => [line.orderItemId, {
+    status: completed ? 'OK' : 'PENDING',
     affectedQuantity: '',
     notes: '',
   }]));
@@ -114,11 +120,12 @@ function buildInitialReviews(task: HubInboundTask): Record<string, ItemReview> {
 export function AssignedInboundTaskScreen({ task, navigation }: Props) {
   const scrollViewRef = useRef<ScrollView>(null);
   const productListOffsetY = useRef(0);
+  const orderGroupOffsets = useRef<Record<string, number>>({});
   const productCardOffsets = useRef<Record<string, number>>({});
   const readOnly = isInboundReceived(task.status);
   const [submitting, setSubmitting] = useState(false);
   const [received, setReceived] = useState(isInboundReceived(task.status));
-  const [reviews, setReviews] = useState<Record<string, ItemReview>>(() => buildInitialReviews(task));
+  const [reviews, setReviews] = useState<Record<string, ItemReview>>({});
   const [batch, setBatch] = useState<HubProcurementBatchDto | null>(null);
   const [loadingBatch, setLoadingBatch] = useState(Boolean(task.deliveryScheduleId));
   const [batchError, setBatchError] = useState<string | null>(null);
@@ -134,58 +141,44 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
     try {
       const detail = await hubApi.getInboundBatchDetail(task);
       setBatch(detail);
-      if (!detail) setBatchError('Không tìm thấy chi tiết đơn hàng của lô này trong kế hoạch Hub.');
+      if (!detail) {
+        setBatchError('Không tìm thấy chi tiết đơn hàng của lô này trong kế hoạch Hub.');
+      } else if ((detail.orders?.length ?? 0) !== detail.orderIds.length) {
+        setBatchError(
+          `API chưa trả đủ chi tiết đơn nhà hàng (${detail.orders?.length ?? 0}/${detail.orderIds.length} đơn). Không thể kiểm đếm bằng số lượng gộp.`,
+        );
+      }
 
       const saved = (await hubApi.getDiscrepancies(task.hubId))
         .filter((item) => item.inboundEventId === task.inboundId);
-      const grouped = new Map<string, ItemReview>();
-      if (saved.length > 0) {
-        const productByOrderItem = new Map(
-          detail?.orders?.flatMap((order) => order.items.flatMap((item) => (
-            item.marketProductId ? [[item.orderItemId, item.marketProductId] as const] : []
-          ))) ?? [],
-        );
-        saved.forEach((discrepancy) => {
-          const marker = discrepancy.notes?.match(/\[APP:([^:\]]+):([A-Z_]+)\]/);
-          const marketProductId = marker?.[1] ?? productByOrderItem.get(discrepancy.orderItemId);
-          if (!marketProductId) return;
-          const markerStatus = marker?.[2];
-          const status: ReviewStatus = markerStatus === 'WRONG_ITEM'
-            ? 'WRONG_ITEM'
-            : discrepancy.conditionStatus;
-          const current = grouped.get(marketProductId);
-          let notes = discrepancy.notes?.replace(marker?.[0] ?? '', '').trim() ?? '';
-          const labelPrefix = `${ISSUE_LABEL[status as keyof typeof ISSUE_LABEL] ?? ''}.`;
-          if (labelPrefix !== '.' && notes.startsWith(labelPrefix)) {
-            notes = notes.slice(labelPrefix.length).trim();
-          }
-          grouped.set(marketProductId, {
-            status,
-            affectedQuantity: String((current ? readQuantity(current.affectedQuantity) : 0)
-              + discrepancy.affectedQuantity),
-            notes: current?.notes || notes,
-            persisted: true,
-            serverStatus: current?.serverStatus === 'OPEN' || discrepancy.status === 'OPEN'
-              ? 'OPEN'
-              : 'ACKNOWLEDGED',
-          });
-        });
-      }
-      setReviews((current) => {
-        const next = { ...current };
-        if (isInboundReceived(task.status)) {
-          task.items.forEach((item) => {
-            if (next[item.marketProductId]?.status === 'PENDING') {
-              next[item.marketProductId] = {
-                status: 'OK',
-                affectedQuantity: '',
-                notes: '',
-              };
-            }
-          });
+      const lines = getOrderLines(detail);
+      const lineIds = new Set(lines.map((line) => line.orderItemId));
+      const next = buildInitialReviews(lines, isInboundReceived(task.status));
+      saved.forEach((discrepancy) => {
+        if (!lineIds.has(discrepancy.orderItemId)) return;
+        const marker = discrepancy.notes?.match(/\[APP:([^:\]]+):([A-Z_]+)\]/);
+        const markerStatus = marker?.[2];
+        const status: ReviewStatus = markerStatus === 'WRONG_ITEM'
+          ? 'WRONG_ITEM'
+          : discrepancy.conditionStatus;
+        const current = next[discrepancy.orderItemId];
+        let notes = discrepancy.notes?.replace(marker?.[0] ?? '', '').trim() ?? '';
+        const labelPrefix = `${ISSUE_LABEL[status as keyof typeof ISSUE_LABEL] ?? ''}.`;
+        if (labelPrefix !== '.' && notes.startsWith(labelPrefix)) {
+          notes = notes.slice(labelPrefix.length).trim();
         }
-        return { ...next, ...Object.fromEntries(grouped) };
+        next[discrepancy.orderItemId] = {
+          status,
+          affectedQuantity: String(readQuantity(current?.affectedQuantity ?? '')
+            + discrepancy.affectedQuantity),
+          notes: current?.notes || notes,
+          persisted: true,
+          serverStatus: current?.serverStatus === 'OPEN' || discrepancy.status === 'OPEN'
+            ? 'OPEN'
+            : 'ACKNOWLEDGED',
+        };
       });
+      setReviews(next);
     } catch (error) {
       setBatchError(getErrorMessage(error));
     } finally {
@@ -199,75 +192,52 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.inboundId]);
 
-  const orderLinesByProduct = useMemo(() => {
-    const result = new Map<string, OrderLine[]>();
-    batch?.orders?.forEach((order) => {
-      order.items.forEach((item) => {
-        const marketProductId = item.marketProductId
-          ?? task.items.find((inboundItem) => (
-            normalizeProductName(inboundItem.productName ?? '') === normalizeProductName(item.productName)
-          ))?.marketProductId;
-        if (!marketProductId) return;
-        const lines = result.get(marketProductId) ?? [];
-        lines.push({
-          orderId: order.orderId,
-          orderItemId: item.orderItemId,
-          restaurantName: order.restaurantName,
-          quantity: item.quantity,
-          unit: item.unit,
-        });
-        result.set(marketProductId, lines);
-      });
-    });
-    return result;
-  }, [batch, task.items]);
-
-  const checkedCount = task.items.filter((item) => (
-    reviews[item.marketProductId]?.status !== 'PENDING'
+  const orders = batch?.orders ?? [];
+  const orderLines = useMemo(() => getOrderLines(batch), [batch]);
+  const checkedCount = orderLines.filter((line) => (
+    Boolean(reviews[line.orderItemId]?.status)
+    && reviews[line.orderItemId]?.status !== 'PENDING'
   )).length;
-  const issueItems = task.items.filter((item) => {
-    const status = reviews[item.marketProductId]?.status;
-    return status !== 'PENDING' && status !== 'OK';
+  const issueItems = orderLines.filter((line) => {
+    const status = reviews[line.orderItemId]?.status;
+    return Boolean(status && status !== 'PENDING' && status !== 'OK');
   });
-  const allChecked = task.items.length > 0 && checkedCount === task.items.length;
-  const reviewedQuantity = task.items.reduce((sum, item) => (
-    reviews[item.marketProductId]?.status !== 'PENDING' ? sum + item.quantityKg : sum
-  ), 0);
+  const allChecked = orderLines.length > 0 && checkedCount === orderLines.length;
 
-  const issueValidationError = issueItems.reduce<string | null>((error, item) => {
+  const issueValidationError = issueItems.reduce<string | null>((error, line) => {
     if (error) return error;
-    const review = reviews[item.marketProductId];
+    const review = reviews[line.orderItemId];
+    if (!review) return null;
     if (review.persisted) return null;
     const affected = readQuantity(review.affectedQuantity);
-    if (affected <= 0) return `Nhập số lượng ảnh hưởng cho ${item.productName ?? 'mặt hàng'}.`;
-    if (review.notes.trim().length < 3) return `Mô tả ngắn tình trạng của ${item.productName ?? 'mặt hàng'}.`;
-    const lines = orderLinesByProduct.get(item.marketProductId) ?? [];
-    if (lines.length === 0) return `Chưa xác định được đơn/nhà hàng của ${item.productName ?? 'mặt hàng'}.`;
-    const available = lines.reduce((sum, line) => sum + line.quantity, 0);
-    if (affected > available) {
-      return `Số lượng ảnh hưởng của ${item.productName ?? 'mặt hàng'} vượt quá ${formatQuantity(available)} trong các đơn.`;
+    if (affected <= 0) return `Nhập số lượng ảnh hưởng cho ${line.productName}.`;
+    if (review.notes.trim().length < 3) return `Mô tả ngắn tình trạng của ${line.productName}.`;
+    if (affected > line.quantity) {
+      return `Số lượng ảnh hưởng của ${line.productName} vượt quá ${formatQuantity(line.quantity)} trong đơn ${shortCode('ĐH', line.orderId)}.`;
     }
     return null;
   }, null);
-  const submitDisabled = !readOnly && (submitting || !allChecked || Boolean(issueValidationError));
+  const submitDisabled = !readOnly && (
+    submitting || loadingBatch || !allChecked || Boolean(batchError) || Boolean(issueValidationError)
+  );
 
-  const updateReview = (marketProductId: string, patch: Partial<ItemReview>) => {
+  const updateReview = (orderItemId: string, patch: Partial<ItemReview>) => {
     if (readOnly) return;
     setReviews((current) => ({
       ...current,
-      [marketProductId]: { ...current[marketProductId], ...patch },
+      [orderItemId]: { ...current[orderItemId], ...patch },
     }));
   };
 
-  const selectStatus = (marketProductId: string, status: Exclude<ReviewStatus, 'PENDING'>) => {
-    if (readOnly || reviews[marketProductId]?.persisted) return;
-    updateReview(marketProductId, status === 'OK'
+  const selectStatus = (orderItemId: string, status: Exclude<ReviewStatus, 'PENDING'>) => {
+    if (readOnly || reviews[orderItemId]?.persisted) return;
+    updateReview(orderItemId, status === 'OK'
       ? { status, affectedQuantity: '', notes: '' }
       : { status });
   };
 
-  const scrollToIssueField = (marketProductId: string, fieldOffset: number) => {
-    const cardOffset = productCardOffsets.current[marketProductId] ?? 0;
+  const scrollToIssueField = (orderItemId: string, fieldOffset: number) => {
+    const cardOffset = productCardOffsets.current[orderItemId] ?? 0;
     // Wait until the keyboard has resized the viewport, then place the active field
     // comfortably above both the keyboard and the fixed action footer.
     setTimeout(() => {
@@ -284,14 +254,14 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
       return;
     }
     if (!allChecked) {
-      Alert.alert('Chưa kiểm đủ mặt hàng', 'Hãy chọn kết quả cho từng mặt hàng trước khi hoàn tất.');
+      Alert.alert('Chưa kiểm đủ đơn hàng', 'Hãy chọn kết quả cho từng dòng hàng trong từng đơn nhà hàng trước khi hoàn tất.');
       return;
     }
     if (issueValidationError) {
       Alert.alert('Chưa đủ thông tin discrepancy', issueValidationError);
       return;
     }
-    const newIssueItems = issueItems.filter((item) => !reviews[item.marketProductId].persisted);
+    const newIssueItems = issueItems.filter((line) => !reviews[line.orderItemId]?.persisted);
     if (received && newIssueItems.length === 0) {
       navigation.goBack();
       return;
@@ -309,34 +279,28 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
         const existing = (await hubApi.getDiscrepancies(task.hubId))
           .filter((item) => item.inboundEventId === task.inboundId);
 
-        for (const item of newIssueItems) {
-          const review = reviews[item.marketProductId];
+        for (const line of newIssueItems) {
+          const review = reviews[line.orderItemId];
+          if (!review) continue;
           const issueStatus = review.status as Exclude<ReviewStatus, 'PENDING' | 'OK'>;
-          const marker = `[APP:${item.marketProductId}:${issueStatus}]`;
+          const marker = `[APP:${line.marketProductId}:${issueStatus}]`;
           const conditionStatus = toBackendCondition(issueStatus);
-          let remaining = readQuantity(review.affectedQuantity);
-          const lines = orderLinesByProduct.get(item.marketProductId) ?? [];
-
-          for (const line of lines) {
-            if (remaining <= 0) break;
-            const affectedQuantity = Math.min(remaining, line.quantity);
-            const notes = `${marker} ${ISSUE_LABEL[issueStatus]}. ${review.notes.trim()}`;
-            const alreadyRecorded = existing.some((saved) => (
-              saved.orderItemId === line.orderItemId
-              && saved.conditionStatus === conditionStatus
-              && saved.affectedQuantity === affectedQuantity
-              && saved.notes?.includes(marker)
-            ));
-            if (!alreadyRecorded) {
-              await hubApi.recordDiscrepancy(task.hubId, task.inboundId, {
-                orderItemId: line.orderItemId,
-                affectedQuantity,
-                conditionStatus,
-                notes,
-              });
-              recordedCount += 1;
-            }
-            remaining -= affectedQuantity;
+          const affectedQuantity = readQuantity(review.affectedQuantity);
+          const notes = `${marker} ${ISSUE_LABEL[issueStatus]}. ${review.notes.trim()}`;
+          const alreadyRecorded = existing.some((saved) => (
+            saved.orderItemId === line.orderItemId
+            && saved.conditionStatus === conditionStatus
+            && saved.affectedQuantity === affectedQuantity
+            && saved.notes?.includes(marker)
+          ));
+          if (!alreadyRecorded) {
+            await hubApi.recordDiscrepancy(task.hubId, task.inboundId, {
+              orderItemId: line.orderItemId,
+              affectedQuantity,
+              conditionStatus,
+              notes,
+            });
+            recordedCount += 1;
           }
         }
       }
@@ -344,13 +308,13 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
       if (newIssueItems.length > 0) {
         Alert.alert(
           'Đã gửi Admin xử lý',
-          `${newIssueItems.length} mặt hàng có vấn đề đã được tạo ở trạng thái OPEN (${recordedCount} dòng đơn mới). Admin/Operations có thể xem và xác nhận kết quả này.`,
+          `${newIssueItems.length} dòng hàng có vấn đề đã được tạo ở trạng thái OPEN (${recordedCount} dòng đơn mới). Admin/Operations có thể xem và xác nhận kết quả này.`,
           [{ text: 'Về danh sách lô', onPress: () => navigation.goBack() }],
         );
       } else {
         Alert.alert(
           'Đã kiểm tra lô hàng',
-          'Tất cả mặt hàng khớp với lô bàn giao.',
+          'Tất cả đơn hàng nhà hàng khớp với lô bàn giao.',
           [{ text: 'Về danh sách lô', onPress: () => navigation.goBack() }],
         );
       }
@@ -398,7 +362,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
             <View style={styles.taskInfo}>
               <Info label="Lô bàn giao" value={shortCode('LÔ', task.deliveryScheduleId)} numeric />
               <Info label="Khối lượng" value={`${formatQuantity(task.totalQuantityKg)} kg`} numeric />
-              <Info label="Mặt hàng" value={`${task.items.length}`} numeric />
+              <Info label="Đơn nhà hàng" value={loadingBatch ? '...' : `${orders.length}`} numeric />
             </View>
           </View>
 
@@ -429,27 +393,29 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                 <Text style={styles.progressTitle}>
                   {readOnly
                     ? loadingBatch ? 'Đang tải kết quả' : 'Kết quả đã ghi nhận'
-                    : allChecked ? 'Đã kiểm đủ mặt hàng' : 'Đang kiểm hàng thực nhận'}
+                    : allChecked ? 'Đã kiểm đủ từng đơn' : 'Đang kiểm theo đơn nhà hàng'}
                 </Text>
               </View>
-              <Text numeric style={styles.progressValue}>{checkedCount}/{task.items.length}</Text>
+              <Text numeric style={styles.progressValue}>{checkedCount}/{orderLines.length}</Text>
             </View>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, {
-                width: `${task.items.length ? (checkedCount / task.items.length) * 100 : 0}%`,
+                width: `${orderLines.length ? (checkedCount / orderLines.length) * 100 : 0}%`,
               }]} />
             </View>
             <Text numeric style={styles.progressMeta}>
-              Đã đối chiếu {formatQuantity(reviewedQuantity)} / {formatQuantity(task.totalQuantityKg)} kg
-              {issueItems.length > 0 ? ` · ${issueItems.length} mặt hàng có vấn đề` : ''}
+              Đã đối chiếu {checkedCount}/{orderLines.length} dòng hàng trong {orders.length} đơn
+              {issueItems.length > 0 ? ` · ${issueItems.length} dòng có vấn đề` : ''}
             </Text>
           </View>
 
           <View style={styles.headingRow}>
             <View>
-              <Text style={styles.sectionTitle}>Kiểm tra mặt hàng</Text>
+              <Text style={styles.sectionTitle}>Kiểm tra theo đơn nhà hàng</Text>
               <Text style={styles.sectionSubtitle}>
-                {readOnly ? 'Chỉ xem · không thể chỉnh sửa' : 'Chọn kết quả thực nhận'}
+                {readOnly
+                  ? 'Chỉ xem · kết quả được khóa theo từng dòng đơn'
+                  : 'Đối chiếu riêng từng đơn, không dùng số lượng gộp của lô'}
               </Text>
             </View>
           </View>
@@ -460,132 +426,165 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
               productListOffsetY.current = event.nativeEvent.layout.y;
             }}
           >
-            {task.items.map((item, index) => {
-              const review = reviews[item.marketProductId];
-              const hasIssue = review.status !== 'PENDING' && review.status !== 'OK';
-              const persisted = review.persisted === true;
-              const locked = readOnly || persisted;
-              const visibleReviewOptions = readOnly
-                ? REVIEW_OPTIONS.filter((option) => option.id === review.status)
-                : REVIEW_OPTIONS;
-              const orderLines = orderLinesByProduct.get(item.marketProductId) ?? [];
-              return (
-                <View
-                  key={item.marketProductId}
-                  style={[styles.productCard, hasIssue && styles.productCardIssue]}
-                  onLayout={(event) => {
-                    productCardOffsets.current[item.marketProductId] = event.nativeEvent.layout.y;
-                  }}
-                >
-                  <View style={styles.productHeader}>
-                    <View style={[styles.productIndex, hasIssue && styles.productIndexIssue]}>
-                      <Text numeric style={styles.productIndexText}>{index + 1}</Text>
-                    </View>
-                    <View style={styles.productCopy}>
-                      <Text style={styles.productName}>{item.productName || shortCode('SP', item.productId)}</Text>
-                      <Text numeric style={styles.expectedText}>
-                        Theo lô: {formatQuantity(item.quantityKg)} kg
-                      </Text>
-                    </View>
-                    {persisted ? (
-                      <View style={[
-                        styles.savedBadge,
-                        review.serverStatus === 'ACKNOWLEDGED' && styles.savedBadgeDone,
-                      ]}>
-                        <Text style={styles.savedBadgeText}>
-                          {review.serverStatus === 'ACKNOWLEDGED' ? 'Đã xác nhận' : 'Chờ Admin'}
-                        </Text>
-                      </View>
-                    ) : review.status === 'PENDING' ? (
-                      <Text style={styles.pendingLabel}>{readOnly ? 'Chưa tải' : 'Chưa kiểm'}</Text>
-                    ) : hasIssue ? (
-                      <Ionicons name="alert-circle" size={22} color={Colors.warning} />
-                    ) : (
-                      <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
-                    )}
+            {orders.map((order, orderIndex) => (
+              <View
+                key={order.orderId}
+                style={styles.orderGroup}
+                onLayout={(event) => {
+                  orderGroupOffsets.current[order.orderId] = event.nativeEvent.layout.y;
+                }}
+              >
+                <View style={styles.orderHeader}>
+                  <View style={styles.orderIndexBadge}>
+                    <Text numeric style={styles.orderIndexText}>{orderIndex + 1}</Text>
                   </View>
-
-                  <View style={styles.optionGrid}>
-                    {visibleReviewOptions.map((option) => {
-                      const active = review.status === option.id;
-                      return (
-                        <Pressable
-                          key={option.id}
-                          disabled={locked}
-                          style={[
-                            styles.optionChip,
-                            active && styles.optionChipActive,
-                            locked && !active && styles.optionChipDisabled,
-                          ]}
-                          onPress={() => selectStatus(item.marketProductId, option.id)}
-                        >
-                          <Ionicons
-                            name={option.icon}
-                            size={15}
-                            color={active ? Colors.primaryText : Colors.textMuted}
-                          />
-                          <Text style={[styles.optionText, active && styles.optionTextActive]}>{option.label}</Text>
-                        </Pressable>
-                      );
-                    })}
+                  <View style={styles.orderCopy}>
+                    <Text style={styles.restaurantName} numberOfLines={1}>{order.restaurantName}</Text>
+                    <Text numeric style={styles.orderCode}>{shortCode('ĐH', order.orderId)}</Text>
                   </View>
-
-                  {hasIssue ? (
-                    <View style={styles.issueForm}>
-                      <View style={styles.quantityInputRow}>
-                        <View style={styles.inputCopy}>
-                          <Text style={styles.inputLabel}>Số lượng ảnh hưởng</Text>
-                          <Text style={styles.inputHint}>
-                            Tối đa {formatQuantity(orderLines.reduce((sum, line) => sum + line.quantity, 0))} trong đơn
-                          </Text>
-                        </View>
-                        <View style={styles.quantityInputWrap}>
-                          <TextInput
-                            value={review.affectedQuantity}
-                            editable={!locked}
-                            onChangeText={(value) => updateReview(item.marketProductId, {
-                              affectedQuantity: value.replace(/[^0-9.,]/g, ''),
-                            })}
-                            keyboardType="decimal-pad"
-                            onFocus={() => scrollToIssueField(item.marketProductId, 70)}
-                            placeholder="0"
-                            placeholderTextColor={Colors.textMuted}
-                            style={styles.quantityInput}
-                          />
-                          <Text style={styles.quantityUnit}>{orderLines[0]?.unit?.trim() || 'đơn vị'}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.inputLabel}>Mô tả tình trạng</Text>
-                      <TextInput
-                        value={review.notes}
-                        editable={!locked}
-                        onChangeText={(notes) => updateReview(item.marketProductId, { notes })}
-                        onFocus={() => scrollToIssueField(item.marketProductId, 145)}
-                        placeholder={review.status === 'WRONG_ITEM'
-                          ? 'Ghi rõ mặt hàng thực tế nhận sai...'
-                          : 'Tình trạng và cách xử lý tạm thời...'}
-                        placeholderTextColor={Colors.textMuted}
-                        multiline
-                        textAlignVertical="top"
-                        maxLength={500}
-                        style={styles.notesInput}
-                      />
-                      <Text style={styles.restaurantHint}>
-                        {persisted
-                          ? review.serverStatus === 'ACKNOWLEDGED'
-                            ? 'Admin/Operations đã xác nhận discrepancy.'
-                            : 'Đã gửi Admin/Operations · trạng thái OPEN.'
-                          : loadingBatch
-                          ? 'Đang đối chiếu dữ liệu...'
-                          : orderLines.length > 0
-                            ? `${orderLines.length} dòng đơn liên quan sẽ được gửi Admin.`
-                            : 'Chưa tìm thấy dòng đơn tương ứng.'}
-                      </Text>
-                    </View>
-                  ) : null}
+                  <Text numeric style={styles.orderItemCount}>{order.items.length} dòng</Text>
                 </View>
-              );
-            })}
+
+                <View style={styles.orderItems}>
+                  {order.items.map((item, itemIndex) => {
+                    const line: OrderLine = {
+                      orderId: order.orderId,
+                      orderItemId: item.orderItemId,
+                      restaurantName: order.restaurantName,
+                      marketProductId: item.marketProductId ?? '',
+                      productName: item.productName,
+                      quantity: item.quantity,
+                      unit: item.unit,
+                    };
+                    const review = reviews[line.orderItemId] ?? {
+                      status: 'PENDING' as const,
+                      affectedQuantity: '',
+                      notes: '',
+                    };
+                    const hasIssue = review.status !== 'PENDING' && review.status !== 'OK';
+                    const persisted = review.persisted === true;
+                    const locked = readOnly || persisted;
+                    const visibleReviewOptions = readOnly
+                      ? REVIEW_OPTIONS.filter((option) => option.id === review.status)
+                      : REVIEW_OPTIONS;
+
+                    return (
+                      <View
+                        key={line.orderItemId}
+                        style={[styles.productCard, hasIssue && styles.productCardIssue]}
+                        onLayout={(event) => {
+                          productCardOffsets.current[line.orderItemId] =
+                            (orderGroupOffsets.current[order.orderId] ?? 0) + event.nativeEvent.layout.y;
+                        }}
+                      >
+                        <View style={styles.productHeader}>
+                          <View style={[styles.productIndex, hasIssue && styles.productIndexIssue]}>
+                            <Text numeric style={styles.productIndexText}>{itemIndex + 1}</Text>
+                          </View>
+                          <View style={styles.productCopy}>
+                            <Text style={styles.productName}>{line.productName}</Text>
+                            <Text numeric style={styles.expectedText}>
+                              Theo đơn: {formatQuantity(line.quantity)} {line.unit?.trim() || 'đơn vị'}
+                            </Text>
+                          </View>
+                          {persisted ? (
+                            <View style={[
+                              styles.savedBadge,
+                              review.serverStatus === 'ACKNOWLEDGED' && styles.savedBadgeDone,
+                            ]}>
+                              <Text style={styles.savedBadgeText}>
+                                {review.serverStatus === 'ACKNOWLEDGED' ? 'Đã xác nhận' : 'Chờ Admin'}
+                              </Text>
+                            </View>
+                          ) : review.status === 'PENDING' ? (
+                            <Text style={styles.pendingLabel}>{readOnly ? 'Chưa tải' : 'Chưa kiểm'}</Text>
+                          ) : hasIssue ? (
+                            <Ionicons name="alert-circle" size={22} color={Colors.warning} />
+                          ) : (
+                            <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
+                          )}
+                        </View>
+
+                        <View style={styles.optionGrid}>
+                          {visibleReviewOptions.map((option) => {
+                            const active = review.status === option.id;
+                            return (
+                              <Pressable
+                                key={option.id}
+                                disabled={locked}
+                                style={[
+                                  styles.optionChip,
+                                  active && styles.optionChipActive,
+                                  locked && !active && styles.optionChipDisabled,
+                                ]}
+                                onPress={() => selectStatus(line.orderItemId, option.id)}
+                              >
+                                <Ionicons
+                                  name={option.icon}
+                                  size={15}
+                                  color={active ? Colors.primaryText : Colors.textMuted}
+                                />
+                                <Text style={[styles.optionText, active && styles.optionTextActive]}>{option.label}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+
+                        {hasIssue ? (
+                          <View style={styles.issueForm}>
+                            <View style={styles.quantityInputRow}>
+                              <View style={styles.inputCopy}>
+                                <Text style={styles.inputLabel}>Số lượng ảnh hưởng</Text>
+                                <Text style={styles.inputHint}>
+                                  Tối đa {formatQuantity(line.quantity)} trong đơn này
+                                </Text>
+                              </View>
+                              <View style={styles.quantityInputWrap}>
+                                <TextInput
+                                  value={review.affectedQuantity}
+                                  editable={!locked}
+                                  onChangeText={(value) => updateReview(line.orderItemId, {
+                                    affectedQuantity: value.replace(/[^0-9.,]/g, ''),
+                                  })}
+                                  keyboardType="decimal-pad"
+                                  onFocus={() => scrollToIssueField(line.orderItemId, 70)}
+                                  placeholder="0"
+                                  placeholderTextColor={Colors.textMuted}
+                                  style={styles.quantityInput}
+                                />
+                                <Text style={styles.quantityUnit}>{line.unit?.trim() || 'đơn vị'}</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.inputLabel}>Mô tả tình trạng</Text>
+                            <TextInput
+                              value={review.notes}
+                              editable={!locked}
+                              onChangeText={(notes) => updateReview(line.orderItemId, { notes })}
+                              onFocus={() => scrollToIssueField(line.orderItemId, 145)}
+                              placeholder={review.status === 'WRONG_ITEM'
+                                ? 'Ghi rõ mặt hàng thực tế nhận sai...'
+                                : 'Tình trạng và cách xử lý tạm thời...'}
+                              placeholderTextColor={Colors.textMuted}
+                              multiline
+                              textAlignVertical="top"
+                              maxLength={500}
+                              style={styles.notesInput}
+                            />
+                            <Text style={styles.restaurantHint}>
+                              {persisted
+                                ? review.serverStatus === 'ACKNOWLEDGED'
+                                  ? 'Admin/Operations đã xác nhận discrepancy.'
+                                  : 'Đã gửi Admin/Operations · trạng thái OPEN.'
+                                : `${shortCode('ĐH', line.orderId)} · ${line.restaurantName}`}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
           </View>
 
           {!readOnly && issueValidationError ? (
@@ -600,7 +599,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
           <View style={styles.footerSummary}>
             <Text style={styles.footerLabel}>Kết quả</Text>
             <Text numeric style={styles.footerValue}>
-              {issueItems.length > 0 ? `${issueItems.length} cần xử lý` : `${checkedCount}/${task.items.length} đã kiểm`}
+              {issueItems.length > 0 ? `${issueItems.length} cần xử lý` : `${checkedCount}/${orderLines.length} đã kiểm`}
             </Text>
           </View>
           <Pressable
@@ -622,7 +621,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                 ? 'Đóng'
                 : submitting
                 ? 'Đang lưu...'
-                : issueItems.some((item) => !reviews[item.marketProductId].persisted)
+                : issueItems.some((line) => !reviews[line.orderItemId]?.persisted)
                   ? 'Xác nhận lô & gửi Admin'
                   : received
                     ? 'Đóng kết quả'
@@ -685,6 +684,15 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.deepTeal },
   sectionSubtitle: { fontSize: 10, color: Colors.textMuted, marginTop: 3 },
   productList: { gap: 10 },
+  orderGroup: { borderRadius: 15, borderWidth: 1, borderColor: Colors.outlineVariant, backgroundColor: Colors.surfaceContainerLow, overflow: 'hidden' },
+  orderHeader: { minHeight: 68, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: Colors.surface },
+  orderIndexBadge: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.secondaryContainer, alignItems: 'center', justifyContent: 'center' },
+  orderIndexText: { fontSize: 12, fontFamily: Fonts.monoBold, color: Colors.deepTeal },
+  orderCopy: { flex: 1, minWidth: 0, paddingHorizontal: 9 },
+  restaurantName: { fontSize: 12, fontWeight: '800', color: Colors.textPrimary },
+  orderCode: { fontSize: 9, fontFamily: Fonts.monoMedium, color: Colors.textMuted, marginTop: 3 },
+  orderItemCount: { fontSize: 9, fontFamily: Fonts.monoMedium, color: Colors.primaryText },
+  orderItems: { padding: 9, gap: 8 },
   productCard: { borderRadius: 14, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, padding: 13, elevation: 1 },
   productCardIssue: { borderColor: '#D9B967', backgroundColor: '#FFFCF4' },
   productHeader: { flexDirection: 'row', alignItems: 'center' },

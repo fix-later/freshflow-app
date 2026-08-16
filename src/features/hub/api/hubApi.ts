@@ -149,16 +149,32 @@ export interface HubOrderLineDto {
   orderId: string;
   orderItemId: string;
   productName: string;
+  marketProductId: string;
+  productId: string;
   quantity: number;
   capacityKg: number | null;
+  orderedQuantity: number;
+  packingCode: string | null;
+  packageCount: number | null;
+  sortedQuantityKg: number;
+  remainingQuantityKg: number;
+  status: string;
   /** Enriched by the App from the market-product catalog. */
   unit?: string | null;
+}
+
+export interface HubSortingOrderDto {
+  orderId: string;
+  status: string;
+  lines: HubOrderLineDto[];
 }
 
 export interface HubRestaurantOrdersDto {
   restaurantId: string;
   restaurantName: string;
   orderCount: number;
+  orders: HubSortingOrderDto[];
+  /** Flattened compatibility view used by the sorting screen. */
   lines: HubOrderLineDto[];
 }
 
@@ -206,11 +222,79 @@ async function getOrdersByRestaurant(
   serviceDate: string,
   includeBatched: boolean,
 ): Promise<HubOrdersByRestaurantDto> {
-  const { data } = await apiClient.get<HubOrdersByRestaurantDto>(
+  interface BackendOrderItemDto {
+    orderItemId: string;
+    productName: string;
+    marketProductId: string;
+    productId: string;
+    unit: string | null;
+    orderedQuantity: number;
+    requiredQuantity: number;
+    packingCode: string | null;
+    packingCapacityKg: number | null;
+    packageCount: number | null;
+    sortedQuantityKg: number;
+    remainingQuantityKg: number;
+    status: string;
+  }
+
+  interface BackendOrderDto {
+    orderId: string;
+    status: string;
+    items: BackendOrderItemDto[];
+  }
+
+  interface BackendRestaurantDto {
+    restaurantId: string;
+    restaurantName: string;
+    orderCount: number;
+    orders: BackendOrderDto[];
+  }
+
+  interface BackendResponseDto {
+    hubId: string;
+    serviceDate: string;
+    restaurants: BackendRestaurantDto[];
+  }
+
+  const { data } = await apiClient.get<BackendResponseDto>(
     `/api/v1/hubs/${hubId}/orders-by-restaurant`,
     { params: { service_date: serviceDate, include_batched: includeBatched } },
   );
-  return data;
+
+  return {
+    ...data,
+    restaurants: data.restaurants.map((restaurant) => {
+      const orders = restaurant.orders.map((order): HubSortingOrderDto => ({
+        orderId: order.orderId,
+        status: order.status,
+        lines: order.items.map((item): HubOrderLineDto => ({
+          orderId: order.orderId,
+          orderItemId: item.orderItemId,
+          productName: item.productName,
+          marketProductId: item.marketProductId,
+          productId: item.productId,
+          quantity: item.requiredQuantity,
+          capacityKg: item.packingCapacityKg,
+          orderedQuantity: item.orderedQuantity,
+          packingCode: item.packingCode,
+          packageCount: item.packageCount,
+          sortedQuantityKg: item.sortedQuantityKg,
+          remainingQuantityKg: item.remainingQuantityKg,
+          status: item.status,
+          unit: item.unit,
+        })),
+      }));
+
+      return {
+        restaurantId: restaurant.restaurantId,
+        restaurantName: restaurant.restaurantName,
+        orderCount: restaurant.orderCount,
+        orders,
+        lines: orders.flatMap((order) => order.lines),
+      };
+    }),
+  };
 }
 
 function enrichRestaurantOrders(
@@ -221,6 +305,13 @@ function enrichRestaurantOrders(
     ...value,
     restaurants: value.restaurants.map((restaurant) => ({
       ...restaurant,
+      orders: restaurant.orders.map((order) => ({
+        ...order,
+        lines: order.lines.map((line) => ({
+          ...line,
+          unit: line.unit ?? findUnitByProductName(catalog, line.productName),
+        })),
+      })),
       lines: restaurant.lines.map((line) => ({
         ...line,
         unit: line.unit ?? findUnitByProductName(catalog, line.productName),
@@ -234,21 +325,15 @@ function mapProcurementOrders(
 ): ReadonlyMap<string, HubProcurementOrderDto> {
   const result = new Map<string, HubProcurementOrderDto>();
   details?.restaurants.forEach((restaurant) => {
-    const linesByOrder = new Map<string, HubOrderLineDto[]>();
-    restaurant.lines.forEach((line) => {
-      const lines = linesByOrder.get(line.orderId) ?? [];
-      lines.push(line);
-      linesByOrder.set(line.orderId, lines);
-    });
-    linesByOrder.forEach((lines, orderId) => {
-      result.set(orderId, {
-        orderId,
+    restaurant.orders.forEach((order) => {
+      result.set(order.orderId, {
+        orderId: order.orderId,
         restaurantId: restaurant.restaurantId,
         restaurantName: restaurant.restaurantName,
         deliveryOrder: null,
-        items: lines.map((line) => ({
+        items: order.lines.map((line) => ({
           orderItemId: line.orderItemId,
-          marketProductId: null,
+          marketProductId: line.marketProductId,
           productName: line.productName,
           quantity: line.quantity,
           unit: line.unit ?? null,
