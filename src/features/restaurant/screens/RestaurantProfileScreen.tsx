@@ -680,7 +680,7 @@ export function RestaurantProfileScreen() {
                 <View style={styles.navIcon}>
                   <Ionicons name="location-outline" size={18} color={Colors.primary} />
                 </View>
-                <View style={{ gap: 1 }}>
+                <View style={{ flex: 1, gap: 1, paddingRight: 4 }}>
                   <Text style={styles.navRowTitle}>Địa chỉ giao hàng</Text>
                   <Text style={styles.navRowSub}>Quản lý địa chỉ và toạ độ GPS</Text>
                 </View>
@@ -699,9 +699,28 @@ export function RestaurantProfileScreen() {
                 <View style={styles.navIcon}>
                   <Ionicons name="receipt-outline" size={18} color={Colors.primary} />
                 </View>
-                <View style={{ gap: 1 }}>
+                <View style={{ flex: 1, gap: 1, paddingRight: 4 }}>
                   <Text style={styles.navRowTitle}>Hóa đơn VAT</Text>
                   <Text style={styles.navRowSub}>Xem hóa đơn điện tử đã phát hành</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            </View>
+          </Pressable>
+
+          {/* ─── Claims list card ──────────────────── */}
+          <Pressable
+            style={styles.card}
+            onPress={() => navigation.navigate('ClaimsList')}
+          >
+            <View style={styles.navRow}>
+              <View style={styles.navRowLeft}>
+                <View style={styles.navIcon}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={Colors.primary} />
+                </View>
+                <View style={{ flex: 1, gap: 1, paddingRight: 4 }}>
+                  <Text style={styles.navRowTitle}>Quản lý khiếu nại đền bù</Text>
+                  <Text style={styles.navRowSub}>Theo dõi trạng thái đền bù hoàn tiền các đơn hàng</Text>
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />

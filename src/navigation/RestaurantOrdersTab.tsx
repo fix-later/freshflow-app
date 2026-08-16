@@ -9,6 +9,7 @@ import { ConfirmOrderScreen } from '../features/orders/screens/ConfirmOrderScree
 import { OrderDetailScreen } from '../features/orders/screens/OrderDetailScreen';
 import { OrderHistoryScreen } from '../features/orders/screens/OrderHistoryScreen';
 import { ReportIssueScreen } from '../features/orders/screens/ReportIssueScreen';
+import { ClaimsListScreen } from '../features/claims/screens/ClaimsListScreen';
 import { CreateRecurringOrderScreen } from '../features/orders/screens/CreateRecurringOrderScreen';
 import { ManageRecurringOrdersScreen } from '../features/orders/screens/ManageRecurringOrdersScreen';
 import { ScheduledOrderInstancesScreen } from '../features/orders/screens/ScheduledOrderInstancesScreen';
@@ -82,6 +83,11 @@ export function RestaurantOrdersTab() {
         name="ReportIssue"
         component={ReportIssueScreen}
         options={{ title: 'Báo sự cố' }}
+      />
+      <Stack.Screen
+        name="ClaimsList"
+        component={ClaimsListScreen}
+        options={{ title: 'Lịch sử khiếu nại đền bù' }}
       />
       <Stack.Screen
         name="CreateRecurringOrder"

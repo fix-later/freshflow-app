@@ -35,6 +35,11 @@ function dataString(data: Record<string, unknown>, key: string): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function formatNotificationBody(body: string): string {
+  if (!body) return '';
+  return body.replace(/\b([a-f0-9]{8})-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b/gi, (_, p1) => `#${p1.toUpperCase()}`);
+}
+
 export function NotificationProvider({ children }: PropsWithChildren) {
   const { user, token, isAuthenticated } = useAuthStore();
   const [notifications, setNotifications] = useState<NotificationDto[]>([]);
@@ -318,7 +323,7 @@ export function NotificationProvider({ children }: PropsWithChildren) {
             }}
           >
             <Text style={styles.toastTitle} numberOfLines={1}>{toast.title}</Text>
-            <Text style={styles.toastBody} numberOfLines={2}>{toast.body}</Text>
+            <Text style={styles.toastBody} numberOfLines={2}>{formatNotificationBody(toast.body)}</Text>
           </Pressable>
         ) : null}
       </View>

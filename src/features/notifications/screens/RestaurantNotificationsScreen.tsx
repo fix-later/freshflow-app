@@ -35,6 +35,11 @@ function notificationIcon(type: string): keyof typeof Ionicons.glyphMap {
   }
 }
 
+function formatNotificationBody(body: string): string {
+  if (!body) return '';
+  return body.replace(/\b([a-f0-9]{8})-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b/gi, (_, p1) => `#${p1.toUpperCase()}`);
+}
+
 export function RestaurantNotificationsScreen() {
   const {
     notifications,
@@ -117,7 +122,7 @@ export function RestaurantNotificationsScreen() {
                 <Text style={styles.title}>{item.title}</Text>
                 {!item.isRead ? <View style={styles.unreadDot} /> : null}
               </View>
-              <Text style={styles.body}>{item.body}</Text>
+              <Text style={styles.body}>{formatNotificationBody(item.body)}</Text>
               <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
             </View>
           </Pressable>

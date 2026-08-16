@@ -12,6 +12,8 @@ import { CreditOverviewScreen } from '../features/credit/screens/CreditOverviewS
 import { CreditStatementsScreen } from '../features/credit/screens/CreditStatementsScreen';
 import { InvoiceListScreen } from '../features/invoices/screens/InvoiceListScreen';
 import { InvoiceDetailScreen } from '../features/invoices/screens/InvoiceDetailScreen';
+import { ClaimsListScreen } from '../features/claims/screens/ClaimsListScreen';
+import { OrderDetailScreen } from '../features/orders/screens/OrderDetailScreen';
 import { type RestaurantProfileStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RestaurantProfileStackParamList>();
@@ -72,6 +74,16 @@ export function RestaurantProfileTab() {
         name="InvoiceDetail"
         component={InvoiceDetailScreen}
         options={{ title: 'Chi tiết hóa đơn' }}
+      />
+      <Stack.Screen
+        name="ClaimsList"
+        component={ClaimsListScreen}
+        options={{ title: 'Lịch sử khiếu nại đền bù' }}
+      />
+      <Stack.Screen
+        name="OrderDetail"
+        component={OrderDetailScreen}
+        options={{ title: 'Chi tiết đơn hàng' }}
       />
     </Stack.Navigator>
   );

@@ -5,6 +5,7 @@ import {
 } from '@microsoft/signalr';
 import { ENV, isDev } from '../../../config/env';
 import { getValidAccessToken } from '../../../services/api/client';
+import { FilteredSignalRLogger } from '../../../utils/signalr';
 import type { NotificationDto } from '../api/notificationApi';
 
 export function isNotificationDto(value: unknown): value is NotificationDto {
@@ -31,7 +32,7 @@ export function createNotificationConnection(
       accessTokenFactory: getValidAccessToken,
     })
     .withAutomaticReconnect([0, 2_000, 5_000, 10_000, 30_000])
-    .configureLogging(isDev ? LogLevel.Warning : LogLevel.Error)
+    .configureLogging(new FilteredSignalRLogger(isDev ? LogLevel.Warning : LogLevel.Error))
     .build();
 
   connection.on('NotificationCreated', (payload: unknown) => {

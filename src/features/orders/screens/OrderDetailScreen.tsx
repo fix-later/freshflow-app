@@ -38,6 +38,13 @@ import { createOrderStatusConnection } from '../realtime/orderRealtime';
 import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
 import { stopAfterStart } from '../../../utils/signalr';
 import { describeApiCode, getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import {
+  claimsApi,
+  CLAIM_STATUS_COLOR,
+  CLAIM_STATUS_LABEL,
+  type OrderClaimDto,
+} from '../../claims/api/claimsApi';
+import { FileClaimModal } from '../../claims/components/FileClaimModal';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'OrderDetail'>;
 
@@ -129,9 +136,6 @@ function ItemRow({
         {item.actualQuantity !== null && item.actualQuantity !== quantity ? (
           <Text style={styles.actualQuantity}>Thực nhận: {item.actualQuantity}</Text>
         ) : null}
-        {item.actualUnitPrice !== null && item.actualUnitPrice !== unitPrice ? (
-          <Text style={styles.actualQuantity}>Giá thực tế: {item.actualUnitPrice.toLocaleString('vi-VN')}đ</Text>
-        ) : null}
         {item.vatRatePercent !== null && item.vatRatePercent > 0 ? (
           <Text style={styles.itemVatText}>
             VAT ({item.vatRatePercent}%){item.vatAmount !== null ? `: ${item.vatAmount.toLocaleString('vi-VN')}đ` : ''}
@@ -187,6 +191,8 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const [reordering, setReordering] = useState(false);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [deliveryAddresses, setDeliveryAddresses] = useState<DeliveryAddressDto[] | null>(null);
+  const [fileClaimModalVisible, setFileClaimModalVisible] = useState(false);
+  const [orderClaims, setOrderClaims] = useState<OrderClaimDto[]>([]);
 
   // BE returns addresses sorted default-first — the first entry is always the right preselect.
   const selectedAddress = deliveryAddresses?.[0] ?? null;
@@ -236,6 +242,13 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     try {
       const data = await orderApi.getById(orderId);
       setOrder(data);
+      // Fetch claims for this order
+      claimsApi
+        .listClaims({ pageSize: 100 })
+        .then((res) => {
+          setOrderClaims(res.items.filter((c) => c.orderId === orderId));
+        })
+        .catch(() => setOrderClaims([]));
     } catch {
       setError('Không thể tải chi tiết đơn hàng');
     } finally {
@@ -255,7 +268,14 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         if (event.orderId === orderId) fetchOrder();
       });
       const startAttempt = connection.start().catch((connectionError) => {
-        console.warn('Order detail realtime connection failed:', connectionError);
+        const msg = String(connectionError);
+        if (
+          !msg.includes('stopped during negotiation') &&
+          !msg.includes('Failed to start') &&
+          !msg.includes('Server timeout')
+        ) {
+          console.warn('Order detail realtime connection failed:', connectionError);
+        }
       });
 
       return () => {
@@ -451,6 +471,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const canConfirmOrder = order.status === 'draft' && items.length > 0;
   const canConfirmReceipt = order.status === 'delivered' && !order.confirmedReceiptAt;
   const canReportIssue = order.status === 'delivered';
+  const canFileClaim = order.status === 'at_hub' || order.status === 'delivered';
   const canReorder = items.length > 0;
 
   return (
@@ -596,6 +617,95 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           </>
         ) : null}
 
+        {/* ── Filed Claims ── */}
+        {orderClaims.length > 0 ? (
+          <>
+            <Text style={styles.sectionTitle}>Yêu cầu khiếu nại đền bù ({orderClaims.length})</Text>
+            <View style={styles.claimsContainer}>
+              {orderClaims.map((claim) => {
+                const statusLower = (claim.status || '').toLowerCase();
+                const isApproved = statusLower === 'approved';
+                const isRejected = statusLower === 'rejected';
+                const statusLabel = CLAIM_STATUS_LABEL[claim.status] || claim.status;
+                const statusColor = CLAIM_STATUS_COLOR[claim.status] || Colors.textMuted;
+
+                const borderColor = isApproved ? '#10B981' : isRejected ? '#EF4444' : '#F59E0B';
+
+                return (
+                  <View key={claim.claimId} style={[styles.claimCardItem, { borderLeftColor: borderColor }]}>
+                    {/* Header Row: Icon + Title + Status Pill */}
+                    <View style={styles.claimCardHeaderRow}>
+                      <View style={styles.claimHeaderLeft}>
+                        <View style={[styles.claimIconWrap, { backgroundColor: statusColor + '18' }]}>
+                          <Ionicons
+                            name={isApproved ? 'shield-checkmark' : isRejected ? 'alert-circle' : 'time'}
+                            size={16}
+                            color={statusColor}
+                          />
+                        </View>
+                        <Text style={styles.claimCardTitle}>
+                          {isApproved ? 'Đã duyệt đền bù' : isRejected ? 'Khiếu nại bị từ chối' : 'Khiếu nại đang chờ xử lý'}
+                        </Text>
+                      </View>
+
+                      <View style={[styles.claimStatusBadge, { backgroundColor: statusColor + '15', borderColor: statusColor + '30' }]}>
+                        <Text style={[styles.claimStatusBadgeText, { color: statusColor }]}>{statusLabel}</Text>
+                      </View>
+                    </View>
+
+                    {/* Divider */}
+                    <View style={styles.claimDivider} />
+
+                    {/* Amount Block */}
+                    <View style={styles.claimAmountBlock}>
+                      <Text style={styles.claimAmountLabel}>Số tiền yêu cầu đền bù:</Text>
+                      <Text style={[styles.claimAmountVal, { color: isApproved ? '#059669' : Colors.textPrimary }]}>
+                        {(claim.amount ?? 0).toLocaleString('vi-VN')}đ
+                      </Text>
+                    </View>
+
+                    {/* Reason Box */}
+                    <View style={styles.claimReasonBox}>
+                      <Text style={styles.claimReasonLabel}>Lý do khiếu nại:</Text>
+                      <Text style={styles.claimReasonVal}>{claim.reason}</Text>
+                    </View>
+
+                    {/* Admin Response Alert */}
+                    {claim.decisionNote ? (
+                      <View
+                        style={[
+                          styles.claimDecisionAlert,
+                          isApproved ? styles.decisionApprovedAlert : styles.decisionRejectedAlert,
+                        ]}
+                      >
+                        <Ionicons
+                          name={isApproved ? 'checkmark-circle' : 'close-circle'}
+                          size={16}
+                          color={isApproved ? '#047857' : '#B91C1C'}
+                        />
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Text style={[styles.decisionAlertTitle, { color: isApproved ? '#047857' : '#B91C1C' }]}>
+                            Phản hồi từ Admin:
+                          </Text>
+                          <Text style={[styles.decisionAlertText, { color: isApproved ? '#065F46' : '#991B1B' }]}>
+                            {claim.decisionNote}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
+
+                    {/* Footer Date */}
+                    <View style={styles.claimFooterRow}>
+                      <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
+                      <Text style={styles.claimFooterTime}>Ngày gửi: {formatDateTime(claim.createdAt)}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+
         {/* ── Summary ── */}
         <Text style={styles.sectionTitle}>Tóm tắt</Text>
         <View style={styles.card}>
@@ -724,10 +834,16 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         </View>
       ) : null}
 
-      {/* ── Confirm receipt / report issue footer ── */}
-      {canConfirmReceipt || canReportIssue ? (
+      {/* ── Confirm receipt / report issue / claim footer ── */}
+      {canConfirmReceipt || canReportIssue || canFileClaim ? (
         <View style={styles.footer}>
           <View style={styles.footerRow}>
+            {canFileClaim ? (
+              <Pressable style={styles.claimBtn} onPress={() => setFileClaimModalVisible(true)}>
+                <Ionicons name="shield-checkmark-outline" size={18} color="#1D4ED8" />
+                <Text style={styles.claimBtnText}>Khiếu nại đền bù</Text>
+              </Pressable>
+            ) : null}
             {canReportIssue ? (
               <Pressable style={styles.reportIssueBtn} onPress={() => navigation.navigate('ReportIssue', { orderId })}>
                 <Ionicons name="alert-circle-outline" size={18} color={Colors.warning} />
@@ -753,6 +869,21 @@ export function OrderDetailScreen({ route, navigation }: Props) {
             ) : null}
           </View>
         </View>
+      ) : null}
+
+      {/* ── File Claim Modal ── */}
+      {order ? (
+        <FileClaimModal
+          visible={fileClaimModalVisible}
+          orderId={order.orderId}
+          orderCode={code}
+          totalAmount={order.totalAmount}
+          onClose={() => setFileClaimModalVisible(false)}
+          onSuccess={(newClaim) => {
+            setFileClaimModalVisible(false);
+            setOrderClaims((prev) => [newClaim, ...prev]);
+          }}
+        />
       ) : null}
 
       {/* ── Cancel confirmation modal ── */}
@@ -1228,5 +1359,148 @@ const styles = StyleSheet.create({
   proofModalImage: {
     width: '92%',
     height: '80%',
+  },
+  claimBtn: {
+    flex: 1,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+  },
+  claimBtnText: {
+    color: '#1D4ED8',
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+  },
+  claimsContainer: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  claimCardItem: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderLeftWidth: 4,
+    padding: 14,
+    gap: 10,
+    shadowColor: Colors.deepTeal,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  claimCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  claimHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  claimIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  claimCardTitle: {
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+    color: Colors.textPrimary,
+  },
+  claimStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  claimStatusBadgeText: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+  },
+  claimDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  claimAmountBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surfaceContainerLow,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  claimAmountLabel: {
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    color: Colors.textMuted,
+  },
+  claimAmountVal: {
+    fontSize: 16,
+    fontFamily: Fonts.monoBold,
+  },
+  claimReasonBox: {
+    gap: 3,
+    paddingHorizontal: 2,
+  },
+  claimReasonLabel: {
+    fontSize: 11,
+    fontFamily: Fonts.semibold,
+    color: Colors.textMuted,
+  },
+  claimReasonVal: {
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+    color: Colors.textPrimary,
+    lineHeight: 18,
+  },
+  claimDecisionAlert: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  decisionApprovedAlert: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#6EE7B7',
+  },
+  decisionRejectedAlert: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FCA5A5',
+  },
+  decisionAlertTitle: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+  },
+  decisionAlertText: {
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    lineHeight: 17,
+  },
+  claimFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingTop: 2,
+  },
+  claimFooterTime: {
+    fontSize: 11,
+    fontFamily: Fonts.medium,
+    color: Colors.textMuted,
   },
 });

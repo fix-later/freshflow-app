@@ -9,6 +9,7 @@ import { ManageRecurringOrdersScreen } from '../features/orders/screens/ManageRe
 import { OrderDetailScreen } from '../features/orders/screens/OrderDetailScreen';
 import { OrderHistoryScreen } from '../features/orders/screens/OrderHistoryScreen';
 import { ReportIssueScreen } from '../features/orders/screens/ReportIssueScreen';
+import { ClaimsListScreen } from '../features/claims/screens/ClaimsListScreen';
 import { ScheduledOrderInstancesScreen } from '../features/orders/screens/ScheduledOrderInstancesScreen';
 import { DeliveryAddressesScreen } from '../features/restaurant/screens/DeliveryAddressesScreen';
 import { Colors } from '../constants/colors';
@@ -58,6 +59,11 @@ export function RestaurantOrderManagementTab() {
         name="ReportIssue"
         component={ReportIssueScreen}
         options={{ title: 'Báo sự cố' }}
+      />
+      <Stack.Screen
+        name="ClaimsList"
+        component={ClaimsListScreen}
+        options={{ title: 'Lịch sử khiếu nại đền bù' }}
       />
       <Stack.Screen
         name="CreateRecurringOrder"

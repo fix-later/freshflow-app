@@ -59,6 +59,8 @@ export type RestaurantProfileStackParamList = {
   CreditStatements: { restaurantId: string };
   Invoices: undefined;
   InvoiceDetail: { invoiceId: string };
+  ClaimsList: undefined;
+  OrderDetail: { orderId: string };
 };
 
 export type CreateOrderItem = {
@@ -87,6 +89,7 @@ export type RestaurantOrdersStackParamList = {
   AddDraftOrderItem: { orderId: string };
   OrderHistory: undefined;
   ReportIssue: { orderId: string };
+  ClaimsList: undefined;
   CreateRecurringOrder:
     | {
         scheduledOrderId?: string;
