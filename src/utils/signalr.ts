@@ -22,22 +22,11 @@ export class FilteredSignalRLogger implements ILogger {
   log(logLevel: LogLevel, message: string): void {
     if (logLevel < this._minLevel) return;
 
-    // Suppress expected harmless races & network timeout disconnects
-    // (SignalR automatic reconnect will handle reconnecting smoothly in the background)
-    if (
-      message.includes('stopped during negotiation') ||
-      message.includes('Failed to start the HttpConnection') ||
-      message.includes('Failed to start the connection') ||
-      message.includes('Server timeout elapsed') ||
-      message.includes('Connection disconnected with error')
-    ) {
-      return;
-    }
-
-    if (logLevel >= LogLevel.Error) {
-      console.error(`[SignalR] ${message}`);
-    } else if (logLevel >= LogLevel.Warning) {
-      console.warn(`[SignalR] ${message}`);
+    // Route ALL SignalR background logs and reconnect errors through console.warn (never console.error)
+    // so Expo LogBox red screen overlay NEVER pops up on the user device UI.
+    if (__DEV__) {
+      const cleanMsg = message.replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
+      console.warn(`[SignalR Auto-Reconnect] ${cleanMsg.slice(0, 150)}`);
     }
   }
 }
