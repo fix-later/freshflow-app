@@ -56,7 +56,7 @@ export type RestaurantProfileStackParamList = {
   RestaurantPolicy: undefined;
   DeliveryAddresses: undefined;
   CreditOverview: undefined;
-  CreditStatements: { restaurantId: string };
+  CreditStatements: { restaurantId?: string } | undefined;
   Invoices: undefined;
   InvoiceDetail: { invoiceId: string };
   ClaimsList: undefined;

@@ -24,6 +24,7 @@ import {
   type CreditStatementLineDto,
   type CreditStatementSummaryDto,
 } from '../api/creditApi';
+import { restaurantApi } from '../../restaurant/api/restaurantApi';
 import { type RestaurantProfileStackParamList } from '../../../navigation/types';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 
@@ -52,14 +53,11 @@ function formatPeriod(start: string, end: string) {
 }
 
 function formatMonthTitle(periodStart: string) {
-  // formatToParts didn't reliably return 'month'/'year' parts here (returned
-  // empty, causing "Tháng /"). toLocaleDateString's plain D/M/YYYY output
-  // does work (see formatPeriod/generatedAt above), so parse the month/year
-  // out of that instead — confirmed working on-device.
-  const [, month, year] = new Date(periodStart)
-    .toLocaleDateString('vi-VN', { timeZone: VN_TIMEZONE })
-    .split('/');
-  return `Tháng ${(month ?? '').padStart(2, '0')}/${year ?? ''}`;
+  const d = new Date(periodStart);
+  if (Number.isNaN(d.getTime())) return 'Tháng —';
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const year = d.getFullYear();
+  return `Tháng ${month}/${year}`;
 }
 
 function base64ArrayBuffer(arrayBuffer: ArrayBuffer): string {
@@ -166,7 +164,8 @@ function StatementCard({
 }
 
 export function CreditStatementsScreen({ route }: Props) {
-  const { restaurantId } = route.params;
+  const routeRestaurantId = route.params?.restaurantId;
+  const [activeRestaurantId, setActiveRestaurantId] = useState<string | null>(routeRestaurantId ?? null);
 
   const [statements, setStatements] = useState<CreditStatementSummaryDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -191,9 +190,30 @@ export function CreditStatementsScreen({ route }: Props) {
   const defaultTargetYear = prevMonthDate.getFullYear();
   const defaultTargetMonth = prevMonthDate.getMonth() + 1;
 
+  const resolveRestaurantId = useCallback(async (): Promise<string | null> => {
+    if (activeRestaurantId) return activeRestaurantId;
+    if (routeRestaurantId) {
+      setActiveRestaurantId(routeRestaurantId);
+      return routeRestaurantId;
+    }
+    try {
+      const approval = await restaurantApi.getApprovalStatus();
+      const id = approval.restaurantId;
+      if (id) setActiveRestaurantId(id);
+      return id;
+    } catch {
+      return null;
+    }
+  }, [activeRestaurantId, routeRestaurantId]);
+
   const load = useCallback(async () => {
     try {
-      const res = await creditApi.getStatements(restaurantId, {
+      const targetId = await resolveRestaurantId();
+      if (!targetId) {
+        setError('Không tìm thấy thông tin nhà hàng');
+        return;
+      }
+      const res = await creditApi.getStatements(targetId, {
         pageSize: STATEMENT_PAGE_SIZE,
       });
       setStatements(res.data);
@@ -206,7 +226,7 @@ export function CreditStatementsScreen({ route }: Props) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [restaurantId]);
+  }, [resolveRestaurantId]);
 
   useEffect(() => {
     void load();
@@ -218,12 +238,13 @@ export function CreditStatementsScreen({ route }: Props) {
   };
 
   const loadMore = useCallback(async () => {
-    if (!nextCursor || loadingMore) return;
+    const targetId = activeRestaurantId || (await resolveRestaurantId());
+    if (!targetId || !nextCursor || loadingMore) return;
 
     setLoadingMore(true);
     setLoadMoreError(false);
     try {
-      const res = await creditApi.getStatements(restaurantId, {
+      const res = await creditApi.getStatements(targetId, {
         cursor: nextCursor,
         pageSize: STATEMENT_PAGE_SIZE,
       });
@@ -237,9 +258,14 @@ export function CreditStatementsScreen({ route }: Props) {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, nextCursor, restaurantId]);
+  }, [activeRestaurantId, loadingMore, nextCursor, resolveRestaurantId]);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    const targetId = activeRestaurantId || (await resolveRestaurantId());
+    if (!targetId) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin nhà hàng.');
+      return;
+    }
     Alert.alert(
       'Tạo sao kê',
       `Tạo sao kê tín dụng cho Tháng ${defaultTargetMonth}/${defaultTargetYear} (tháng vừa kết thúc)?`,
@@ -251,7 +277,7 @@ export function CreditStatementsScreen({ route }: Props) {
             setGenerating(true);
             try {
               const newStatement = await creditApi.generateStatement(
-                restaurantId,
+                targetId,
                 defaultTargetYear,
                 defaultTargetMonth,
               );
@@ -275,13 +301,15 @@ export function CreditStatementsScreen({ route }: Props) {
   };
 
   const handleOpenDetail = async (summaryItem: CreditStatementSummaryDto) => {
+    const targetId = activeRestaurantId || (await resolveRestaurantId());
+    if (!targetId) return;
     setSelectedSummary(summaryItem);
     setModalTab('detail');
     setPdfBase64(null);
     setLoadingDetail(true);
     setStatementDetail(null);
     try {
-      const detail = await creditApi.getStatementById(restaurantId, summaryItem.id);
+      const detail = await creditApi.getStatementById(targetId, summaryItem.id);
       setStatementDetail(detail);
     } catch {
       Alert.alert('Lỗi', 'Không thể tải chi tiết sao kê. Vui lòng thử lại.');
@@ -291,9 +319,11 @@ export function CreditStatementsScreen({ route }: Props) {
   };
 
   const handleFetchAndShowPdf = async (statementId: string) => {
+    const targetId = activeRestaurantId || (await resolveRestaurantId());
+    if (!targetId) return;
     setDownloadingPdf(true);
     try {
-      const buffer = await creditApi.getStatementPdf(restaurantId, statementId);
+      const buffer = await creditApi.getStatementPdf(targetId, statementId);
       if (buffer && buffer.byteLength > 0) {
         const b64 = base64ArrayBuffer(buffer);
         setPdfBase64(b64);
@@ -420,19 +450,52 @@ export function CreditStatementsScreen({ route }: Props) {
                     <View style={styles.webViewContainer}>
                       <WebView
                         originWhitelist={['*']}
+                        allowFileAccess
+                        allowUniversalAccessFromFileURLs
                         source={{
                           html: `
                             <!DOCTYPE html>
                             <html>
                               <head>
                                 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0">
+                                <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
                                 <style>
-                                  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #525659; }
-                                  embed, iframe, object { width: 100%; height: 100%; border: none; }
+                                  html, body { margin: 0; padding: 0; width: 100%; background: #525659; font-family: sans-serif; }
+                                  #pdf-container { display: flex; flex-direction: column; align-items: center; padding: 10px; }
+                                  canvas { width: 100% !important; height: auto !important; margin-bottom: 12px; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
                                 </style>
                               </head>
                               <body>
-                                <embed src="data:application/pdf;base64,${pdfBase64}" type="application/pdf" />
+                                <div id="pdf-container">
+                                  <div id="status" style="color:white;padding:20px;text-align:center">Đang tải trang PDF...</div>
+                                </div>
+                                <script>
+                                  try {
+                                    const b64 = "${pdfBase64}";
+                                    const pdfData = atob(b64);
+                                    const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+                                    loadingTask.promise.then(pdf => {
+                                      const statusEl = document.getElementById('status');
+                                      if (statusEl) statusEl.style.display = 'none';
+                                      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                                        pdf.getPage(pageNum).then(page => {
+                                          const scale = 2.0;
+                                          const viewport = page.getViewport({ scale });
+                                          const canvas = document.createElement('canvas');
+                                          const context = canvas.getContext('2d');
+                                          canvas.height = viewport.height;
+                                          canvas.width = viewport.width;
+                                          document.getElementById('pdf-container').appendChild(canvas);
+                                          page.render({ canvasContext: context, viewport: viewport });
+                                        });
+                                      }
+                                    }).catch(err => {
+                                      document.getElementById('status').innerText = 'Vui lòng xem chi tiết danh sách giao dịch tại tab Chi tiết.';
+                                    });
+                                  } catch (e) {
+                                    document.getElementById('status').innerText = 'Vui lòng xem chi tiết danh sách giao dịch tại tab Chi tiết.';
+                                  }
+                                </script>
                               </body>
                             </html>
                           `,

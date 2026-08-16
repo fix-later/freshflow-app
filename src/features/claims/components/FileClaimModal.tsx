@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -13,17 +14,21 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import { Text, TextInput } from '../../../components/ui/Text';
 import { claimsApi, type OrderClaimDto } from '../api/claimsApi';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import { uploadImageToCloudinary } from '../../../services/cloudinaryUpload';
+import type { OrderItemDto } from '../../orders/api/orderApi';
 
 interface FileClaimModalProps {
   visible: boolean;
   orderId: string;
   orderCode: string;
   totalAmount: number;
+  items?: OrderItemDto[];
   onClose: () => void;
   onSuccess: (claim: OrderClaimDto) => void;
 }
@@ -33,17 +38,87 @@ export function FileClaimModal({
   orderId,
   orderCode,
   totalAmount,
+  items,
   onClose,
   onSuccess,
 }: FileClaimModalProps) {
   const [amountStr, setAmountStr] = useState<string>('');
   const [reason, setReason] = useState<string>('');
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [proofImageUri, setProofImageUri] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const resetForm = () => {
     setAmountStr('');
     setReason('');
+    setSelectedItemIds(new Set());
+    setProofImageUri(null);
+    setErrorMsg(null);
+  };
+
+  const pickProofPhotoFromLibrary = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Cần cấp quyền', 'Vui lòng cho phép ứng dụng truy cập thư viện ảnh.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        setProofImageUri(result.assets[0].uri);
+        setErrorMsg(null);
+      }
+    } catch {
+      Alert.alert('Lỗi', 'Không thể chọn ảnh từ thư viện.');
+    }
+  };
+
+  const takeProofPhotoWithCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Cần cấp quyền', 'Vui lòng cho phép ứng dụng truy cập máy ảnh.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        setProofImageUri(result.assets[0].uri);
+        setErrorMsg(null);
+      }
+    } catch {
+      Alert.alert('Lỗi', 'Không thể mở máy ảnh.');
+    }
+  };
+
+  const toggleItemSelection = (item: OrderItemDto) => {
+    const next = new Set(selectedItemIds);
+    if (next.has(item.orderItemId)) {
+      next.delete(item.orderItemId);
+    } else {
+      next.add(item.orderItemId);
+    }
+    setSelectedItemIds(next);
+
+    const selectedItems = (items || []).filter((i) => next.has(i.orderItemId));
+    if (selectedItems.length > 0) {
+      const suggestedAmount = selectedItems.reduce(
+        (acc, i) => acc + (i.subtotal ?? (i.unitPrice * i.quantity)),
+        0,
+      );
+      setAmountStr(suggestedAmount.toLocaleString('vi-VN'));
+
+      const names = selectedItems.map((i) => i.productNameSnapshot || 'Sản phẩm').join(', ');
+      setReason(`Sản phẩm bị hư hỏng/lỗi: ${names}.\nLý do chi tiết: `);
+    } else {
+      setAmountStr('');
+      setReason('');
+    }
     setErrorMsg(null);
   };
 
@@ -91,10 +166,22 @@ export function FileClaimModal({
     }
 
     setSubmitting(true);
+    let uploadedProofUrl: string | null = null;
+
+    if (proofImageUri) {
+      try {
+        const signature = await claimsApi.getProofUploadSignature(orderId);
+        uploadedProofUrl = await uploadImageToCloudinary(proofImageUri, signature);
+      } catch {
+        // Fallback: if signature fails, proceed with null proofImageUrl
+      }
+    }
+
     try {
       const claim = await claimsApi.fileClaim(orderId, {
         amount,
         reason: trimmedReason,
+        proofImageUrl: uploadedProofUrl,
       });
 
       resetForm();
@@ -172,6 +259,49 @@ export function FileClaimModal({
                   </View>
                 ) : null}
 
+                {/* Product Selection List (Optional) */}
+                {items && items.length > 0 ? (
+                  <View style={styles.fieldSection}>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.fieldLabel}>Chọn sản phẩm bị hư hỏng / gặp sự cố</Text>
+                      <Text style={styles.maxCapText}>{selectedItemIds.size}/{items.length} đã chọn</Text>
+                    </View>
+
+                    <View style={styles.itemsListContainer}>
+                      {items.map((item) => {
+                        const isSelected = selectedItemIds.has(item.orderItemId);
+                        const itemTotal = item.subtotal ?? (item.unitPrice * item.quantity);
+                        return (
+                          <Pressable
+                            key={item.orderItemId}
+                            style={[styles.itemPickRow, isSelected && styles.itemPickRowSelected]}
+                            onPress={() => toggleItemSelection(item)}
+                          >
+                            <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                              {isSelected ? (
+                                <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                              ) : null}
+                            </View>
+
+                            <View style={styles.itemPickInfo}>
+                              <Text style={styles.itemPickName} numberOfLines={1}>
+                                {item.productNameSnapshot || 'Sản phẩm'}
+                              </Text>
+                              <Text style={styles.itemPickSub}>
+                                {item.unitPrice.toLocaleString('vi-VN')}đ x {item.quantity}
+                              </Text>
+                            </View>
+
+                            <Text style={[styles.itemPickPrice, isSelected && styles.itemPickPriceSelected]}>
+                              {itemTotal.toLocaleString('vi-VN')}đ
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : null}
+
                 {/* Amount Section */}
                 <View style={styles.fieldSection}>
                   <View style={styles.labelRow}>
@@ -221,6 +351,43 @@ export function FileClaimModal({
                     multiline
                     maxLength={500}
                   />
+                </View>
+
+                {/* Proof Photo Section */}
+                <View style={styles.fieldSection}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.fieldLabel}>Ảnh minh chứng sản phẩm hư hỏng</Text>
+                    <Text style={styles.maxCapText}>Không bắt buộc</Text>
+                  </View>
+
+                  {proofImageUri ? (
+                    <View style={styles.photoPreviewWrap}>
+                      <Image source={{ uri: proofImageUri }} style={styles.photoPreviewImage} resizeMode="cover" />
+                      <Pressable style={styles.photoRemoveBtn} onPress={() => setProofImageUri(null)}>
+                        <Ionicons name="close" size={16} color="#FFFFFF" />
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.photoActionRow}>
+                      <Pressable
+                        style={styles.photoBtn}
+                        onPress={() => void takeProofPhotoWithCamera()}
+                        disabled={submitting}
+                      >
+                        <Ionicons name="camera-outline" size={18} color={Colors.primaryText} />
+                        <Text style={styles.photoBtnText}>Chụp ảnh bằng chứng</Text>
+                      </Pressable>
+
+                      <Pressable
+                        style={styles.photoBtn}
+                        onPress={() => void pickProofPhotoFromLibrary()}
+                        disabled={submitting}
+                      >
+                        <Ionicons name="images-outline" size={18} color={Colors.primaryText} />
+                        <Text style={styles.photoBtnText}>Thư viện ảnh</Text>
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
 
                 {/* Policy Disclaimer */}
@@ -454,5 +621,102 @@ const styles = StyleSheet.create({
     color: Colors.onPrimary,
     fontSize: 14,
     fontFamily: Fonts.bold,
+  },
+  itemsListContainer: {
+    gap: 8,
+  },
+  itemPickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 10,
+  },
+  itemPickRowSelected: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#6EE7B7',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: Colors.outlineVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+  },
+  checkboxSelected: {
+    borderColor: '#10B981',
+    backgroundColor: '#10B981',
+  },
+  itemPickInfo: {
+    flex: 1,
+  },
+  itemPickName: {
+    fontSize: 13,
+    fontFamily: Fonts.semibold,
+    color: Colors.textPrimary,
+  },
+  itemPickSub: {
+    fontSize: 11,
+    fontFamily: Fonts.medium,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+  itemPickPrice: {
+    fontSize: 13,
+    fontFamily: Fonts.monoBold,
+    color: Colors.textSecondary,
+  },
+  itemPickPriceSelected: {
+    color: '#047857',
+  },
+  photoActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  photoBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  photoBtnText: {
+    fontSize: 12,
+    fontFamily: Fonts.semibold,
+    color: Colors.primaryText,
+  },
+  photoPreviewWrap: {
+    position: 'relative',
+    height: 140,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  photoPreviewImage: {
+    width: '100%',
+    height: '140%',
+  },
+  photoRemoveBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

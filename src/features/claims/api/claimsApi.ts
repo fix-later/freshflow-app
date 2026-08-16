@@ -1,4 +1,5 @@
 import { apiClient } from '../../../services/api/client';
+import type { CloudinaryUploadSignature } from '../../../services/cloudinaryUpload';
 
 export type OrderClaimStatus = 'Submitted' | 'Approved' | 'Rejected' | 'submitted' | 'approved' | 'rejected';
 
@@ -8,6 +9,7 @@ export interface OrderClaimDto {
   restaurantId: string;
   amount: number;
   reason: string;
+  proofImageUrl?: string | null;
   status: OrderClaimStatus;
   createdBy: string;
   createdAt: string;
@@ -21,6 +23,7 @@ export interface OrderClaimDto {
 export interface FileClaimPayload {
   amount: number;
   reason: string;
+  proofImageUrl?: string | null;
 }
 
 export interface ListClaimsParams {
@@ -84,6 +87,14 @@ export const claimsApi = {
   /** GET /api/v1/claims/{claimId} — Get detail of a specific claim */
   async getClaimById(claimId: string): Promise<OrderClaimDto> {
     const { data } = await apiClient.get<OrderClaimDto>(`/api/v1/claims/${claimId}`);
+    return data;
+  },
+
+  /** POST /api/v1/orders/{orderId}/claims/upload-signature — Get Cloudinary signature for claim proof photo upload */
+  async getProofUploadSignature(orderId: string): Promise<CloudinaryUploadSignature> {
+    const { data } = await apiClient.post<CloudinaryUploadSignature>(
+      `/api/v1/orders/${orderId}/claims/upload-signature`,
+    );
     return data;
   },
 };

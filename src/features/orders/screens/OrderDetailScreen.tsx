@@ -78,9 +78,9 @@ function formatDateTime(iso: string | null | undefined) {
   return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1)
     .toString()
     .padStart(2, '0')}/${d.getFullYear()} • ${d.getHours().toString().padStart(2, '0')}:${d
-    .getMinutes()
-    .toString()
-    .padStart(2, '0')}`;
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`;
 }
 
 /**
@@ -470,8 +470,10 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const canCancel = CANCELLABLE_STATUSES.includes(order.status);
   const canConfirmOrder = order.status === 'draft' && items.length > 0;
   const canConfirmReceipt = order.status === 'delivered' && !order.confirmedReceiptAt;
-  const canReportIssue = order.status === 'delivered';
-  const canFileClaim = order.status === 'at_hub' || order.status === 'delivered';
+  const pendingClaim = orderClaims.find((c) => (c.status || '').toLowerCase() === 'submitted');
+  const approvedClaim = orderClaims.find((c) => (c.status || '').toLowerCase() === 'approved');
+  const isClaimableStatus = order.status === 'at_hub' || order.status === 'delivered';
+  const canFileClaim = isClaimableStatus && !pendingClaim && !approvedClaim;
   const canReorder = items.length > 0;
 
   return (
@@ -670,6 +672,18 @@ export function OrderDetailScreen({ route, navigation }: Props) {
                       <Text style={styles.claimReasonVal}>{claim.reason}</Text>
                     </View>
 
+                    {/* Proof Photo */}
+                    {claim.proofImageUrl ? (
+                      <View style={{ marginTop: 8 }}>
+                        <Text style={styles.claimReasonLabel}>Ảnh minh chứng hư hỏng:</Text>
+                        <Image
+                          source={{ uri: claim.proofImageUrl }}
+                          style={{ width: 80, height: 80, borderRadius: 8, marginTop: 4, borderWidth: 1, borderColor: Colors.border }}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    ) : null}
+
                     {/* Admin Response Alert */}
                     {claim.decisionNote ? (
                       <View
@@ -834,8 +848,8 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         </View>
       ) : null}
 
-      {/* ── Confirm receipt / report issue / claim footer ── */}
-      {canConfirmReceipt || canReportIssue || canFileClaim ? (
+      {/* ── Confirm receipt / claim footer ── */}
+      {canConfirmReceipt || isClaimableStatus ? (
         <View style={styles.footer}>
           <View style={styles.footerRow}>
             {canFileClaim ? (
@@ -843,12 +857,11 @@ export function OrderDetailScreen({ route, navigation }: Props) {
                 <Ionicons name="shield-checkmark-outline" size={18} color="#1D4ED8" />
                 <Text style={styles.claimBtnText}>Khiếu nại đền bù</Text>
               </Pressable>
-            ) : null}
-            {canReportIssue ? (
-              <Pressable style={styles.reportIssueBtn} onPress={() => navigation.navigate('ReportIssue', { orderId })}>
-                <Ionicons name="alert-circle-outline" size={18} color={Colors.warning} />
-                <Text style={styles.reportIssueBtnText}>Báo sự cố</Text>
-              </Pressable>
+            ) : pendingClaim ? (
+              <View style={[styles.claimBtn, styles.claimBtnPending]}>
+                <Ionicons name="time-outline" size={18} color="#D97706" />
+                <Text style={[styles.claimBtnText, { color: '#B45309' }]}>Đang chờ duyệt khiếu nại</Text>
+              </View>
             ) : null}
             {canConfirmReceipt ? (
               <Pressable
@@ -878,10 +891,12 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           orderId={order.orderId}
           orderCode={code}
           totalAmount={order.totalAmount}
+          items={order.items}
           onClose={() => setFileClaimModalVisible(false)}
           onSuccess={(newClaim) => {
             setFileClaimModalVisible(false);
             setOrderClaims((prev) => [newClaim, ...prev]);
+            void fetchOrder();
           }}
         />
       ) : null}
@@ -1373,6 +1388,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 12,
+  },
+  claimBtnPending: {
+    borderColor: '#FCD34D',
+    backgroundColor: '#FEF3C7',
+  },
+  claimBtnApproved: {
+    borderColor: '#6EE7B7',
+    backgroundColor: '#ECFDF5',
   },
   claimBtnText: {
     color: '#1D4ED8',
