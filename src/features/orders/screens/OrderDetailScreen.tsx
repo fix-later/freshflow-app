@@ -823,8 +823,11 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         <View style={styles.footer}>
           <View style={styles.footerRow}>
             {canCancel ? (
-              <Pressable style={styles.cancelBtn} onPress={openCancelModal}>
-                <Ionicons name="close-circle-outline" size={18} color={Colors.error} />
+              <Pressable
+                style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.75 }]}
+                onPress={openCancelModal}
+              >
+                <Ionicons name="close-circle-outline" size={18} color="#DC2626" />
                 <Text style={styles.cancelBtnText}>Hủy đơn hàng</Text>
               </Pressable>
             ) : null}
@@ -1139,16 +1142,23 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: Colors.error,
-    borderRadius: 12,
-    paddingVertical: 14,
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
   },
-  cancelBtnText: { color: Colors.error, fontWeight: '700', fontSize: 15 },
+  cancelBtnText: {
+    color: '#DC2626',
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+  },
 
   // Confirm receipt / report issue footer
   footerRow: {
