@@ -22,6 +22,10 @@ import {
 } from '../api/marketProcurementApi';
 import { useMarketAgentTaskRealtime } from '../context/MarketAgentTaskRealtimeContext';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import {
+  formatQuantityTotal,
+  formatQuantityWithUnit,
+} from '../../../utils/quantity';
 
 type TaskFilter = 'all' | 'pending' | 'active' | 'completed';
 
@@ -272,7 +276,10 @@ export function MarketAgentTasksScreen() {
                 <View style={styles.taskList}>
                   {group.tasks.map((task) => {
                     const status = STATUS[task.status] ?? UNKNOWN_STATUS;
-                    const quantity = task.items.reduce((sum, item) => sum + item.totalQuantity, 0);
+                    const quantitySummary = formatQuantityTotal(task.items.map((item) => ({
+                      quantity: item.totalQuantity,
+                      unit: item.unit,
+                    })));
                     return (
                       <Pressable
                         key={task.id}
@@ -299,12 +306,18 @@ export function MarketAgentTasksScreen() {
                         <View style={styles.taskMetrics}>
                           <TaskMetric icon="receipt-outline" value={`${task.members.length}`} label="đơn" />
                           <TaskMetric icon="cube-outline" value={`${task.items.length}`} label="mặt hàng" />
-                          <TaskMetric icon="layers-outline" value={`${quantity}`} label="số lượng" />
+                          <TaskMetric
+                            icon="layers-outline"
+                            value={quantitySummary}
+                            label="số lượng"
+                          />
                         </View>
 
                         <Text style={styles.productPreview} numberOfLines={2}>
                           {task.items
-                            .map((item) => `${item.productNameSnapshot} ×${item.totalQuantity}`)
+                            .map((item) => (
+                              `${item.productNameSnapshot} ${formatQuantityWithUnit(item.totalQuantity, item.unit)}`
+                            ))
                             .join(' · ')}
                         </Text>
 

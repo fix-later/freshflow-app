@@ -45,6 +45,7 @@ import {
   type OrderClaimDto,
 } from '../../claims/api/claimsApi';
 import { FileClaimModal } from '../../claims/components/FileClaimModal';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'OrderDetail'>;
 
@@ -132,9 +133,13 @@ function ItemRow({
       )}
       <View style={styles.itemInfo}>
         <Text style={styles.itemName} numberOfLines={2}>{item.productNameSnapshot || 'Sản phẩm'}</Text>
-        <Text style={styles.itemUnitPrice}>{unitPrice.toLocaleString('vi-VN')}đ x {quantity}</Text>
+        <Text style={styles.itemUnitPrice}>
+          {unitPrice.toLocaleString('vi-VN')}đ x {formatQuantityWithUnit(quantity, item.unit)}
+        </Text>
         {item.actualQuantity !== null && item.actualQuantity !== quantity ? (
-          <Text style={styles.actualQuantity}>Thực nhận: {item.actualQuantity}</Text>
+          <Text style={styles.actualQuantity}>
+            Thực nhận: {formatQuantityWithUnit(item.actualQuantity, item.unit)}
+          </Text>
         ) : null}
         {item.vatRatePercent !== null && item.vatRatePercent > 0 ? (
           <Text style={styles.itemVatText}>
@@ -150,7 +155,9 @@ function ItemRow({
             >
               <Ionicons name="remove" size={15} color={Colors.primaryText} />
             </Pressable>
-            <Text style={styles.quantityValue}>{quantity}</Text>
+            <Text style={styles.quantityValue}>
+              {formatQuantityWithUnit(quantity, item.unit)}
+            </Text>
             <Pressable
               style={styles.quantityButton}
               onPress={() => onChangeQuantity(quantity + step)}

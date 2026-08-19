@@ -17,6 +17,7 @@ import { type MarketDto, type MarketProductDto } from '../../../types/api.types'
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 import { orderApi } from '../api/orderApi';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'AddDraftOrderItem'>;
 
@@ -176,7 +177,7 @@ export function AddDraftOrderItemScreen({ route, navigation }: Props) {
               >
                 <Ionicons name="remove" size={15} color={Colors.primaryText} />
               </Pressable>
-              <Text style={styles.quantityText}>{quantity}</Text>
+              <Text style={styles.quantityText}>{formatQuantityWithUnit(quantity, item.unit)}</Text>
               <Pressable
                 style={styles.quantityButton}
                 onPress={() => changeQuantity(item, 1)}

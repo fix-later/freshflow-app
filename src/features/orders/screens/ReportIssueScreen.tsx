@@ -27,6 +27,7 @@ import {
 } from '../api/orderApi';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'ReportIssue'>;
 
@@ -265,7 +266,9 @@ export function ReportIssueScreen({ route, navigation }: Props) {
                       <Text style={styles.itemNameText} numberOfLines={1}>
                         {it.productNameSnapshot || 'Sản phẩm'}
                       </Text>
-                      <Text style={styles.itemOrderQtyText}>Số lượng trong đơn: {it.quantity} kg / đơn vị</Text>
+                      <Text style={styles.itemOrderQtyText}>
+                        Số lượng trong đơn: {formatQuantityWithUnit(it.quantity, it.unit)}
+                      </Text>
                     </View>
                     <Text style={[styles.toggleText, form.enabled && styles.toggleTextActive]}>
                       {form.enabled ? 'Đang báo lỗi' : '+ Báo sự cố'}
@@ -307,7 +310,9 @@ export function ReportIssueScreen({ route, navigation }: Props) {
                       {/* Affected Quantity Stepper */}
                       <View style={styles.rowBetween}>
                         <Text style={styles.subLabel}>Số lượng bị ảnh hưởng</Text>
-                        <Text style={styles.qtyLimitText}>Tối đa {it.quantity} kg</Text>
+                        <Text style={styles.qtyLimitText}>
+                          Tối đa {formatQuantityWithUnit(it.quantity, it.unit)}
+                        </Text>
                       </View>
 
                       <View style={styles.stepperWrap}>
@@ -319,7 +324,9 @@ export function ReportIssueScreen({ route, navigation }: Props) {
                           <Ionicons name="remove" size={16} color={form.affectedQuantity <= 1 ? Colors.textMuted : Colors.textPrimary} />
                         </Pressable>
 
-                        <Text style={styles.stepValText} numeric>{form.affectedQuantity} kg</Text>
+                        <Text style={styles.stepValText} numeric>
+                          {formatQuantityWithUnit(form.affectedQuantity, it.unit)}
+                        </Text>
 
                         <Pressable
                           style={[styles.stepBtn, form.affectedQuantity >= it.quantity && styles.stepBtnDisabled]}

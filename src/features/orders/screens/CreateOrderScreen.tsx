@@ -25,6 +25,7 @@ import {
 } from '../../../components/ui/Text';
 import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../../../navigation/types';
 import { orderApi, DEFAULT_DELIVERY_WINDOW_DAYS } from '../api/orderApi';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'CreateOrder'>;
 
@@ -74,7 +75,7 @@ function ItemRow({ item }: { item: CreateOrderItem }) {
         </View>
         <View style={styles.itemQtyWrap}>
           <Text style={styles.itemQtyLabel}>SL</Text>
-          <Text style={styles.itemQty}>{item.quantity}</Text>
+          <Text style={styles.itemQty}>{formatQuantityWithUnit(item.quantity, item.unit)}</Text>
         </View>
       </View>
       {item.note ? (

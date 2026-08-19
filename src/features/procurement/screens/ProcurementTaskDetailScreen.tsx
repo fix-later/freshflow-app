@@ -27,6 +27,11 @@ import {
   type ProcurementTaskStatus,
 } from '../api/marketProcurementApi';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import {
+  formatQuantityTotal,
+  formatQuantityWithUnit,
+  getQuantityUnit,
+} from '../../../utils/quantity';
 
 type Props = NativeStackScreenProps<MarketTasksStackParamList, 'ProcurementTaskDetail'>;
 type PurchaseInput = { quantity: string; price: string };
@@ -167,7 +172,10 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
   ), [task]);
 
   const canEdit = task?.status === 'Manifested' || task?.status === 'Purchasing';
-  const totalPlannedQuantity = task?.items.reduce((sum, item) => sum + item.totalQuantity, 0) ?? 0;
+  const totalPlannedDisplay = formatQuantityTotal(task?.items.map((item) => ({
+    quantity: item.totalQuantity,
+    unit: item.unit,
+  })) ?? []);
   const reportingItem = task?.items.find((item) => item.marketProductId === reportingItemId) ?? null;
 
   const updateInput = (marketProductId: string, field: keyof PurchaseInput, value: string) => {
@@ -289,7 +297,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
         <View style={styles.metrics}>
           <HeaderMetric value={task.members.length} label="đơn hàng" />
           <HeaderMetric value={task.items.length} label="mặt hàng" />
-          <HeaderMetric value={totalPlannedQuantity} label="SL kế hoạch" />
+          <HeaderMetric value={totalPlannedDisplay} label="SL kế hoạch" />
           <HeaderMetric value={task.exceptions.length} label="sự cố" />
         </View>
       </View>
@@ -328,7 +336,9 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
                     <Text style={styles.referencePrice}>Giá tham chiếu: {formatMoney(item.referenceUnitPrice)}</Text>
                   </View>
                   <View style={styles.plannedBadge}>
-                    <Text style={styles.plannedValue} numeric>{item.totalQuantity}</Text>
+                    <Text style={styles.plannedValue} numeric>
+                      {formatQuantityWithUnit(item.totalQuantity, item.unit)}
+                    </Text>
                     <Text style={styles.plannedLabel}>kế hoạch</Text>
                   </View>
                 </View>
@@ -348,7 +358,9 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
                 ) : (
                   <View style={styles.inputRow}>
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Số lượng thực tế</Text>
+                      <Text style={styles.inputLabel}>
+                        Số lượng thực tế ({getQuantityUnit(item.unit)})
+                      </Text>
                       <TextInput
                         editable={canEdit && !submitting}
                         value={input.quantity}
@@ -400,9 +412,10 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
             <Text style={styles.sectionTitle}>Sự cố & bằng chứng đã gửi</Text>
             <View style={styles.exceptionList}>
               {task.exceptions.map((exception) => {
-                const productName = task.items.find(
+                const product = task.items.find(
                   (item) => item.marketProductId === exception.marketProductId,
-                )?.productNameSnapshot ?? 'Mặt hàng trong lô';
+                );
+                const productName = product?.productNameSnapshot ?? 'Mặt hàng trong lô';
                 return (
                   <View key={exception.id} style={styles.exceptionCard}>
                     {exception.proofImageUrl ? (
@@ -425,7 +438,8 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
                         </View>
                       </View>
                       <Text style={styles.exceptionMeta} numeric>
-                        SL ảnh hưởng: {exception.reportedQuantity} · {formatDateTime(exception.reportedAt)}
+                        SL ảnh hưởng: {formatQuantityWithUnit(exception.reportedQuantity, product?.unit)} ·{' '}
+                        {formatDateTime(exception.reportedAt)}
                       </Text>
                       {exception.note ? <Text style={styles.exceptionNote}>{exception.note}</Text> : null}
                     </View>
@@ -512,7 +526,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
   );
 }
 
-function HeaderMetric({ value, label }: { value: number; label: string }) {
+function HeaderMetric({ value, label }: { value: number | string; label: string }) {
   return (
     <View style={styles.metric}>
       <Text style={styles.metricValue} numeric>{value}</Text>

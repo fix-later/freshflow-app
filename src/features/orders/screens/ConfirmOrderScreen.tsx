@@ -25,6 +25,7 @@ import { type RestaurantOrdersStackParamList, type CreateOrderItem } from '../..
 import { creditApi } from '../../credit/api/creditApi';
 import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
 import { describeApiCode, getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'ConfirmOrder'>;
 
@@ -124,7 +125,7 @@ function ItemRow({ item }: { item: CreateOrderItem }) {
         </View>
         <View style={styles.itemQtyWrap}>
           <Text style={styles.itemQtyLabel}>SL</Text>
-          <Text style={styles.itemQty}>{item.quantity}</Text>
+          <Text style={styles.itemQty}>{formatQuantityWithUnit(item.quantity, item.unit)}</Text>
         </View>
       </View>
       {item.note ? (

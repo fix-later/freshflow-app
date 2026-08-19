@@ -1,4 +1,8 @@
 import { apiClient } from '../../../services/api/client';
+import {
+  findUnitByProductName,
+  getMarketProductCatalog,
+} from '../../../services/marketProductCatalog';
 import type {
   AttachProofOfDeliveryRequest,
   AttachProofOfDeliveryResponseDto,
@@ -39,9 +43,31 @@ export const driverApi = {
    * GET /api/v1/logistics/routes/{routeId}/loading-manifest — the real orderIds
    * for this route's restaurant stops, needed to build the confirm-pickup checklist.
    */
-  async getLoadingManifest(routeId: string): Promise<LoadingManifestDto> {
-    const { data } = await apiClient.get(`/api/v1/logistics/routes/${routeId}/loading-manifest`);
-    return data;
+  async getLoadingManifest(routeId: string, marketIds: string[] = []): Promise<LoadingManifestDto> {
+    const { data } = await apiClient.get<LoadingManifestDto>(
+      `/api/v1/logistics/routes/${routeId}/loading-manifest`,
+    );
+    if (marketIds.length === 0) return data;
+
+    try {
+      const catalog = await getMarketProductCatalog(marketIds);
+      return {
+        ...data,
+        stops: data.stops.map((stop) => ({
+          ...stop,
+          lines: stop.lines.map((line) => ({
+            ...line,
+            unit: line.unit
+              ?? (line.marketProductId
+                ? catalog.byMarketProductId.get(line.marketProductId)?.unit
+                : null)
+              ?? findUnitByProductName(catalog, line.productName),
+          })),
+        })),
+      };
+    } catch {
+      return data;
+    }
   },
 
   /** POST /api/v1/driver/routes/{routeId}/start — mark the route as started. */

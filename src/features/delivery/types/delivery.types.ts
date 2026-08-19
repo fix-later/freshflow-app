@@ -85,9 +85,13 @@ export interface DriverRouteDto {
 export interface LoadingLineDto {
   orderId: string;
   orderItemId: string;
+  /** Present on the current backend; optional for compatibility with cached legacy manifests. */
+  marketProductId?: string | null;
   productName: string;
   quantity: number;
   capacityKg: number | null;
+  /** Enriched from the public market catalog because loading-manifest omits it. */
+  unit?: string | null;
 }
 
 /**

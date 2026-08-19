@@ -14,6 +14,7 @@ import {
   type HubProcurementOrderDto,
 } from '../api/hubApi';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 type Props = NativeStackScreenProps<HubStackParamList, 'HubBatchOrders'>;
 
@@ -34,10 +35,6 @@ function formatDate(value: string): string {
     month: '2-digit',
     year: 'numeric',
   }).format(new Date(Date.UTC(year, month - 1, day)));
-}
-
-function formatQuantity(value: number): string {
-  return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value);
 }
 
 function readErrorMessage(error: unknown): string {
@@ -211,7 +208,7 @@ export function HubBatchOrdersScreen({ route }: Props) {
                     <View key={orderItem.orderItemId} style={styles.itemRow}>
                       <Text style={styles.itemName}>{orderItem.productName}</Text>
                       <Text numeric style={styles.itemQuantity}>
-                        {formatQuantity(orderItem.quantity)} {orderItem.unit?.trim() || 'đơn vị'}
+                        {formatQuantityWithUnit(orderItem.quantity, orderItem.unit)}
                       </Text>
                     </View>
                   ))}

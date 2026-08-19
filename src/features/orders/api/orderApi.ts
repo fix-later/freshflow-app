@@ -1,4 +1,5 @@
 import { apiClient } from '../../../services/api/client';
+import { getMarketProductCatalog } from '../../../services/marketProductCatalog';
 
 export type OrderStatus =
   | 'draft'
@@ -21,6 +22,8 @@ export interface OrderItemDto {
   marketProductId: string;
   productNameSnapshot: string;
   quantity: number;
+  /** Catalog unit enriched by the App; older order payloads may omit it. */
+  unit?: string | null;
   unitPrice: number;
   subtotal: number;
   actualQuantity: number | null;
@@ -69,6 +72,8 @@ export const DEFAULT_DELIVERY_WINDOW_DAYS = 7;
 export interface OrderDto {
   orderId: string;
   restaurantId: string;
+  /** Market snapshot returned by the current backend; null on legacy drafts. */
+  marketId?: string | null;
   status: OrderStatus;
   paymentStatus: OrderPaymentStatus;
   orderGroupId: string | null;
@@ -326,7 +331,23 @@ export const orderApi = {
 
   async getById(orderId: string): Promise<OrderDto> {
     const { data } = await apiClient.get<OrderDto>(`/api/v1/orders/${orderId}`);
-    return data;
+    if (!data.marketId) return data;
+
+    try {
+      const catalog = await getMarketProductCatalog([data.marketId]);
+      return {
+        ...data,
+        items: data.items.map((item) => ({
+          ...item,
+          unit: item.unit
+            ?? catalog.byMarketProductId.get(item.marketProductId)?.unit
+            ?? null,
+        })),
+      };
+    } catch {
+      // Unit rendering has a kg fallback, so an unavailable catalog must not hide the order.
+      return data;
+    }
   },
 
   async cancel(

@@ -25,6 +25,7 @@ import {
   type ProcurementTaskItemDto,
 } from '../api/marketProcurementApi';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import { getQuantityUnit } from '../../../utils/quantity';
 
 const EXCEPTION_TYPES: Array<{
   value: ProcurementExceptionType;
@@ -203,7 +204,9 @@ export function ProcurementExceptionModal({
               })}
             </View>
 
-            <Text style={styles.sectionLabel}>SỐ LƯỢNG ẢNH HƯỞNG</Text>
+            <Text style={styles.sectionLabel}>
+              SỐ LƯỢNG ẢNH HƯỞNG ({getQuantityUnit(item?.unit).toUpperCase()})
+            </Text>
             <TextInput
               value={quantity}
               onChangeText={(value) => setQuantity(value.replace(/[^0-9]/g, ''))}

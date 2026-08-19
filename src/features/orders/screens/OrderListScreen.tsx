@@ -32,6 +32,7 @@ import {
 import { pricingApi } from '../../pricing/api/pricingApi';
 import { useNotifications } from '../../notifications/context/NotificationContext';
 import { CartModal } from '../components/CartModal';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 type OrdersNav = NativeStackNavigationProp<RestaurantOrdersStackParamList>;
 
@@ -584,7 +585,9 @@ export function OrderListScreen() {
               >
                 <Ionicons name="remove" size={16} color={Colors.deepTeal} />
               </Pressable>
-              <Text numeric style={styles.quantityValue}>{quantity}</Text>
+              <Text numeric style={styles.quantityValue}>
+                {formatQuantityWithUnit(quantity, item.unit)}
+              </Text>
               <Pressable
                 style={[styles.quantityButton, styles.quantityButtonAdd]}
                 disabled={quantity >= maxQty}

@@ -24,6 +24,10 @@ import {
   type HubProcurementBatchDto,
 } from '../api/hubApi';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import {
+  formatQuantityWithUnit,
+  getQuantityUnit,
+} from '../../../utils/quantity';
 
 type Navigation = NativeStackNavigationProp<HubStackParamList, 'CheckIn'>;
 
@@ -213,7 +217,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
     if (affected <= 0) return `Nhập số lượng ảnh hưởng cho ${line.productName}.`;
     if (review.notes.trim().length < 3) return `Mô tả ngắn tình trạng của ${line.productName}.`;
     if (affected > line.quantity) {
-      return `Số lượng ảnh hưởng của ${line.productName} vượt quá ${formatQuantity(line.quantity)} trong đơn ${shortCode('ĐH', line.orderId)}.`;
+      return `Số lượng ảnh hưởng của ${line.productName} vượt quá ${formatQuantityWithUnit(line.quantity, line.unit)} trong đơn ${shortCode('ĐH', line.orderId)}.`;
     }
     return null;
   }, null);
@@ -484,7 +488,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                           <View style={styles.productCopy}>
                             <Text style={styles.productName}>{line.productName}</Text>
                             <Text numeric style={styles.expectedText}>
-                              Theo đơn: {formatQuantity(line.quantity)} {line.unit?.trim() || 'đơn vị'}
+                              Theo đơn: {formatQuantityWithUnit(line.quantity, line.unit)}
                             </Text>
                           </View>
                           {persisted ? (
@@ -536,7 +540,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                               <View style={styles.inputCopy}>
                                 <Text style={styles.inputLabel}>Số lượng ảnh hưởng</Text>
                                 <Text style={styles.inputHint}>
-                                  Tối đa {formatQuantity(line.quantity)} trong đơn này
+                                  Tối đa {formatQuantityWithUnit(line.quantity, line.unit)} trong đơn này
                                 </Text>
                               </View>
                               <View style={styles.quantityInputWrap}>
@@ -552,7 +556,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                                   placeholderTextColor={Colors.textMuted}
                                   style={styles.quantityInput}
                                 />
-                                <Text style={styles.quantityUnit}>{line.unit?.trim() || 'đơn vị'}</Text>
+                                <Text style={styles.quantityUnit}>{getQuantityUnit(line.unit)}</Text>
                               </View>
                             </View>
                             <Text style={styles.inputLabel}>Mô tả tình trạng</Text>

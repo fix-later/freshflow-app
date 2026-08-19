@@ -1,5 +1,6 @@
 import { apiClient } from '../../../services/api/client';
 import type { CloudinaryUploadSignature } from '../../../services/cloudinaryUpload';
+import { getMarketProductCatalog } from '../../../services/marketProductCatalog';
 
 export type ProcurementTaskStatus =
   | 'Built'
@@ -13,6 +14,8 @@ export interface ProcurementTaskItemDto {
   marketProductId: string;
   productNameSnapshot: string;
   totalQuantity: number;
+  /** Enriched from the market catalog because the procurement payload omits it. */
+  unit?: string | null;
   referenceUnitPrice: number | null;
   actualQuantity: number | null;
   actualUnitPrice: number | null;
@@ -108,6 +111,25 @@ function datePlusDays(value: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+async function enrichTaskUnits(
+  tasks: MarketProcurementTaskDto[],
+): Promise<MarketProcurementTaskDto[]> {
+  const catalog = await getMarketProductCatalog(tasks.map((task) => task.marketId));
+  return tasks.map((task) => ({
+    ...task,
+    items: task.items.map((item) => ({
+      ...item,
+      unit: item.unit
+        ?? catalog.byMarketProductId.get(item.marketProductId)?.unit
+        ?? null,
+    })),
+  }));
+}
+
+async function enrichTaskUnit(task: MarketProcurementTaskDto): Promise<MarketProcurementTaskDto> {
+  return (await enrichTaskUnits([task]))[0];
+}
+
 export const marketProcurementApi = {
   async getTasksInNextSevenDays(fromDate = getVietnamDate()): Promise<MarketProcurementTaskDto[]> {
     const allTasks: MarketProcurementTaskDto[] = [];
@@ -125,7 +147,7 @@ export const marketProcurementApi = {
     } while (allTasks.length < total);
 
     const toDate = datePlusDays(fromDate, 6);
-    return allTasks
+    const tasks = allTasks
       .filter((task) => (
         task.batchDate >= fromDate
         && task.batchDate <= toDate
@@ -135,13 +157,14 @@ export const marketProcurementApi = {
         left.batchDate.localeCompare(right.batchDate)
         || left.id.localeCompare(right.id)
       ));
+    return enrichTaskUnits(tasks);
   },
 
   async getTask(batchId: string): Promise<MarketProcurementTaskDto> {
     const { data } = await apiClient.get<MarketProcurementTaskDto>(
       `/api/v1/procurement/tasks/${batchId}`,
     );
-    return data;
+    return enrichTaskUnit(data);
   },
 
   async confirmPurchase(
@@ -156,7 +179,7 @@ export const marketProcurementApi = {
       `/api/v1/procurement/tasks/${batchId}/purchase`,
       { lines },
     );
-    return data;
+    return enrichTaskUnit(data);
   },
 
   /** Signed Cloudinary upload payload scoped to the authenticated agent's batch. */
@@ -178,7 +201,7 @@ export const marketProcurementApi = {
       `/api/v1/procurement/tasks/${batchId}/exceptions`,
       request,
     );
-    return data;
+    return enrichTaskUnit(data);
   },
 
   /**
@@ -191,6 +214,6 @@ export const marketProcurementApi = {
     const { data } = await apiClient.patch<MarketProcurementTaskDto>(
       `/api/v1/procurement/tasks/${batchId}/handover`,
     );
-    return data;
+    return enrichTaskUnit(data);
   },
 };

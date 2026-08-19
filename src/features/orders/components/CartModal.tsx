@@ -6,6 +6,7 @@ import { Colors } from '../../../constants/colors';
 import { Fonts } from '../../../constants/fonts';
 import { Text, TextInput } from '../../../components/ui/Text';
 import { useCartStore } from '../../../store/cartStore';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 function formatPrice(value: number) {
   return `${value.toLocaleString('vi-VN')}đ`;
@@ -105,7 +106,9 @@ export function CartModal({
                         >
                           <MaterialIcons name="remove" size={16} color={Colors.primaryText} />
                         </Pressable>
-                        <Text numeric style={styles.cartScreenQtyText}>{item.qty}</Text>
+                        <Text numeric style={styles.cartScreenQtyText}>
+                          {formatQuantityWithUnit(item.qty, item.unit)}
+                        </Text>
                         <Pressable
                           style={styles.cartScreenQtyBtn}
                           disabled={item.qty >= maxQuantity}

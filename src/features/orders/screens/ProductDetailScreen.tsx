@@ -16,6 +16,7 @@ import { useFavoritesStore } from '../../../store/favoritesStore';
 import { useCartStore } from '../../../store/cartStore';
 import { pricingApi } from '../../pricing/api/pricingApi';
 import type { MarketProductTagDto, PriceHistoryItemDto } from '../../../types/api.types';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 interface RouteParams {
   product: {
@@ -294,7 +295,9 @@ export function ProductDetailScreen() {
           >
             <Ionicons name="remove" size={22} color={Colors.deepTeal} />
           </Pressable>
-          <Text numeric style={styles.quantityValue}>{quantity}</Text>
+          <Text numeric style={styles.quantityValue}>
+            {formatQuantityWithUnit(quantity, product.unit)}
+          </Text>
           <Pressable
             style={styles.quantityButton}
             disabled={quantity >= maxQty}

@@ -20,6 +20,7 @@ import {
   type InvoiceStatus,
 } from '../api/invoiceApi';
 import { type RestaurantProfileStackParamList } from '../../../navigation/types';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 type Props = NativeStackScreenProps<RestaurantProfileStackParamList, 'InvoiceDetail'>;
 
@@ -218,7 +219,7 @@ export function InvoiceDetailScreen({ route, navigation }: Props) {
                 <Text style={styles.lineTotal}>{formatVnd(line.lineTotal)}</Text>
               </View>
               <Text style={styles.lineSub}>
-                {line.quantity}{line.unit ? ` ${line.unit}` : ''} x {formatVnd(line.unitPrice)} · VAT{' '}
+                {formatQuantityWithUnit(line.quantity, line.unit)} x {formatVnd(line.unitPrice)} · VAT{' '}
                 {line.vatRateCode} ({line.vatRatePercent}%)
               </Text>
               {index < invoice.lines.length - 1 && <View style={styles.lineSeparator} />}

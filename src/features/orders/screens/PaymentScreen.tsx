@@ -5,6 +5,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
 import { Text } from '../../../components/ui/Text';
 import type { CartItem } from '../../../store/cartStore';
+import { formatQuantityWithUnit, getQuantityUnit } from '../../../utils/quantity';
 
 type PaymentMethod = 'cod' | 'bank_transfer';
 
@@ -36,7 +37,10 @@ export function PaymentScreen({
   const [placed, setPlaced] = useState(false);
 
   const total = subtotal;
-  const itemCount = cart.reduce((sum, item) => sum + item.qty, 0);
+  const itemCount = cart.length;
+  const totalQuantity = cart.reduce((sum, item) => sum + item.qty, 0);
+  const firstUnit = getQuantityUnit(cart[0]?.unit);
+  const hasSingleUnit = cart.every((item) => getQuantityUnit(item.unit) === firstUnit);
 
   const handleConfirm = () => {
     setPlacing(true);
@@ -62,7 +66,9 @@ export function PaymentScreen({
             </View>
             <Text style={styles.successTitle}>Đặt hàng thành công!</Text>
             <Text style={styles.successSub}>
-              Đơn hàng {itemCount} sản phẩm trị giá {total.toLocaleString('vi-VN')}đ đã được ghi nhận.
+              Đơn hàng {itemCount} mặt hàng
+              {hasSingleUnit ? ` (${formatQuantityWithUnit(totalQuantity, firstUnit)})` : ''} trị giá{' '}
+              {total.toLocaleString('vi-VN')}đ đã được ghi nhận.
             </Text>
             <Pressable style={styles.successBtn} onPress={handleDone}>
               <Text style={styles.successBtnText}>Về trang chủ</Text>
@@ -107,7 +113,7 @@ export function PaymentScreen({
               <Text style={styles.sectionTitle}>Tóm tắt đơn hàng</Text>
               <View style={styles.summaryCard}>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Tạm tính ({itemCount} sản phẩm)</Text>
+                  <Text style={styles.summaryLabel}>Tạm tính ({itemCount} mặt hàng)</Text>
                   <Text style={styles.summaryValue}>{subtotal.toLocaleString('vi-VN')}đ</Text>
                 </View>
                 <View style={styles.summaryDivider} />

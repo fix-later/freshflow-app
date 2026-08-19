@@ -13,6 +13,10 @@ import { driverApi } from '../api/driverApi';
 import { driverRouteStore, type DeliveryStop } from '../store/driverRouteStore';
 import { type DeliveryStatus } from '../types/delivery.types';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import {
+  formatQuantityTotal,
+  formatQuantityWithUnit,
+} from '../../../utils/quantity';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'DriverNavigation'>;
 
@@ -109,6 +113,7 @@ export function NavigationScreen({ route, navigation }: Props) {
             orderItemId: l.orderItemId,
             marketProductId: '',
             productNameSnapshot: l.productName,
+            unit: l.unit,
             unitPriceSnapshot: 0,
             quantity: l.quantity,
             lineSubtotal: 0,
@@ -121,7 +126,11 @@ export function NavigationScreen({ route, navigation }: Props) {
       try {
         const route = driverRouteStore.getRoute();
         if (route) {
-          const manifest = await driverApi.getLoadingManifest(route.routeId);
+          const manifest = await driverApi.getLoadingManifest(
+            route.routeId,
+            route.stops.filter((routeStop) => routeStop.entityType === 'market')
+              .map((routeStop) => routeStop.entityId),
+          );
           if (cancelled) return;
           if (manifest && manifest.stops && manifest.stops.length > 0) {
             driverRouteStore.setManifestStops(manifest.stops);
@@ -132,6 +141,7 @@ export function NavigationScreen({ route, navigation }: Props) {
                   orderItemId: l.orderItemId,
                   marketProductId: '',
                   productNameSnapshot: l.productName,
+                  unit: l.unit,
                   unitPriceSnapshot: 0,
                   quantity: l.quantity,
                   lineSubtotal: 0,
@@ -217,7 +227,7 @@ export function NavigationScreen({ route, navigation }: Props) {
   }
 
   const isDone = localStatus === 'delivered' || localStatus === 'failed';
-  const totalItems = items?.reduce((s, i) => s + i.quantity, 0) ?? 0;
+  const totalQuantityLabel = formatQuantityTotal(items ?? []);
   const bottomPad = Math.max(insets.bottom, 12);
 
   return (
@@ -296,7 +306,9 @@ export function NavigationScreen({ route, navigation }: Props) {
                 <View key={item.orderItemId} style={styles.itemRow}>
                   <Ionicons name="cube-outline" size={16} color={Colors.primary} />
                   <Text style={styles.itemName}>{item.productNameSnapshot}</Text>
-                  <Text style={styles.itemQty}>{item.quantity}</Text>
+                  <Text style={styles.itemQty}>
+                    {formatQuantityWithUnit(item.quantity, item.unit)}
+                  </Text>
                 </View>
               ))}
               {itemsUnavailable && (
@@ -326,13 +338,17 @@ export function NavigationScreen({ route, navigation }: Props) {
             >
               <View style={styles.itemsCountChip}>
                 <Ionicons name="cube-outline" size={12} color={Colors.primary} />
-                <Text style={styles.itemsCountText}>{items?.length ?? 0} loại · {totalItems} đv</Text>
+                <Text style={styles.itemsCountText}>
+                  {items?.length ?? 0} loại · {totalQuantityLabel}
+                </Text>
               </View>
               {items?.map(item => (
                 <View key={item.orderItemId} style={styles.itemChip}>
                   <Text style={styles.itemChipText}>
                     {item.productNameSnapshot}{' '}
-                    <Text style={{ fontWeight: '800', color: Colors.primary }}>{item.quantity}</Text>
+                    <Text style={{ fontWeight: '800', color: Colors.primary }}>
+                      {formatQuantityWithUnit(item.quantity, item.unit)}
+                    </Text>
                   </Text>
                 </View>
               ))}

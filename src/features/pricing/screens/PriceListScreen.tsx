@@ -20,6 +20,7 @@ import { Colors } from '../../../constants/colors';
 import { pricingApi } from '../api/pricingApi';
 import { useCartStore } from '../../../store/cartStore';
 import type { MarketDto, MarketProductDto, CategoryDto, PriceHistoryItemDto } from '../../../types/api.types';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 // ─── Assets ────────────────────────────────
 const MARKET_IMAGES: Record<string, string> = {
@@ -403,7 +404,7 @@ export function PriceListScreen() {
                     <Pressable style={styles.qtyBtn} onPress={() => addToCart(item)}>
                       <Ionicons name="add" size={18} color={Colors.onPrimary} />
                     </Pressable>
-                    <Text style={styles.qtyText}>{qty}</Text>
+                    <Text style={styles.qtyText}>{formatQuantityWithUnit(qty, item.unit)}</Text>
                     <Pressable style={styles.qtyBtnMinus} onPress={() => removeFromCart(item.marketProductId)}>
                       <Ionicons name="remove" size={18} color={Colors.primary} />
                     </Pressable>
@@ -489,11 +490,21 @@ export function PriceListScreen() {
                 <View style={styles.productDetailStatsGrid}>
                   <View style={styles.productDetailStatCard}>
                     <Text style={styles.productDetailStatLabel}>Số lượng tại chợ</Text>
-                    <Text style={styles.productDetailStatValue}>{detailProduct.product.currentQuantity}</Text>
+                    <Text style={styles.productDetailStatValue}>
+                      {formatQuantityWithUnit(
+                        detailProduct.product.currentQuantity,
+                        detailProduct.product.unit,
+                      )}
+                    </Text>
                   </View>
                   <View style={styles.productDetailStatCard}>
                     <Text style={styles.productDetailStatLabel}>Có thể đặt</Text>
-                    <Text style={styles.productDetailStatValue}>{Math.max(0, detailProduct.product.availableQuantity)}</Text>
+                    <Text style={styles.productDetailStatValue}>
+                      {formatQuantityWithUnit(
+                        Math.max(0, detailProduct.product.availableQuantity),
+                        detailProduct.product.unit,
+                      )}
+                    </Text>
                   </View>
                 </View>
 
@@ -523,7 +534,9 @@ export function PriceListScreen() {
                           <Text style={styles.productHistoryPrice}>{formatPrice(history.price)}</Text>
                           <Text style={styles.productHistoryDate}>{formatDateTime(history.recordedAt)}</Text>
                         </View>
-                        <Text style={styles.productHistoryQty}>SL: {history.quantity}</Text>
+                        <Text style={styles.productHistoryQty}>
+                          SL: {formatQuantityWithUnit(history.quantity, detailProduct.product.unit)}
+                        </Text>
                       </View>
                     ))}
                   </View>
@@ -588,7 +601,9 @@ export function PriceListScreen() {
                     <Pressable style={styles.cartScreenQtyBtn} onPress={() => globalRemoveFromCart(item.id)}>
                       <MaterialIcons name="remove" size={16} color={Colors.primary} />
                     </Pressable>
-                    <Text style={styles.cartScreenQtyText}>{item.qty}</Text>
+                    <Text style={styles.cartScreenQtyText}>
+                      {formatQuantityWithUnit(item.qty, item.unit)}
+                    </Text>
                     <Pressable style={styles.cartScreenQtyBtn} onPress={() => {
                       globalAddToCart(item);
                     }}>

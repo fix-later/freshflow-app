@@ -31,6 +31,7 @@ import { useHubProcurementWeek } from '../hooks/useHubProcurementWeek';
 import { useHubSortingWeek } from '../hooks/useHubSortingWeek';
 import { useHubWork } from '../hooks/useHubWork';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 type Navigation = NativeStackNavigationProp<HubStackParamList>;
 
@@ -446,7 +447,7 @@ export function SortingScreen() {
                                       <View style={styles.itemCopy}>
                                         <Text style={[styles.itemName, checked && styles.itemNameChecked]}>{line.productName}</Text>
                                         <Text numeric style={styles.itemQuantity}>
-                                          {formatQuantity(line.quantity)} {line.unit?.trim() || 'đơn vị'}
+                                          {formatQuantityWithUnit(line.quantity, line.unit)}
                                           {line.capacityKg !== null ? ` · ${formatQuantity(line.capacityKg)} kg tải` : ''}
                                         </Text>
                                         {locallySorted ? (

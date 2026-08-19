@@ -22,6 +22,7 @@ import { claimsApi, type OrderClaimDto } from '../api/claimsApi';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 import { uploadImageToCloudinary } from '../../../services/cloudinaryUpload';
 import type { OrderItemDto } from '../../orders/api/orderApi';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 interface FileClaimModalProps {
   visible: boolean;
@@ -288,7 +289,8 @@ export function FileClaimModal({
                                 {item.productNameSnapshot || 'Sản phẩm'}
                               </Text>
                               <Text style={styles.itemPickSub}>
-                                {item.unitPrice.toLocaleString('vi-VN')}đ x {item.quantity}
+                                {item.unitPrice.toLocaleString('vi-VN')}đ x{' '}
+                                {formatQuantityWithUnit(item.quantity, item.unit)}
                               </Text>
                             </View>
 

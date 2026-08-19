@@ -10,6 +10,7 @@ import { driverApi } from '../api/driverApi';
 import { driverRouteStore } from '../store/driverRouteStore';
 import { type LoadingLineDto, type LoadingManifestDto } from '../types/delivery.types';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'PickupConfirm'>;
 
@@ -117,7 +118,9 @@ function PackageCard({
               <Text style={styles.itemName} numberOfLines={1}>
                 {line.productName}
               </Text>
-              <Text style={styles.itemQty}>x{line.quantity}</Text>
+              <Text style={styles.itemQty}>
+                {formatQuantityWithUnit(line.quantity, line.unit)}
+              </Text>
             </View>
           ))}
         </View>
@@ -139,7 +142,13 @@ export function PickupConfirmScreen({ route, navigation }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const manifest = await driverApi.getLoadingManifest(routeId);
+      const assignedRoute = driverRouteStore.getRoute();
+      const manifest = await driverApi.getLoadingManifest(
+        routeId,
+        assignedRoute?.stops
+          .filter((stop) => stop.entityType === 'market')
+          .map((stop) => stop.entityId) ?? [],
+      );
       if (manifest && manifest.stops) {
         driverRouteStore.setManifestStops(manifest.stops);
       }

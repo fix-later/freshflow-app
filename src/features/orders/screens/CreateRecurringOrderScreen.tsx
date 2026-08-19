@@ -30,6 +30,7 @@ import { pricingApi } from '../../pricing/api/pricingApi';
 import { restaurantApi, type DeliveryAddressDto } from '../../restaurant/api/restaurantApi';
 import { type MarketDto, type MarketProductDto } from '../../../types/api.types';
 import { type RestaurantOrdersStackParamList } from '../../../navigation/types';
+import { formatQuantityWithUnit } from '../../../utils/quantity';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'CreateRecurringOrder'>;
 
@@ -555,7 +556,9 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
                             >
                               <Ionicons name="remove" size={15} color={Colors.primaryText} />
                             </Pressable>
-                            <Text style={styles.quantityText}>{picked.quantity}</Text>
+                            <Text style={styles.quantityText}>
+                              {formatQuantityWithUnit(picked.quantity, product.unit)}
+                            </Text>
                             <Pressable
                               style={styles.quantityButton}
                               onPress={() => changePickedQuantity(product, 1)}
@@ -592,7 +595,9 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
                   {item.product?.productName ?? item.marketProductId}
                   {!item.product ? '  ·  sản phẩm không còn tồn tại' : ''}
                 </Text>
-                <Text style={styles.pickedQty}>x{item.quantity}</Text>
+                <Text style={styles.pickedQty}>
+                  {formatQuantityWithUnit(item.quantity, item.product?.unit)}
+                </Text>
                 {!isEditMode ? (
                   <Pressable onPress={() => removePickedItem(item.marketProductId)}>
                     <Ionicons name="close-circle" size={20} color={Colors.outline} />

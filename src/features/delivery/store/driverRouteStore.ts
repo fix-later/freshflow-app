@@ -135,7 +135,10 @@ export const driverRouteStore = {
     }
     if (_route && _manifestLinesByOrder.size === 0) {
       try {
-        const manifest = await driverApi.getLoadingManifest(_route.routeId);
+        const manifest = await driverApi.getLoadingManifest(
+          _route.routeId,
+          _route.stops.filter((stop) => stop.entityType === 'market').map((stop) => stop.entityId),
+        );
         if (manifest && manifest.stops && manifest.stops.length > 0) {
           this.setManifestStops(manifest.stops);
         }
