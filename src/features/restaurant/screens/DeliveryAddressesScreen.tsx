@@ -303,6 +303,13 @@ export function DeliveryAddressesScreen() {
   };
 
   const handleDelete = (item: DeliveryAddressDto) => {
+    if (addresses.length <= 1) {
+      Alert.alert(
+        'Không thể xoá',
+        'Đây là địa chỉ giao hàng duy nhất của bạn. Vui lòng thêm địa chỉ khác trước khi xoá địa chỉ này.',
+      );
+      return;
+    }
     Alert.alert(
       'Xoá địa chỉ',
       `Bạn có chắc muốn xoá địa chỉ "${item.addressLine}"?`,
