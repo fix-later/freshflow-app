@@ -132,8 +132,8 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
         title = 'Số điện thoại đã được sử dụng';
         body = `Số điện thoại "${normalizedPhone}" đã được đăng ký.\nVui lòng dùng số điện thoại khác.`;
       } else if (code === 'ROLE_NOT_CONFIGURED') {
-        title = 'Lỗi hệ thống';
-        body = 'Hệ thống chưa cấu hình vai trò nhà hàng. Vui lòng liên hệ hỗ trợ.';
+        title = 'Chưa thể đăng ký';
+        body = 'Đăng ký tài khoản nhà hàng hiện tạm gián đoạn. Vui lòng liên hệ hỗ trợ.';
       } else if (!err?.response) {
         title = 'Không có kết nối mạng';
         body = 'Vui lòng kiểm tra kết nối internet và thử lại.';

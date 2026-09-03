@@ -237,7 +237,7 @@ export function SortingScreen() {
       if (assignments.length > 1) {
         Alert.alert(
           'Dòng hàng thuộc nhiều tuyến',
-          'App đã tạm ghi nhận trong phiên. Cần BE hoặc Điều phối xử lý tuyến trùng trước khi đồng bộ tiến độ.',
+          'Kết quả đã được lưu tạm. Vui lòng chờ bộ phận điều phối xử lý tuyến bị trùng trước khi tiếp tục.',
         );
       }
       return;
@@ -321,13 +321,13 @@ export function SortingScreen() {
           <EmptyState
             icon={<Ionicons name="business-outline" size={52} color={Colors.textMuted} />}
             title="Chưa được phân công Hub"
-            subtitle="Danh sách phân loại sẽ xuất hiện sau khi Admin gán Hub cho tài khoản của bạn."
+            subtitle="Danh sách phân loại sẽ xuất hiện sau khi bạn được quản lý phân công Hub."
           />
         ) : !sorting.error && !procurement.error && plans.length === 0 ? (
           <EmptyState
             icon={<Ionicons name="checkmark-done-circle-outline" size={52} color={Colors.primaryText} />}
             title="Chưa có lô đã kiểm đếm để phân hàng"
-            subtitle="Đơn chỉ xuất hiện sau khi Hub Staff đối chiếu đủ mặt hàng và xác nhận nhận lô. Không bắt buộc phải có tuyến giao."
+            subtitle="Đơn hàng sẽ xuất hiện sau khi nhân viên Hub đối chiếu đủ mặt hàng và xác nhận nhận lô."
           />
         ) : (
           <ScrollView
@@ -344,7 +344,7 @@ export function SortingScreen() {
             <View style={styles.instructionStrip}>
               <Ionicons name="information-circle-outline" size={17} color={Colors.secondary} />
               <Text style={styles.instructionText}>
-                Danh sách này chỉ lấy đơn thuộc lô đã xác nhận “Đã đến Hub”. Dòng có tuyến sẽ lưu lên BE; dòng chưa có tuyến được tạm giữ trong phiên App.
+                Danh sách gồm các đơn thuộc lô đã xác nhận “Đã đến Hub”. Mặt hàng chưa có tuyến sẽ được lưu tạm để tiếp tục sau khi điều phối.
               </Text>
             </View>
 
@@ -452,7 +452,7 @@ export function SortingScreen() {
                                         </Text>
                                         {locallySorted ? (
                                           <Text style={styles.temporaryText}>
-                                            {canSync ? 'Chạm lại để đồng bộ lên BE' : 'Tạm ghi nhận trên App · chờ tuyến'}
+                                            {canSync ? 'Chạm lại để lưu kết quả' : 'Đã lưu tạm · Đang chờ tuyến'}
                                           </Text>
                                         ) : null}
                                       </View>

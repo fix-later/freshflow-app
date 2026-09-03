@@ -111,7 +111,7 @@ export function HubProcurementWeekScreen() {
           <EmptyState
             icon={<Ionicons name="business-outline" size={52} color={Colors.textMuted} />}
             title="Chưa được phân công Hub"
-            subtitle="Kế hoạch sẽ xuất hiện sau khi Admin gán Hub cho tài khoản của bạn."
+            subtitle="Kế hoạch sẽ xuất hiện sau khi bạn được quản lý phân công Hub."
           />
         ) : !week.error && plansWithWork.length === 0 ? (
           <EmptyState

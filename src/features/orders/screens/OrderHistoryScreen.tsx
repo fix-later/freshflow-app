@@ -186,7 +186,7 @@ export function OrderHistoryScreen() {
   };
 
   const renderItem = ({ item }: { item: OrderListItemDto }) => {
-    const statusLabel = ORDER_STATUS_LABEL[item.status] || item.status;
+    const statusLabel = ORDER_STATUS_LABEL[item.status] || 'Đang cập nhật';
     const statusColor = ORDER_STATUS_COLOR[item.status] || Colors.outline;
     const dateObj = item.createdAt ? new Date(item.createdAt) : new Date();
     const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${(

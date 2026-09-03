@@ -49,7 +49,7 @@ export function HubDashboardScreen() {
   const receivedTasks = inboundTasks.filter((task) => isInboundReceived(task.status));
   const pendingWeight = pendingTasks.reduce((sum, task) => sum + task.totalQuantityKg, 0);
   const assignmentLabel = assignedHubs.length === 0
-    ? 'Chưa được Admin phân công Hub'
+    ? 'Chưa được phân công Hub'
     : assignedHubs.length === 1
       ? assignedHubs[0].name
       : `${assignedHubs.length} Hub được phân công`;
@@ -93,13 +93,13 @@ export function HubDashboardScreen() {
               <Text style={styles.summaryLabel}>PHẠM VI CÔNG VIỆC</Text>
               <Text style={styles.summaryText}>
                 {assignedHubs.length > 0
-                  ? 'Chỉ hiển thị các lô thuộc Hub đã được Admin giao cho bạn.'
-                  : 'Liên hệ Admin để được gán Hub trước khi nhận hàng.'}
+                  ? 'Chỉ hiển thị các lô thuộc Hub bạn đang phụ trách.'
+                  : 'Liên hệ quản lý để được phân công Hub trước khi nhận hàng.'}
               </Text>
             </View>
             <View style={styles.onlineBadge}>
               <View style={[styles.onlineDot, assignedHubs.length === 0 && styles.offlineDot]} />
-              <Text style={styles.onlineText}>{assignedHubs.length > 0 ? 'Đã đồng bộ' : 'Chờ giao'}</Text>
+              <Text style={styles.onlineText}>{assignedHubs.length > 0 ? 'Sẵn sàng' : 'Chờ phân công'}</Text>
             </View>
           </View>
         </View>
@@ -118,8 +118,8 @@ export function HubDashboardScreen() {
 
             <View style={styles.sectionHeading}>
               <View>
-                <Text style={styles.sectionTitle}>Hub được Admin phân công</Text>
-                <Text style={styles.sectionSubtitle}>Cập nhật trực tiếp từ tài khoản của bạn</Text>
+                <Text style={styles.sectionTitle}>Hub đang phụ trách</Text>
+                <Text style={styles.sectionSubtitle}>Phạm vi công việc hiện tại của bạn</Text>
               </View>
             </View>
 
@@ -128,7 +128,7 @@ export function HubDashboardScreen() {
                 <EmptyState
                   icon={<Ionicons name="business-outline" size={52} color={Colors.textMuted} />}
                   title="Bạn chưa được phân công Hub"
-                  subtitle="Sau khi Admin gán Hub, các lô hàng cần nhận sẽ tự động xuất hiện tại đây."
+                  subtitle="Sau khi được quản lý phân công Hub, các lô hàng cần nhận sẽ xuất hiện tại đây."
                   actionLabel="Kiểm tra lại"
                   onAction={refresh}
                 />
@@ -177,7 +177,7 @@ export function HubDashboardScreen() {
               <>
                 <View style={styles.sectionHeading}>
                   <View>
-                    <Text style={styles.sectionTitle}>Task nhận hàng của tôi</Text>
+                    <Text style={styles.sectionTitle}>Nhiệm vụ nhận hàng của tôi</Text>
                     <Text style={styles.sectionSubtitle}>
                       {pendingTasks.length} lô chờ nhận · {receivedTasks.length} lô đã đến Hub
                     </Text>
@@ -192,7 +192,7 @@ export function HubDashboardScreen() {
                     <EmptyState
                       icon={<Ionicons name="checkmark-done-circle-outline" size={52} color={Colors.primaryText} />}
                       title="Chưa có lô hàng cần xử lý"
-                      subtitle="Khi có lô hàng thuộc Hub được phân công, task sẽ xuất hiện ở đây."
+                      subtitle="Khi có lô hàng thuộc Hub được phân công, nhiệm vụ sẽ xuất hiện ở đây."
                     />
                   </View>
                 ) : (
@@ -209,7 +209,7 @@ export function HubDashboardScreen() {
                     onPress={() => navigation.navigate('HubTabs', { screen: 'InboundQueue' })}
                   >
                     <Ionicons name="file-tray-full-outline" size={19} color={Colors.onPrimary} />
-                    <Text style={styles.primaryActionText}>Mở danh sách task</Text>
+                    <Text style={styles.primaryActionText}>Mở danh sách nhiệm vụ</Text>
                   </Pressable>
                 </View>
               </>

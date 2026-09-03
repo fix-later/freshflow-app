@@ -86,6 +86,7 @@ export type RestaurantOrdersStackParamList = {
     notes?: string;
   };
   OrderDetail: { orderId: string };
+  InvoiceDetail: { invoiceId: string };
   AddDraftOrderItem: { orderId: string };
   OrderHistory: undefined;
   ReportIssue: { orderId: string };

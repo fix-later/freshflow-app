@@ -83,7 +83,7 @@ export function ClaimsListScreen({ navigation }: Props) {
   });
 
   const renderClaimItem = ({ item }: { item: OrderClaimDto }) => {
-    const statusLabel = CLAIM_STATUS_LABEL[item.status] || item.status;
+    const statusLabel = CLAIM_STATUS_LABEL[item.status] || 'Đang cập nhật';
     const statusColor = CLAIM_STATUS_COLOR[item.status] || Colors.textMuted;
     const orderCode = (item.orderId || '').slice(0, 8).toUpperCase();
 
@@ -141,7 +141,7 @@ export function ClaimsListScreen({ navigation }: Props) {
                 { color: item.status?.toLowerCase() === 'approved' ? '#047857' : '#B91C1C' },
               ]}
             >
-              Phản hồi Admin: {item.decisionNote}
+              Phản hồi từ bộ phận quản lý: {item.decisionNote}
             </Text>
           </View>
         ) : null}

@@ -94,7 +94,7 @@ export function MarketAgentHomeScreen() {
           </View>
           <View style={styles.profileCopy}>
             <Text style={styles.greeting}>Xin chào,</Text>
-            <Text style={styles.userName} numberOfLines={1}>{user?.name || 'Market Agent'}</Text>
+            <Text style={styles.userName} numberOfLines={1}>{user?.name || 'Nhân viên thu mua'}</Text>
           </View>
           <View style={styles.onlinePill}>
             <View style={styles.onlineDot} />
@@ -150,9 +150,9 @@ export function MarketAgentHomeScreen() {
             <Ionicons name="shield-checkmark-outline" size={22} color={Colors.primaryText} />
           </View>
           <View style={styles.scopeCopy}>
-            <Text style={styles.scopeTitle}>Phạm vi đã đồng bộ</Text>
+            <Text style={styles.scopeTitle}>Phạm vi được phân công</Text>
             <Text style={styles.scopeText}>
-              Danh sách dưới đây được lấy từ phân công hiện tại của hệ thống.
+              Danh sách chợ bạn đang phụ trách được hiển thị bên dưới.
             </Text>
           </View>
           <Text style={styles.scopeValue} numeric>{assignedMarkets.length}</Text>

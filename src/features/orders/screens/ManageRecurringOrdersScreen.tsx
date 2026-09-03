@@ -154,7 +154,7 @@ export function ManageRecurringOrdersScreen() {
           <View style={styles.headerTitleRow}>
             <Ionicons name="repeat-outline" size={16} color={Colors.primaryText} />
             <Text style={styles.recurrenceLabel}>
-              {RECURRENCE_LABEL[item.recurrenceType] ?? item.recurrenceType}
+              {RECURRENCE_LABEL[item.recurrenceType] ?? 'Định kỳ'}
             </Text>
           </View>
           <View

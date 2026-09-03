@@ -226,7 +226,7 @@ export function ProcurementExceptionModal({
               maxLength={500}
               multiline
               textAlignVertical="top"
-              placeholder="Mô tả tình trạng thực tế để Admin và Hub dễ đối chiếu..."
+              placeholder="Mô tả tình trạng thực tế để bộ phận quản lý và Hub dễ đối chiếu..."
               placeholderTextColor={Colors.textMuted}
               style={[styles.input, styles.noteInput]}
             />
@@ -255,7 +255,7 @@ export function ProcurementExceptionModal({
                   <Ionicons name="camera" size={25} color={Colors.deepTeal} />
                 </View>
                 <Text style={styles.evidenceTitle}>Chụp hoặc chọn ảnh</Text>
-                <Text style={styles.evidenceHint}>Ảnh sẽ được upload bằng chữ ký bảo mật do backend cấp.</Text>
+                <Text style={styles.evidenceHint}>Ảnh sẽ được đính kèm vào báo cáo để hỗ trợ đối chiếu.</Text>
               </Pressable>
             )}
           </ScrollView>

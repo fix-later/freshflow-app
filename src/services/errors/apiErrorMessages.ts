@@ -96,7 +96,7 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   "HUB_NOT_CONFIGURED_FOR_MARKET": "Lô này chưa có hub được cấu hình",
   "HUB_NOT_FOUND": "Hub này không còn tồn tại",
   "HUB_OUTBOUND_EVENT_NOT_FOUND": "Lượt xuất kho không còn tồn tại",
-  "HUB_RELAY_NOT_SUPPORTED": "Hệ thống chưa hỗ trợ tuyến trung chuyển qua hub",
+  "HUB_RELAY_NOT_SUPPORTED": "Chưa hỗ trợ tuyến trung chuyển qua Hub",
   "INBOUND_NOT_ARRIVED": "Lượt nhập phải tới hub trước khi trung chuyển",
   "INSUFFICIENT_HUB_STOCK": "Tồn kho tại hub không đủ cho lượt xuất này",
   "INSUFFICIENT_STOCK": "Một hoặc nhiều sản phẩm vượt quá số lượng còn lại",
@@ -132,6 +132,7 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   "INVOICE_LINE_UNIT_REQUIRED": "Một dòng hoá đơn thiếu đơn vị tính",
   "INVOICE_NOT_FOUND": "Hoá đơn này không còn tồn tại",
   "INVOICE_NOT_ISSUED": "Chỉ xuất được hoá đơn đã phát hành",
+  "INVOICE_PDF_PROVIDER_REQUIRED": "Hóa đơn điện tử này cần được xem qua cổng tra cứu",
   "MARKET_ACCESS_DENIED": "Bạn không được phân công cho chợ này",
   "MARKET_ASSIGNMENT_CONFLICT": "Chợ này đã được phân công cho người dùng đó",
   "MARKET_INACTIVE": "Chợ này đang ngừng hoạt động — hãy kích hoạt lại trước khi niêm yết sản phẩm",
@@ -193,7 +194,7 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   "RESTAURANT_NOT_ACTIVE": "Chỉ nhà hàng đang hoạt động mới có thể tạm ngưng",
   "RESTAURANT_NOT_APPROVED": "Nhà hàng của bạn đang chờ quản trị viên duyệt",
   "RESTAURANT_NOT_FOUND": "Không tìm thấy nhà hàng với mã này",
-  "ROLE_NOT_CONFIGURED": "Máy chủ gặp lỗi, vui lòng thử lại sau giây lát",
+  "ROLE_NOT_CONFIGURED": "Đăng ký hiện tạm gián đoạn, vui lòng thử lại sau",
   "ROUTE_HAS_NO_DELIVERIES": "Hãy điều phối tuyến trước khi bắt đầu",
   "ROUTE_HAS_NO_DRIVER": "Tuyến này chưa có tài xế",
   "ROUTE_HUB_MISMATCH": "Tuyến này thuộc hub khác",
@@ -255,8 +256,8 @@ export const API_MESSAGE_TEXT: Record<string, string> = {
   "At least one order must be provided": "Phải có ít nhất một đơn hàng",
   "Authentication is required": "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại",
   "Auto-batch is already running": "Tiến trình gộp tự động đang chạy cho ngày này",
-  "AvatarUrl must be a valid absolute HTTPS or HTTP URL.": "Phải là địa chỉ http:// hoặc https:// đầy đủ",
-  "BusinessLicenseUrl must be a valid absolute HTTPS or HTTP URL.": "Phải là địa chỉ http:// hoặc https:// đầy đủ",
+  "AvatarUrl must be a valid absolute HTTPS or HTTP URL.": "Ảnh đại diện không hợp lệ",
+  "BusinessLicenseUrl must be a valid absolute HTTPS or HTTP URL.": "Ảnh giấy phép kinh doanh không hợp lệ",
   "Cannot calculate a route for more than 20 orders at once": "Không thể xử lý quá 20 đơn hàng cùng lúc",
   "Capacity must be greater than 0": "Sức chứa phải lớn hơn 0",
   "End date must be on or after start date": "Ngày kết thúc phải bằng hoặc sau ngày bắt đầu",
@@ -277,7 +278,7 @@ export const API_MESSAGE_TEXT: Record<string, string> = {
   "One or more fields failed validation.": "Vui lòng kiểm tra lại các trường được đánh dấu và thử lại",
   "One or more orders are already in an active order group": "Một hoặc nhiều đơn hàng đã thuộc một nhóm đang hoạt động",
   "Order cannot be cancelled in its current status": "Không thể hủy đơn hàng này ở trạng thái hiện tại",
-  "OrderItemId must be null or a non-empty id.": "Không lưu được mục này — mã định danh không hợp lệ",
+  "OrderItemId must be null or a non-empty id.": "Không lưu được mục này. Vui lòng tải lại và thử lại",
   "Password must contain at least one digit.": "Phải có ít nhất một chữ số",
   "Password must contain at least one special character.": "Phải có ít nhất một ký tự đặc biệt",
   "Password must contain at least one uppercase letter.": "Phải có ít nhất một chữ hoa",
@@ -290,7 +291,7 @@ export const API_MESSAGE_TEXT: Record<string, string> = {
   "Quantity must be greater than 0": "Số lượng phải lớn hơn 0",
   "RecurrenceType must be 'daily' or 'weekly'.": "Chọn hằng ngày hoặc hằng tuần",
   "Requested quantity exceeds available hub stock": "Số lượng yêu cầu vượt quá tồn kho tại hub",
-  "Role must be one of the accepted values": "Vai trò phải là một trong các giá trị được chấp nhận",
+  "Role must be one of the accepted values": "Tài khoản không phù hợp với thao tác này",
   "Scheduled time must be at least 2 hours from now": "Thời gian đặt lịch phải cách hiện tại ít nhất 2 giờ",
   "You are not authorized to update prices at this market": "Bạn không được phân công cho chợ này",
   "You do not have permission to perform this action": "Bạn không có quyền thực hiện thao tác này",
@@ -343,13 +344,25 @@ const API_STATUS_MESSAGES: Record<number, string> = {
   409: 'Thao tác xung đột với trạng thái hiện tại — vui lòng tải lại và thử lại',
   422: 'Thao tác này hiện không được phép',
   429: 'Quá nhiều yêu cầu, vui lòng đợi một lát và thử lại',
-  500: 'Máy chủ gặp lỗi, vui lòng thử lại sau giây lát',
-  502: 'Máy chủ gặp lỗi, vui lòng thử lại sau giây lát',
-  503: 'Máy chủ gặp lỗi, vui lòng thử lại sau giây lát',
-  504: 'Máy chủ gặp lỗi, vui lòng thử lại sau giây lát',
+  500: 'Đã xảy ra sự cố, vui lòng thử lại sau giây lát',
+  502: 'Đã xảy ra sự cố, vui lòng thử lại sau giây lát',
+  503: 'Đã xảy ra sự cố, vui lòng thử lại sau giây lát',
+  504: 'Đã xảy ra sự cố, vui lòng thử lại sau giây lát',
 };
 
 const DEFAULT_FALLBACK = 'Đã xảy ra lỗi, vui lòng thử lại';
+
+// A thrown library/network error can bypass the normal response envelope. Never
+// surface implementation terms or machine codes from those messages to users.
+const TECHNICAL_MESSAGE_PATTERN = /\b(?:api|backend|server|rest|signalr|endpoint|payload|token|jwt|https?|exception|stack|database|sql|guid|cloudinary|provider)\b/i;
+const MACHINE_CODE_PATTERN = /(?:^|[\s(:])[A-Z][A-Z0-9_]{2,}(?=$|[\s).,:])/;
+
+function isUserFacingMessage(message: string): boolean {
+  const trimmed = message.trim();
+  return trimmed.length > 0
+    && !TECHNICAL_MESSAGE_PATTERN.test(trimmed)
+    && !MACHINE_CODE_PATTERN.test(trimmed);
+}
 
 /**
  * Marks an `Error` whose `.message` may not be Vietnamese — thrown by
@@ -446,7 +459,7 @@ export function getApiErrorMessage(error: unknown, fallback: string = DEFAULT_FA
 
   if (!info) {
     if (error instanceof UntrustedUploadError) return fallback;
-    if (error instanceof Error && error.message) return error.message;
+    if (error instanceof Error && isUserFacingMessage(error.message)) return error.message;
     return fallback;
   }
 
@@ -463,9 +476,7 @@ export function getApiErrorMessage(error: unknown, fallback: string = DEFAULT_FA
   if (info.code && API_ERROR_MESSAGES[info.code]) return API_ERROR_MESSAGES[info.code];
 
   if (info.status && API_STATUS_MESSAGES[info.status]) {
-    return info.code
-      ? `${API_STATUS_MESSAGES[info.status]} (mã lỗi: ${info.code})`
-      : API_STATUS_MESSAGES[info.status];
+    return API_STATUS_MESSAGES[info.status];
   }
 
   return fallback;

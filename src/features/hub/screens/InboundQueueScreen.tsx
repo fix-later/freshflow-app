@@ -52,8 +52,8 @@ function formatWeight(value: number): string {
 }
 
 function formatSyncTime(value: Date | null): string {
-  if (!value) return 'Chưa đồng bộ';
-  return `Đồng bộ lúc ${new Intl.DateTimeFormat('vi-VN', {
+  if (!value) return 'Chưa cập nhật';
+  return `Cập nhật lúc ${new Intl.DateTimeFormat('vi-VN', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -92,7 +92,7 @@ export function InboundQueueScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.screen}>
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>TASK ĐƯỢC PHÂN CÔNG · {assignedHubs.length} HUB</Text>
+          <Text style={styles.eyebrow}>NHIỆM VỤ ĐƯỢC PHÂN CÔNG · {assignedHubs.length} HUB</Text>
           <Text style={styles.title}>Kiểm đếm lô hàng</Text>
           <Text style={styles.subtitle}>
             {visibleTasks.length} lô · {formatWeight(visibleWeight)} {filter === 'pending' ? 'đang chờ nhận' : 'đã đến Hub'}
@@ -117,7 +117,7 @@ export function InboundQueueScreen() {
               Đã nhận  {receivedTasks.length}
             </Text>
           </Pressable>
-          <Pressable accessibilityLabel="Tải lại danh sách task" style={styles.refreshButton} onPress={refresh}>
+          <Pressable accessibilityLabel="Tải lại danh sách nhiệm vụ" style={styles.refreshButton} onPress={refresh}>
             <Ionicons name="refresh" size={19} color={Colors.onPrimary} />
           </Pressable>
         </View>
@@ -130,7 +130,7 @@ export function InboundQueueScreen() {
         ) : null}
 
         {loading ? (
-          <Loading fullScreen label="Đang tải task nhận hàng..." />
+          <Loading fullScreen label="Đang tải nhiệm vụ nhận hàng..." />
         ) : error ? (
           <ErrorView fullScreen message={error} onRetry={refresh} />
         ) : assignedHubs.length === 0 ? (
@@ -138,7 +138,7 @@ export function InboundQueueScreen() {
             <EmptyState
               icon={<Ionicons name="business-outline" size={58} color={Colors.textMuted} />}
               title="Bạn chưa được phân công Hub"
-              subtitle="Admin cần gán ít nhất một Hub cho tài khoản trước khi bạn có thể nhận task."
+              subtitle="Vui lòng liên hệ quản lý để được phân công Hub trước khi nhận hàng."
               actionLabel="Kiểm tra lại"
               onAction={refresh}
             />
@@ -161,7 +161,7 @@ export function InboundQueueScreen() {
                 icon={<Ionicons name="checkmark-done-circle-outline" size={58} color={Colors.primaryText} />}
                 title={filter === 'pending' ? 'Không có lô hàng đang chờ' : 'Chưa có lô hàng đã nhận'}
                 subtitle={filter === 'pending'
-                  ? `API pending-inbound đang trả về 0 task cho: ${assignedHubs.map((hub) => `${hub.name} (${shortId(hub.hubId)})`).join(', ')}.`
+                  ? `Hiện chưa có lô hàng cần nhận tại ${assignedHubs.map((hub) => hub.name).join(', ')}.`
                   : 'Lô hàng sẽ chuyển sang đây sau khi bạn xác nhận nhận hàng.'}
               />
             ) : (
@@ -197,14 +197,14 @@ function TaskCard({ task, onPress }: { task: HubInboundTask; onPress: () => void
       <View style={styles.infoGrid}>
         <Info
           icon="time-outline"
-          label={task.deliveryScheduleId ? 'MA bàn giao lúc' : 'Thời gian dự kiến'}
+          label={task.deliveryScheduleId ? 'Nhân viên thu mua bàn giao lúc' : 'Thời gian dự kiến'}
           value={formatDateTime(task.arrivedAt)}
           numeric
         />
         <Info icon="scale-outline" label="Khối lượng" value={formatWeight(task.totalQuantityKg)} numeric />
         <Info
           icon={task.deliveryScheduleId ? 'cube-outline' : 'navigate-outline'}
-          label={task.deliveryScheduleId ? 'Lô từ MA' : 'Tuyến giao'}
+          label={task.deliveryScheduleId ? 'Lô từ nhân viên thu mua' : 'Tuyến giao'}
           value={task.deliveryScheduleId ? shortBatchCode(task.deliveryScheduleId) : shortId(task.deliveryRouteId)}
           numeric
         />

@@ -146,7 +146,7 @@ export function CreateOrderScreen({ route, navigation }: Props) {
     if (scheduledDate <= new Date() || startOfSelectedDay > getDeliveryUpperBound(deliveryWindowDays)) {
       Alert.alert(
         'Ngày giao không hợp lệ',
-        `Ngày giao phải ở tương lai và nằm trong cửa sổ ${deliveryWindowDays} ngày theo quy định của hệ thống.`,
+        `Ngày giao phải ở tương lai và nằm trong khoảng ${deliveryWindowDays} ngày cho phép.`,
       );
       return;
     }

@@ -19,6 +19,8 @@ export interface InvoiceSummaryDto {
   taxAuthorityCode: string | null;
   issuedAt: string | null;
   total: number;
+  providerName: string | null;
+  isSandbox: boolean;
   createdAt: string;
 }
 
@@ -55,6 +57,8 @@ export interface InvoiceDto {
   // Machine error code from the last issuance attempt — non-null on 'Failed' and, while a
   // retry is still pending, also on 'PendingIssuance' (see MarkAwaitingBuyerInfo/MarkIssuanceFailed).
   errorReason: string | null;
+  providerName: string | null;
+  isSandbox: boolean;
   createdAt: string;
   lines: InvoiceLineDto[];
 }
@@ -86,5 +90,29 @@ export const invoiceApi = {
   async getInvoiceById(invoiceId: string): Promise<InvoiceDto> {
     const { data } = await apiClient.get<InvoiceDto>(`/api/v1/invoices/${invoiceId}`);
     return data;
+  },
+
+  async getInvoicePdf(invoiceId: string): Promise<ArrayBuffer> {
+    const { data } = await apiClient.get<ArrayBuffer>(`/api/v1/invoices/${invoiceId}/pdf`, {
+      responseType: 'arraybuffer',
+      headers: { Accept: 'application/pdf' },
+    });
+    return data;
+  },
+
+  async getInvoiceByOrderId(orderId: string): Promise<InvoiceSummaryDto | null> {
+    const pageSize = 100;
+    let page = 1;
+
+    while (true) {
+      const { data } = await apiClient.get<InvoiceListResult>('/api/v1/invoices', {
+        params: { page, pageSize },
+      });
+      const invoice = data.items.find((item) => item.orderId === orderId);
+      if (invoice) return invoice;
+
+      if (data.items.length === 0 || page * pageSize >= data.total) return null;
+      page += 1;
+    }
   },
 };

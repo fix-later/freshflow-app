@@ -4,46 +4,54 @@ import { RoleGate, useHasRole } from '../features/auth';
 import { UserRole } from '../constants/roles';
 import { useAuthStore } from '../store/authStore';
 
+const ROLE_LABELS: Record<string, string> = {
+  [UserRole.RESTAURANT]: 'Nhà hàng',
+  [UserRole.MARKET_AGENT]: 'Nhân viên thu mua',
+  [UserRole.HUB_STAFF]: 'Nhân viên Hub',
+  [UserRole.DRIVER]: 'Tài xế',
+};
+
 export function NotificationsScreen() {
   const { user } = useAuthStore();
   const isDriver = useHasRole(UserRole.DRIVER);
+  const roleLabel = user?.role ? ROLE_LABELS[user.role] ?? 'Người dùng' : 'Khách';
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Thông báo</Text>
-        <Text style={styles.sub}>Danh sách push notifications</Text>
+        <Text style={styles.sub}>Các cập nhật mới dành cho bạn</Text>
       </View>
 
       {/* Demo Section for Role-Based Access Control Verification */}
       <View style={styles.rbacDemo}>
-        <Text style={styles.demoTitle}>🛡️ Kiểm tra Phân Quyền (RBAC Demo)</Text>
+        <Text style={styles.demoTitle}>🛡️ Thông tin dành cho bạn</Text>
         <Text style={styles.roleInfo}>
-          Tài khoản hiện tại: <Text style={styles.roleBadge}>{user?.name || 'Chưa đăng nhập'}</Text> 
-          {' - '} Vai trò: <Text style={[styles.roleBadge, styles.roleName]}>{user?.role || 'NONE'}</Text>
+          Tài khoản: <Text style={styles.roleBadge}>{user?.name || 'Chưa đăng nhập'}</Text>
+          {' · '} Phạm vi: <Text style={[styles.roleBadge, styles.roleName]}>{roleLabel}</Text>
         </Text>
 
         <View style={styles.cardContainer}>
           {/* Case 1: RoleGate only for RESTAURANT */}
           <RoleGate allowedRoles={UserRole.RESTAURANT}>
             <View style={[styles.card, styles.restaurantCard]}>
-              <Text style={styles.cardHeader}>🏪 Dành riêng cho Nhà Hàng</Text>
-              <Text style={styles.cardBody}>Đây là thông báo đặc biệt chỉ dành cho đối tác Nhà hàng đặt nông sản.</Text>
+              <Text style={styles.cardHeader}>🏪 Dành cho nhà hàng</Text>
+              <Text style={styles.cardBody}>Theo dõi đơn hàng, công nợ và các cập nhật dành cho nhà hàng tại đây.</Text>
             </View>
           </RoleGate>
 
           {/* Case 2: RoleGate only for DRIVER */}
           <RoleGate allowedRoles={UserRole.DRIVER}>
             <View style={[styles.card, styles.driverCard]}>
-              <Text style={styles.cardHeader}>🚚 Dành riêng cho Tài Xế</Text>
-              <Text style={styles.cardBody}>Tuyến đường giao hàng của bạn đã được cập nhật từ hệ thống Hub.</Text>
+              <Text style={styles.cardHeader}>🚚 Dành cho tài xế</Text>
+              <Text style={styles.cardBody}>Tuyến đường giao hàng của bạn đã được Hub cập nhật.</Text>
             </View>
           </RoleGate>
 
           {/* Case 3: RoleGate for HUB_STAFF or MARKET_AGENT */}
           <RoleGate allowedRoles={[UserRole.HUB_STAFF, UserRole.MARKET_AGENT]}>
             <View style={[styles.card, styles.agentCard]}>
-              <Text style={styles.cardHeader}>💼 Dành cho Hub Staff / Market Agent</Text>
+              <Text style={styles.cardHeader}>💼 Dành cho nhân viên vận hành</Text>
               <Text style={styles.cardBody}>Vui lòng cập nhật bảng giá và kiểm tra tồn kho tại điểm tập kết.</Text>
             </View>
           </RoleGate>
@@ -53,19 +61,19 @@ export function NotificationsScreen() {
             allowedRoles={UserRole.RESTAURANT}
             fallback={
               <View style={[styles.card, styles.fallbackCard]}>
-                <Text style={styles.cardHeaderFallback}>🔒 Quyền Hạn Hạn Chế</Text>
+                <Text style={styles.cardHeaderFallback}>🔒 Tính năng không khả dụng</Text>
                 <Text style={styles.cardBodyFallback}>
-                  {isDriver 
-                    ? 'Bạn là Tài xế, không thể thực hiện chức năng Đặt hàng nông sản.'
-                    : `Vai trò ${user?.role || 'khách'} không được phép đặt hàng.`
+                  {isDriver
+                    ? 'Tài khoản tài xế không thể sử dụng tính năng đặt hàng.'
+                    : 'Tài khoản của bạn không thể sử dụng tính năng đặt hàng.'
                   }
                 </Text>
               </View>
             }
           >
             <View style={[styles.card, styles.successCard]}>
-              <Text style={styles.cardHeader}>✨ Chức Năng Đặt Hàng</Text>
-              <Text style={styles.cardBody}>Nút tạo đơn hàng hiển thị vì bạn có quyền RESTAURANT.</Text>
+              <Text style={styles.cardHeader}>✨ Đặt hàng nhanh chóng</Text>
+              <Text style={styles.cardBody}>Bạn có thể chọn sản phẩm và tạo đơn hàng mới ngay trên FreshFlow.</Text>
             </View>
           </RoleGate>
         </View>

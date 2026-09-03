@@ -99,7 +99,7 @@ export function RestaurantNotificationsScreen() {
               realtimeConnected ? styles.connectionOnline : styles.connectionOffline,
             ]} />
             <Text style={styles.connectionText}>
-              {realtimeConnected ? 'Cập nhật realtime đang hoạt động' : 'Đang đồng bộ qua REST'}
+              {realtimeConnected ? 'Thông báo mới sẽ tự động cập nhật' : 'Đang kiểm tra thông báo mới'}
             </Text>
           </View>
         )}

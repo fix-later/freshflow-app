@@ -41,7 +41,7 @@ function AppContent() {
   // wrong. Sign them out with a real explanation instead.
   useEffect(() => {
     if (isAuthenticated && user && !RoleHome) {
-      forceSignOutWithNotice(`Vai trò "${user.role}" chưa được hỗ trợ trên ứng dụng di động.`);
+      forceSignOutWithNotice('Tài khoản này chưa được hỗ trợ trên ứng dụng di động.');
     }
   }, [isAuthenticated, user, RoleHome, forceSignOutWithNotice]);
 

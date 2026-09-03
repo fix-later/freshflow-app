@@ -266,7 +266,7 @@ export async function getCursorPaged<T>(
   const envelope = response.data;
 
   if (!envelope?.success || !Array.isArray(envelope.data) || !envelope.meta) {
-    throw new Error('Phản hồi phân trang từ máy chủ không hợp lệ');
+    throw new Error('Không thể tải đầy đủ dữ liệu. Vui lòng thử lại.');
   }
 
   return {

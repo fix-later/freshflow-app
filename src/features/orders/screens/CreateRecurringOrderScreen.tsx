@@ -380,7 +380,7 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
             quantity: item.quantity,
           })),
         });
-        Alert.alert('Đã tạo lịch đặt hàng', 'Đến hạn, hệ thống sẽ tự đặt đơn theo mẫu này.', [
+        Alert.alert('Đã tạo lịch đặt hàng', 'Đến hạn, FreshFlow sẽ tự đặt đơn theo mẫu này.', [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
       }
@@ -411,7 +411,7 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
         <View style={styles.infoBox}>
           <Ionicons name="information-circle-outline" size={16} color={Colors.primaryText} />
           <Text style={styles.infoText}>
-            Đến hạn, hệ thống sẽ tự đặt đơn từ danh sách sản phẩm bên dưới. Nếu có vấn đề (hết
+            Đến hạn, FreshFlow sẽ tự đặt đơn từ danh sách sản phẩm bên dưới. Nếu có vấn đề (hết
             hàng, thiếu địa chỉ, vượt hạn mức công nợ...), đơn sẽ được để ở dạng nháp và bạn sẽ
             nhận thông báo để xử lý tay.
           </Text>
@@ -453,7 +453,7 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
           </Pressable>
         </View>
         <Text style={styles.helperCaption}>
-          Mỗi lần đến hạn, hệ thống tự đặt đơn và giao vào khung {DELIVERY_HOUR}:00 -{' '}
+          Mỗi lần đến hạn, FreshFlow tự đặt đơn và giao vào khung {DELIVERY_HOUR}:00 -{' '}
           {DELIVERY_HOUR + 2}:00 sáng.
           {isEditMode && !firstRunAtEdited
             ? ' Chỉ cần đổi ngày nếu bạn muốn dời lần chạy đầu tiên — nếu không đổi, lịch vẫn giữ nguyên.'
@@ -592,7 +592,7 @@ export function CreateRecurringOrderScreen({ navigation, route }: Props) {
             {pickedItems.map((item) => (
               <View key={item.marketProductId} style={styles.pickedRow}>
                 <Text style={styles.pickedName} numberOfLines={1}>
-                  {item.product?.productName ?? item.marketProductId}
+                  {item.product?.productName ?? 'Sản phẩm chưa xác định'}
                   {!item.product ? '  ·  sản phẩm không còn tồn tại' : ''}
                 </Text>
                 <Text style={styles.pickedQty}>

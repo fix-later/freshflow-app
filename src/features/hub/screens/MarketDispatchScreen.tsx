@@ -150,7 +150,7 @@ export function MarketDispatchScreen() {
     )));
     const failedCount = results.filter((result) => result.status === 'rejected').length;
     setDiscrepancyWarning(failedCount > 0
-      ? `Chưa kiểm tra được discrepancy của ${failedCount} Hub. Hãy tải lại trước khi bàn giao.`
+      ? `Chưa kiểm tra được các sự cố tại ${failedCount} Hub. Hãy tải lại trước khi bàn giao.`
       : null);
   };
 
@@ -199,7 +199,7 @@ export function MarketDispatchScreen() {
     if (load.missingPackingLines > 0) {
       Alert.alert(
         'Chưa đủ dữ liệu tải trọng',
-        `${load.missingPackingLines} dòng hàng chưa có capacityKg trong loading-manifest. App chưa thể chọn xe an toàn theo kg.`,
+        `${load.missingPackingLines} mặt hàng chưa có thông tin quy cách đóng gói. Chưa thể đề xuất xe phù hợp với tải trọng.`,
       );
       return;
     }
@@ -263,7 +263,7 @@ export function MarketDispatchScreen() {
       if (!latestEligibility.isEligible) {
         Alert.alert(
           'Xe không còn phù hợp',
-          latestEligibility.reasons.map((reason) => REASON_LABEL[reason] ?? reason).join('\n'),
+          latestEligibility.reasons.map((reason) => REASON_LABEL[reason] ?? 'Chưa đáp ứng điều kiện phân công').join('\n'),
         );
         await openVehiclePicker(selectedPlan!);
         return;
@@ -326,7 +326,7 @@ export function MarketDispatchScreen() {
             <View style={styles.notice}>
               <Ionicons name="sparkles-outline" size={20} color={Colors.primaryText} />
               <Text style={styles.noticeText}>
-                App đề xuất xe nhỏ nhất đủ tải ước tính; BE kiểm tra lại trạng thái, trùng lịch và giới hạn tuyến trước khi gán.
+                FreshFlow đề xuất xe nhỏ nhất đủ tải. Trạng thái xe, lịch hoạt động và giới hạn tuyến sẽ được kiểm tra trước khi phân công.
               </Text>
             </View>
 
@@ -335,10 +335,10 @@ export function MarketDispatchScreen() {
                 <Ionicons name="warning-outline" size={21} color="#8A5900" />
                 <View style={styles.discrepancyNoticeCopy}>
                   <Text style={styles.discrepancyNoticeTitle}>
-                    {openDiscrepancies.length} discrepancy đang chờ Operations xử lý
+                    {openDiscrepancies.length} sự cố đang chờ xử lý
                   </Text>
                   <Text style={styles.discrepancyNoticeText}>
-                    Tuyến chứa đơn bị ảnh hưởng sẽ không thể bàn giao để dispatch cho tới khi discrepancy được xác nhận.
+                    Tuyến có đơn hàng liên quan chưa thể bàn giao cho đến khi sự cố được xác nhận.
                   </Text>
                 </View>
               </View>
@@ -375,7 +375,7 @@ export function MarketDispatchScreen() {
                 <EmptyState
                   icon={<Ionicons name="checkmark-done-circle-outline" size={56} color={Colors.primaryText} />}
                   title="Chưa có tuyến giao trong 7 ngày"
-                  subtitle="Đơn chỉ xuất hiện khi BE đã tạo tuyến và đơn đã tới Hub. Đơn mới xác nhận tại Restaurant chưa phải là task của Hub."
+                  subtitle="Tuyến giao sẽ xuất hiện sau khi đơn hàng đến Hub và được điều phối."
                   actionLabel="Kiểm tra lại"
                   onAction={refresh}
                 />
@@ -499,7 +499,7 @@ function DispatchCard({
           </Text>
           {vehicle ? (
             <Text style={styles.assignmentMeta}>
-              {VEHICLE_TYPE_LABEL[vehicle.vehicleType] ?? vehicle.vehicleType} · {formatNumber(vehicle.capacityKg)} kg
+              {VEHICLE_TYPE_LABEL[vehicle.vehicleType] ?? 'Phương tiện'} · {formatNumber(vehicle.capacityKg)} kg
             </Text>
           ) : null}
         </View>
@@ -529,14 +529,14 @@ function DispatchCard({
         <View style={styles.routeDiscrepancy}>
           <Ionicons name="warning-outline" size={16} color="#8A5900" />
           <Text style={styles.routeDiscrepancyText}>
-            {openDiscrepancyCount} discrepancy mở · Chưa thể bàn giao để dispatch
+            {openDiscrepancyCount} sự cố đang xử lý · Chưa thể bàn giao
           </Text>
         </View>
       ) : null}
       {discrepancyCheckFailed ? (
         <View style={styles.routeDiscrepancy}>
           <Ionicons name="cloud-offline-outline" size={16} color="#8A5900" />
-          <Text style={styles.routeDiscrepancyText}>Chưa xác minh được discrepancy · Tạm khóa bàn giao</Text>
+          <Text style={styles.routeDiscrepancyText}>Chưa kiểm tra được tình trạng sự cố · Tạm khóa bàn giao</Text>
         </View>
       ) : null}
       {route.vehicleId && route.driverUserId && route.status === 'assigned' ? (
@@ -603,7 +603,7 @@ function VehiclePicker({
                 <EmptyState
                   icon={<Ionicons name="car-outline" size={52} color={Colors.textMuted} />}
                   title="Không có xe hoạt động"
-                  subtitle="Admin cần cập nhật đội xe trước khi Hub có thể phân công."
+                  subtitle="Vui lòng liên hệ quản lý để cập nhật đội xe trước khi phân công."
                 />
               ) : choices.map((choice) => {
                 const suggested = choice.vehicle.id === suggestedVehicleId;
@@ -611,7 +611,7 @@ function VehiclePicker({
                 const assigning = assigningVehicleId === choice.vehicle.id;
                 const reason = !choice.fitsLoad
                   ? 'Không đủ tải trọng ước tính'
-                  : choice.reasons.map((item) => REASON_LABEL[item] ?? item).join(' · ');
+                  : choice.reasons.map((item) => REASON_LABEL[item] ?? 'Chưa đáp ứng điều kiện phân công').join(' · ');
 
                 return (
                   <Pressable
@@ -629,7 +629,7 @@ function VehiclePicker({
                         {suggested ? <Text style={styles.recommendedBadge}>ĐỀ XUẤT</Text> : null}
                       </View>
                       <Text style={styles.optionMeta}>
-                        {VEHICLE_TYPE_LABEL[choice.vehicle.vehicleType] ?? choice.vehicle.vehicleType}
+                        {VEHICLE_TYPE_LABEL[choice.vehicle.vehicleType] ?? 'Phương tiện'}
                         {' · '}{formatNumber(choice.vehicle.capacityKg)} kg
                       </Text>
                       {!selectable && reason ? <Text style={styles.optionReason}>{reason}</Text> : null}
@@ -687,7 +687,7 @@ function DriverPicker({
               <EmptyState
                 icon={<Ionicons name="person-outline" size={52} color={Colors.textMuted} />}
                 title="Không có tài xế đủ điều kiện"
-                subtitle="BE chưa trả tài xế active có role driver."
+                subtitle="Hiện không có tài xế đang hoạt động và phù hợp với tuyến này."
               />
             ) : drivers.map((driver) => (
               <Pressable
@@ -701,7 +701,7 @@ function DriverPicker({
                 </View>
                 <View style={styles.optionCopy}>
                   <Text style={styles.optionTitle}>Tài xế {driver.userId.replaceAll('-', '').slice(0, 8).toUpperCase()}</Text>
-                  <Text numeric style={styles.optionMeta}>{driver.userId}</Text>
+                  <Text style={styles.optionMeta}>Sẵn sàng nhận tuyến</Text>
                 </View>
                 {assigning ? <ActivityIndicator size="small" color={Colors.primary} /> : <Ionicons name="chevron-forward" size={20} color={Colors.outline} />}
               </Pressable>

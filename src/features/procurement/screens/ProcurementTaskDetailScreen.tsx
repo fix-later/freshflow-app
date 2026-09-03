@@ -92,7 +92,7 @@ function exceptionLabel(type: string): string {
     pricediscrepancy: 'Sai lệch giá',
     damaged: 'Hàng hư hỏng',
   };
-  return labels[type.toLowerCase()] ?? type;
+  return labels[type.toLowerCase()] ?? 'Sự cố khác';
 }
 
 function formatDateTime(value: string): string {
@@ -223,7 +223,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
       Alert.alert(
         'Đã xác nhận thu mua',
         purchaseProofUri
-          ? 'Kết quả đã được cập nhật. Ảnh hiện chỉ được giữ tạm trên màn hình vì backend chưa có API lưu ảnh xác nhận cho Admin/Hub.'
+          ? 'Kết quả đã được cập nhật. Ảnh xác nhận hiện chỉ được lưu tạm trên thiết bị này.'
           : 'Số lượng và đơn giá thực tế đã được cập nhật thành công.',
       );
     } catch (submitError) {
@@ -238,7 +238,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
 
     Alert.alert(
       'Bàn giao cho Hub?',
-      'Sau khi xác nhận, lô thu mua sẽ được chuyển sang Hub đã được hệ thống chỉ định.',
+      'Sau khi xác nhận, lô thu mua sẽ được chuyển đến Hub được phân công.',
       [
         { text: 'Để sau', style: 'cancel' },
         {
@@ -250,7 +250,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
               setTask(updated);
               Alert.alert(
                 'Đã bàn giao',
-                'Backend đã tiếp nhận bàn giao. Task Hub sẽ tự đồng bộ ngay khi integration event hoàn tất; Hub Staff có thể mở màn Lô hàng hoặc kéo để tải lại.',
+                'Lô thu mua đã được bàn giao. Nhân viên Hub có thể mở mục Lô hàng hoặc kéo xuống để cập nhật danh sách.',
               );
             } catch (handoverError) {
               Alert.alert('Không thể bàn giao', readError(handoverError));
@@ -347,7 +347,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
                   <View style={styles.unavailableNotice}>
                     <Ionicons name="lock-closed-outline" size={16} color={Colors.textMuted} />
                     <Text style={styles.unavailableText}>
-                      {item.assignedAgentUserId ? 'Được giao cho market agent khác.' : 'Chưa được giao cho ai — chờ Admin phân công.'}
+                      {item.assignedAgentUserId ? 'Được giao cho nhân viên thu mua khác.' : 'Chưa được giao — vui lòng chờ quản lý phân công.'}
                     </Text>
                   </View>
                 ) : unavailable ? (
@@ -467,7 +467,7 @@ export function ProcurementTaskDetailScreen({ route }: Props) {
               </View>
               <View style={styles.orderCopy}>
                 <Text style={styles.orderCode} numeric>Đơn #{member.orderId.replaceAll('-', '').slice(0, 8).toUpperCase()}</Text>
-                <Text style={styles.orderStatus}>{ORDER_STATUS[member.status] ?? member.status}</Text>
+                <Text style={styles.orderStatus}>{ORDER_STATUS[member.status] ?? 'Đang cập nhật'}</Text>
               </View>
               <Ionicons name="checkmark-circle-outline" size={18} color={Colors.primaryText} />
             </View>

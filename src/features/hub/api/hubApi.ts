@@ -414,7 +414,7 @@ export const hubApi = {
     ));
 
     if (failedHubs.length > 0 && pages.length === 0) {
-      throw new Error(`Không tải được task của ${failedHubs.map((hub) => hub.name).join(', ')}.`);
+      throw new Error(`Không tải được nhiệm vụ của ${failedHubs.map((hub) => hub.name).join(', ')}.`);
     }
 
     const inboundTasks = pages
@@ -424,7 +424,7 @@ export const hubApi = {
     return {
       assignedHubs,
       inboundTasks,
-      warnings: failedHubs.map((hub) => `Không tải được task của ${hub.name} (${hub.hubId}).`),
+      warnings: failedHubs.map((hub) => `Không tải được nhiệm vụ của ${hub.name}.`),
     };
   },
 

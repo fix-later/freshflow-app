@@ -160,7 +160,7 @@ export function HubBatchOrdersScreen({ route }: Props) {
             title={batch?.orderIds.length ? 'Không tìm thấy đơn phù hợp' : 'Lô chưa có đơn hàng'}
             subtitle={batch?.orderIds.length
               ? 'Thử tìm bằng mã đơn hoặc tên nhà hàng khác.'
-              : 'Danh sách sẽ xuất hiện khi BE liên kết đơn vào lô.'}
+              : 'Danh sách sẽ xuất hiện khi đơn hàng được thêm vào lô.'}
           />
         )}
         renderItem={({ item, index }) => {
@@ -184,7 +184,7 @@ export function HubBatchOrdersScreen({ route }: Props) {
                   <Text style={detailAvailable ? styles.itemCount : styles.missingDetail}>
                     {detailAvailable
                       ? `${item.order?.items.length ?? 0} mặt hàng`
-                      : 'BE chưa trả chi tiết đơn này'}
+                      : 'Chưa tải được chi tiết đơn này'}
                   </Text>
                 </View>
                 {detailAvailable ? (

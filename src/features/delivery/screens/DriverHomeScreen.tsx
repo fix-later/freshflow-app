@@ -448,7 +448,7 @@ export function DriverHomeScreen() {
     } catch {
       Alert.alert(
         'Lưu thứ tự thất bại',
-        'Không thể lưu thứ tự điểm giao mới lên hệ thống. Vui lòng kiểm tra kết nối mạng và bấm "Xong" để thử lại.',
+        'Không thể lưu thứ tự điểm giao mới. Vui lòng kiểm tra kết nối mạng và bấm "Xong" để thử lại.',
       );
     } finally {
       setSavingOrder(false);

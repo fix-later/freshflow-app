@@ -54,7 +54,7 @@ const UNSUPPORTED_MOBILE_ROLES = new Set(['admin', 'operations_manager']);
 
 export class UnsupportedRoleError extends Error {
   constructor(public readonly role: string) {
-    super(`Vai trò "${role}" chưa được hỗ trợ trên ứng dụng di động.`);
+    super('Tài khoản này chưa được hỗ trợ trên ứng dụng di động.');
     this.name = 'UnsupportedRoleError';
   }
 }

@@ -74,7 +74,7 @@ function OrderRuleBanner() {
       <View style={{ flex: 1 }}>
         <Text style={[styles.cutoffTitle, { color: '#047857' }]}>Kiểm tra trước khi xác nhận</Text>
         <Text style={styles.cutoffSub}>
-          Hệ thống sẽ kiểm tra công nợ, trạng thái bản nháp và tự điều chỉnh lịch giao theo cutoff hiện hành.
+          FreshFlow sẽ kiểm tra công nợ, trạng thái bản nháp và điều chỉnh lịch giao theo thời gian nhận đơn hiện hành.
         </Text>
       </View>
     </View>
@@ -313,7 +313,7 @@ export function ConfirmOrderScreen({ route, navigation }: Props) {
       if (code === 'INSUFFICIENT_STOCK') {
         Alert.alert('Không đủ hàng', getApiErrorMessage(err, 'Một hoặc nhiều sản phẩm không đủ số lượng tồn kho.'), buttons);
       } else if (code === 'RESTAURANT_NOT_APPROVED' || code === 'RESTAURANT_NOT_ACTIVE') {
-        Alert.alert('Tài khoản chưa được duyệt', 'Nhà hàng cần được Admin phê duyệt trước khi đặt hàng.', buttons);
+        Alert.alert('Tài khoản chưa được duyệt', 'Nhà hàng cần được bộ phận quản lý phê duyệt trước khi đặt hàng.', buttons);
       } else if (code === 'DELIVERY_DATE_OUT_OF_WINDOW') {
         Alert.alert(
           'Thời gian không hợp lệ',

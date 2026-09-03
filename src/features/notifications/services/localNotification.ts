@@ -34,7 +34,7 @@ export async function ensureLocalNotificationPermission(): Promise<boolean> {
     // channel exists, so always create the channel before requesting access.
     await Notifications.setNotificationChannelAsync(DEFAULT_CHANNEL_ID, {
       name: 'Thông báo FreshFlow',
-      description: 'Thông báo realtime khi FreshFlow đang chạy.',
+      description: 'Nhận thông báo mới khi FreshFlow đang chạy.',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#2BBFA4',

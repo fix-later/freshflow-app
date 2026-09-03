@@ -217,7 +217,7 @@ export function MarketAgentTasksScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Mở nhiệm vụ mới ${shortBatchCode(latestAssignment.batchId)}`}
             >
-              <Text style={styles.newTaskEyebrow}>NHIỆM VỤ MỚI TỪ ADMIN</Text>
+              <Text style={styles.newTaskEyebrow}>NHIỆM VỤ MỚI ĐƯỢC PHÂN CÔNG</Text>
               <Text style={styles.newTaskTitle}>
                 Bạn vừa được giao {shortBatchCode(latestAssignment.batchId)}
               </Text>

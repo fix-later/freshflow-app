@@ -144,7 +144,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
   const loadBatch = async () => {
     if (!task.deliveryScheduleId) {
       setLoadingBatch(false);
-      setBatchError('Lô nhận chưa liên kết với batch đơn hàng nên chưa thể gửi discrepancy.');
+      setBatchError('Lô hàng chưa có đầy đủ thông tin đơn nên chưa thể ghi nhận sự cố.');
       return;
     }
     setLoadingBatch(true);
@@ -156,7 +156,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
         setBatchError('Không tìm thấy chi tiết đơn hàng của lô này trong kế hoạch Hub.');
       } else if ((detail.orders?.length ?? 0) !== detail.orderIds.length) {
         setBatchError(
-          `API chưa trả đủ chi tiết đơn nhà hàng (${detail.orders?.length ?? 0}/${detail.orderIds.length} đơn). Không thể kiểm đếm bằng số lượng gộp.`,
+          `Chưa tải đủ chi tiết đơn hàng (${detail.orders?.length ?? 0}/${detail.orderIds.length} đơn). Vui lòng tải lại trước khi kiểm đếm.`,
         );
       }
 
@@ -275,7 +275,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
       return;
     }
     if (issueValidationError) {
-      Alert.alert('Chưa đủ thông tin discrepancy', issueValidationError);
+      Alert.alert('Chưa đủ thông tin sự cố', issueValidationError);
       return;
     }
     const newIssueItems = issueItems.filter((line) => !reviews[line.orderItemId]?.persisted);
@@ -328,8 +328,8 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
 
       if (newIssueItems.length > 0) {
         Alert.alert(
-          'Đã gửi Admin xử lý',
-          `${newIssueItems.length} dòng hàng có vấn đề đã được tạo ở trạng thái OPEN (${recordedCount} dòng đơn mới). Admin/Operations có thể xem và xác nhận kết quả này.`,
+          'Đã gửi xử lý',
+          `${newIssueItems.length} mặt hàng có vấn đề đã được ghi nhận (${recordedCount} mặt hàng mới). Bộ phận quản lý sẽ kiểm tra và xác nhận kết quả.`,
           [{ text: 'Về danh sách lô', onPress: () => navigation.goBack() }],
         );
       } else {
@@ -342,7 +342,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
     } catch (error) {
       Alert.alert(
         'Chưa hoàn tất ghi nhận',
-        `${getErrorMessage(error)}\n\nNếu lô đã chuyển sang “Đã nhận”, hãy giữ nguyên thông tin và thử gửi lại; App sẽ bỏ qua các discrepancy đã lưu.`,
+        `${getErrorMessage(error)}\n\nNếu lô đã chuyển sang “Đã nhận”, hãy giữ nguyên thông tin và thử gửi lại. Các sự cố đã lưu sẽ không bị tạo trùng.`,
       );
     } finally {
       setSubmitting(false);
@@ -392,11 +392,11 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
               ? <ActivityIndicator size="small" color="#8A5900" />
               : <Ionicons name="shield-checkmark-outline" size={20} color="#8A5900" />}
             <View style={styles.noticeCopy}>
-              <Text style={styles.noticeTitle}>{readOnly ? 'Kết quả đã khóa' : 'Kiểm tra và gửi Admin'}</Text>
+              <Text style={styles.noticeTitle}>{readOnly ? 'Kết quả đã khóa' : 'Kiểm tra và gửi xử lý'}</Text>
               <Text style={styles.noticeText}>
                 {readOnly
-                  ? 'Lô đã được ghi nhận tại Hub. Bạn chỉ có thể xem kết quả; Admin/Operations phụ trách xử lý tiếp.'
-                  : 'Hàng có vấn đề sẽ được tạo ở trạng thái OPEN để Admin/Operations xác nhận.'}
+                  ? 'Lô đã được ghi nhận tại Hub. Bạn chỉ có thể xem kết quả; bộ phận quản lý sẽ tiếp tục xử lý.'
+                  : 'Mặt hàng có vấn đề sẽ được chuyển đến bộ phận quản lý để kiểm tra.'}
               </Text>
               {batchError ? (
                 <Pressable style={styles.retryRow} onPress={() => void loadBatch()}>
@@ -514,7 +514,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                               review.serverStatus === 'ACKNOWLEDGED' && styles.savedBadgeDone,
                             ]}>
                               <Text style={styles.savedBadgeText}>
-                                {review.serverStatus === 'ACKNOWLEDGED' ? 'Đã xác nhận' : 'Chờ Admin'}
+                                {review.serverStatus === 'ACKNOWLEDGED' ? 'Đã xác nhận' : 'Đang chờ xử lý'}
                               </Text>
                             </View>
                           ) : review.status === 'PENDING' ? (
@@ -620,8 +620,8 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                             <Text style={styles.restaurantHint}>
                               {persisted
                                 ? review.serverStatus === 'ACKNOWLEDGED'
-                                  ? 'Admin/Operations đã xác nhận discrepancy.'
-                                  : 'Đã gửi Admin/Operations · trạng thái OPEN.'
+                                  ? 'Sự cố đã được bộ phận quản lý xác nhận.'
+                                  : 'Đã gửi bộ phận quản lý xử lý.'
                                 : `${shortCode('ĐH', line.orderId)} · ${line.restaurantName}`}
                             </Text>
                           </View>
@@ -669,7 +669,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                 : submitting
                 ? 'Đang lưu...'
                 : issueItems.some((line) => !reviews[line.orderItemId]?.persisted)
-                  ? 'Xác nhận lô & gửi Admin'
+                  ? 'Xác nhận lô và gửi xử lý'
                   : received
                     ? 'Đóng kết quả'
                     : 'Xác nhận lô hàng'}

@@ -46,6 +46,12 @@ import {
 } from '../../claims/api/claimsApi';
 import { FileClaimModal } from '../../claims/components/FileClaimModal';
 import { formatQuantityWithUnit } from '../../../utils/quantity';
+import {
+  invoiceApi,
+  INVOICE_STATUS_LABEL,
+  type InvoiceStatus,
+  type InvoiceSummaryDto,
+} from '../../invoices/api/invoiceApi';
 
 type Props = NativeStackScreenProps<RestaurantOrdersStackParamList, 'OrderDetail'>;
 
@@ -59,6 +65,15 @@ const PAYMENT_STATUS_LABEL: Record<OrderDto['paymentStatus'], string> = {
   outstanding: 'Công nợ chưa thanh toán',
   settled: 'Đã tất toán',
   waived: 'Đã miễn/hoàn công nợ',
+};
+
+const INVOICE_STATUS_COLOR: Record<InvoiceStatus, string> = {
+  Draft: Colors.textMuted,
+  PendingIssuance: Colors.warning,
+  Issued: Colors.success,
+  Failed: Colors.danger,
+  Adjusted: Colors.textMuted,
+  Cancelled: Colors.danger,
 };
 
 const OTHER_REASON_ID = 'other';
@@ -200,6 +215,9 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const [deliveryAddresses, setDeliveryAddresses] = useState<DeliveryAddressDto[] | null>(null);
   const [fileClaimModalVisible, setFileClaimModalVisible] = useState(false);
   const [orderClaims, setOrderClaims] = useState<OrderClaimDto[]>([]);
+  const [invoice, setInvoice] = useState<InvoiceSummaryDto | null>(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(true);
+  const [invoiceLoadFailed, setInvoiceLoadFailed] = useState(false);
 
   // BE returns addresses sorted default-first — the first entry is always the right preselect.
   const selectedAddress = deliveryAddresses?.[0] ?? null;
@@ -244,6 +262,19 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     setCancelModalVisible(true);
   };
 
+  const fetchInvoice = useCallback(async () => {
+    setInvoiceLoading(true);
+    setInvoiceLoadFailed(false);
+    try {
+      setInvoice(await invoiceApi.getInvoiceByOrderId(orderId));
+    } catch {
+      setInvoice(null);
+      setInvoiceLoadFailed(true);
+    } finally {
+      setInvoiceLoading(false);
+    }
+  }, [orderId]);
+
   const fetchOrder = useCallback(async () => {
     setError(null);
     try {
@@ -256,12 +287,19 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           setOrderClaims(res.items.filter((c) => c.orderId === orderId));
         })
         .catch(() => setOrderClaims([]));
+      if (data.status === 'delivered') {
+        void fetchInvoice();
+      } else {
+        setInvoice(null);
+        setInvoiceLoadFailed(false);
+        setInvoiceLoading(false);
+      }
     } catch {
       setError('Không thể tải chi tiết đơn hàng');
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [fetchInvoice, orderId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -435,7 +473,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     }
     Alert.alert(
       'Xác nhận đơn hàng',
-      `Giao tới: ${selectedAddress.addressLine}\nHệ thống sẽ khóa giá và ghi nhận công nợ cho đơn này.`,
+      `Giao tới: ${selectedAddress.addressLine}\nGiá và công nợ của đơn sẽ được ghi nhận sau khi xác nhận.`,
       [
         { text: 'Chưa', style: 'cancel' },
         { text: 'Xác nhận', onPress: performConfirmOrder },
@@ -482,6 +520,12 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const isClaimableStatus = order.status === 'at_hub' || order.status === 'delivered';
   const canFileClaim = isClaimableStatus && !pendingClaim && !approvedClaim;
   const canReorder = items.length > 0;
+  const invoiceStatusColor = invoice ? INVOICE_STATUS_COLOR[invoice.status] : Colors.textMuted;
+  const noInvoiceMessage = order.status === 'cancelled'
+    ? 'Đơn hàng đã huỷ nên không phát sinh hóa đơn.'
+    : order.status === 'delivered'
+      ? 'Hóa đơn đang được chuẩn bị. Vui lòng kiểm tra lại sau ít phút.'
+      : 'Hóa đơn VAT sẽ có sau khi đơn hàng được giao thành công.';
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -706,7 +750,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
                         />
                         <View style={{ flex: 1, gap: 2 }}>
                           <Text style={[styles.decisionAlertTitle, { color: isApproved ? '#047857' : '#B91C1C' }]}>
-                            Phản hồi từ Admin:
+                            Phản hồi từ bộ phận quản lý:
                           </Text>
                           <Text style={[styles.decisionAlertText, { color: isApproved ? '#065F46' : '#991B1B' }]}>
                             {claim.decisionNote}
@@ -766,6 +810,63 @@ export function OrderDetailScreen({ route, navigation }: Props) {
               {PAYMENT_STATUS_LABEL[order.paymentStatus]}
             </Text>
           </View>
+        </View>
+
+        {/* ── Invoice ── */}
+        <Text style={styles.sectionTitle}>Hóa đơn VAT</Text>
+        <View style={styles.card}>
+          {invoiceLoading ? (
+            <View style={styles.invoiceStateRow}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.invoiceStateText}>Đang kiểm tra hóa đơn...</Text>
+            </View>
+          ) : invoice ? (
+            <Pressable
+              style={({ pressed }) => [styles.invoiceRow, pressed && { opacity: 0.7 }]}
+              onPress={() => navigation.navigate('InvoiceDetail', { invoiceId: invoice.id })}
+            >
+              <View style={[styles.invoiceIconWrap, { backgroundColor: invoiceStatusColor + '18' }]}>
+                <Ionicons name="document-text-outline" size={22} color={invoiceStatusColor} />
+              </View>
+              <View style={styles.invoiceInfo}>
+                <Text style={styles.invoiceTitle}>{invoice.number ?? 'Hóa đơn chưa cấp số'}</Text>
+                <Text style={[styles.invoiceStatus, { color: invoiceStatusColor }]}>
+                  {INVOICE_STATUS_LABEL[invoice.status]}
+                </Text>
+                <Text style={styles.invoiceDate}>Tạo lúc {formatDateTime(invoice.createdAt)}</Text>
+              </View>
+              <View style={styles.invoiceAmountBlock}>
+                <Text style={styles.invoiceAmount}>{invoice.total.toLocaleString('vi-VN')}đ</Text>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              </View>
+            </Pressable>
+          ) : invoiceLoadFailed ? (
+            <View style={styles.invoiceStateRow}>
+              <Ionicons name="alert-circle-outline" size={22} color={Colors.warning} />
+              <View style={styles.invoiceInfo}>
+                <Text style={styles.invoiceTitle}>Chưa tải được thông tin hóa đơn</Text>
+                <Text style={styles.invoiceStateText}>Vui lòng kiểm tra kết nối và thử lại.</Text>
+              </View>
+              <Pressable style={styles.invoiceRetryButton} onPress={() => void fetchInvoice()}>
+                <Text style={styles.invoiceRetryText}>Thử lại</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.invoiceStateRow}>
+              <View style={styles.invoiceIconWrap}>
+                <Ionicons name="receipt-outline" size={22} color={Colors.textMuted} />
+              </View>
+              <View style={styles.invoiceInfo}>
+                <Text style={styles.invoiceTitle}>Chưa có hóa đơn</Text>
+                <Text style={styles.invoiceStateText}>{noInvoiceMessage}</Text>
+              </View>
+              {order.status === 'delivered' ? (
+                <Pressable style={styles.invoiceRetryButton} onPress={() => void fetchInvoice()}>
+                  <Text style={styles.invoiceRetryText}>Kiểm tra lại</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          )}
         </View>
 
         {/* ── Reorder / Recurring Buttons (B2B Convenience) ── */}
@@ -1138,6 +1239,42 @@ const styles = StyleSheet.create({
   summarySecondaryValue: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
   summaryBreakdownRow: { paddingVertical: 8 },
   summaryBreakdownValue: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+
+  invoiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  invoiceStateRow: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  invoiceIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  invoiceInfo: { flex: 1 },
+  invoiceTitle: { fontSize: 13, fontFamily: Fonts.bold, color: Colors.textPrimary },
+  invoiceStatus: { marginTop: 3, fontSize: 12, fontFamily: Fonts.semibold },
+  invoiceDate: { marginTop: 3, fontSize: 11, color: Colors.textMuted },
+  invoiceStateText: { marginTop: 3, fontSize: 12, color: Colors.textMuted, lineHeight: 17 },
+  invoiceAmountBlock: { alignItems: 'flex-end', gap: 6 },
+  invoiceAmount: { fontSize: 13, fontFamily: Fonts.bold, color: Colors.primaryText },
+  invoiceRetryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+  },
+  invoiceRetryText: { fontSize: 12, fontFamily: Fonts.bold, color: Colors.primaryText },
 
   // Cancel footer
   footer: {

@@ -31,7 +31,7 @@ export const RESTAURANT_POLICY_SECTIONS: RestaurantPolicySection[] = [
     icon: 'receipt-outline',
     items: [
       'Đơn ở trạng thái Bản nháp có thể thêm, sửa hoặc xóa sản phẩm và chưa được xem là đơn đã đặt thành công.',
-      'Khi xác nhận, hệ thống kiểm tra số lượng tối thiểu của từng sản phẩm, tồn kho, địa chỉ giao hàng và hạn mức tín dụng; đồng thời xác định thuế, phí giao và khóa giá của đơn.',
+      'Khi xác nhận, FreshFlow kiểm tra số lượng tối thiểu của từng sản phẩm, tồn kho, địa chỉ giao hàng và hạn mức tín dụng; đồng thời xác định thuế, phí giao và khóa giá của đơn.',
       'Đơn chỉ được ghi nhận thành công khi ứng dụng hiển thị trạng thái Đã xác nhận. Nếu một điều kiện không còn đáp ứng, nhà hàng cần điều chỉnh đơn theo thông báo trên ứng dụng.',
       'Giá và thông tin sản phẩm hiển thị trong giỏ hàng là dữ liệu tham khảo trước xác nhận; số tiền chính thức được thể hiện tại bước Xem xác nhận.',
     ],
@@ -42,9 +42,9 @@ export const RESTAURANT_POLICY_SECTIONS: RestaurantPolicySection[] = [
     summary: 'Cách FreshFlow xác định ngày giao sớm nhất.',
     icon: 'calendar-outline',
     items: [
-      'Nhà hàng có thể chọn “Sớm nhất có thể” hoặc chọn thời gian giao trong cửa sổ đặt lịch đang được hệ thống công bố.',
+      'Nhà hàng có thể chọn “Sớm nhất có thể” hoặc chọn thời gian trong khoảng giao hàng đang áp dụng.',
       'Đơn xác nhận trước thời điểm chốt hằng ngày được xếp ngày giao sớm nhất từ ngày kế tiếp (D+1); đơn xác nhận từ thời điểm chốt trở đi được xếp sớm nhất từ D+2.',
-      'Nếu thời gian nhà hàng chọn sớm hơn mốc hợp lệ, hệ thống tự điều chỉnh lên chu kỳ giao sớm nhất và hiển thị lại trước hoặc sau khi xác nhận.',
+      'Nếu thời gian nhà hàng chọn sớm hơn mốc hợp lệ, FreshFlow tự điều chỉnh sang thời gian giao sớm nhất và hiển thị lại trước hoặc sau khi xác nhận.',
       'Thời gian giao là dự kiến và có thể thay đổi theo tình trạng thu mua, phân loại, tuyến giao hoặc sự kiện bất khả kháng. Thay đổi quan trọng sẽ được cập nhật qua trạng thái đơn hoặc thông báo trong ứng dụng.',
     ],
   },
@@ -68,7 +68,7 @@ export const RESTAURANT_POLICY_SECTIONS: RestaurantPolicySection[] = [
     items: [
       'Đơn chỉ được xác nhận khi hạn mức tín dụng khả dụng đủ cho tổng giá trị đơn.',
       'Giá trị đơn được ghi nhận vào công nợ khi xác nhận. Nhà hàng có thể theo dõi hạn mức, dư nợ, giao dịch và sao kê tại mục Tín dụng & Thanh toán.',
-      'Nếu đơn được hủy hợp lệ trước khi vào phiên thu mua, khoản công nợ liên quan sẽ được hoàn/miễn trừ theo kết quả xử lý của hệ thống.',
+      'Nếu đơn được hủy hợp lệ trước khi vào phiên thu mua, khoản công nợ liên quan sẽ được hoàn hoặc miễn trừ theo kết quả xử lý.',
       'Nhà hàng cần cập nhật đúng mã số thuế, tên pháp lý, địa chỉ và email nhận hóa đơn để FreshFlow phát hành hóa đơn VAT khi đủ điều kiện.',
     ],
   },
@@ -105,7 +105,7 @@ export const RESTAURANT_POLICY_SECTIONS: RestaurantPolicySection[] = [
       'Chức năng Báo sự cố được mở khi đơn đã chuyển sang trạng thái Đã giao.',
       'FreshFlow tiếp nhận ba nhóm vấn đề: thiếu hàng, sai hàng và hàng hư hỏng. Nhà hàng cần chọn đúng sản phẩm, nhập số lượng bị ảnh hưởng và mô tả chi tiết.',
       'Số lượng báo sự cố phải lớn hơn 0 và không vượt quá số lượng đã đặt của sản phẩm tương ứng.',
-      'FreshFlow sẽ đối chiếu dữ liệu đơn hàng, kết quả kiểm đếm và thông tin giao nhận. Khoản điều chỉnh hoặc hoàn công nợ, nếu có, được thực hiện theo kết quả phê duyệt trên hệ thống.',
+      'FreshFlow sẽ đối chiếu dữ liệu đơn hàng, kết quả kiểm đếm và thông tin giao nhận. Khoản điều chỉnh hoặc hoàn công nợ, nếu có, được thực hiện theo kết quả phê duyệt.',
     ],
   },
   {
@@ -125,8 +125,8 @@ export const RESTAURANT_POLICY_SECTIONS: RestaurantPolicySection[] = [
     icon: 'refresh-circle-outline',
     items: [
       `Phiên bản ${RESTAURANT_POLICY_VERSION} có hiệu lực từ ngày ${RESTAURANT_POLICY_EFFECTIVE_DATE}.`,
-      'FreshFlow có thể cập nhật chính sách để phù hợp với quy trình vận hành và tính năng hệ thống. Phiên bản đang hiển thị trong ứng dụng là phiên bản được áp dụng tại thời điểm nhà hàng tra cứu.',
-      'Các thông số vận hành có thể thay đổi như thời điểm chốt đơn, cửa sổ đặt lịch, giá, thuế và phí sẽ được hệ thống tính và hiển thị tại bước xác nhận; dữ liệu tại bước xác nhận được ưu tiên nếu khác với nội dung mô tả chung.',
+      'FreshFlow có thể cập nhật chính sách để phù hợp với quy trình vận hành và các tính năng đang cung cấp. Phiên bản hiển thị trong ứng dụng là phiên bản áp dụng tại thời điểm nhà hàng tra cứu.',
+      'Các thông số vận hành như thời điểm chốt đơn, khoảng đặt lịch, giá, thuế và phí có thể thay đổi và sẽ được hiển thị tại bước xác nhận; thông tin tại bước xác nhận được ưu tiên nếu khác với nội dung mô tả chung.',
     ],
   },
 ];

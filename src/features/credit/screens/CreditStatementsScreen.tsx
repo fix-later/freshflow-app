@@ -332,7 +332,7 @@ export function CreditStatementsScreen({ route }: Props) {
         Alert.alert('Thông báo', 'File PDF sao kê chưa có dữ liệu.');
       }
     } catch {
-      Alert.alert('Lỗi', 'Không thể tải file PDF sao kê từ máy chủ.');
+      Alert.alert('Không thể mở sao kê', 'Vui lòng kiểm tra kết nối và thử lại.');
     } finally {
       setDownloadingPdf(false);
     }

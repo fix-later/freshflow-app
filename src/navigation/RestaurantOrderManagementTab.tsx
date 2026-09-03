@@ -12,6 +12,7 @@ import { ReportIssueScreen } from '../features/orders/screens/ReportIssueScreen'
 import { ClaimsListScreen } from '../features/claims/screens/ClaimsListScreen';
 import { ScheduledOrderInstancesScreen } from '../features/orders/screens/ScheduledOrderInstancesScreen';
 import { DeliveryAddressesScreen } from '../features/restaurant/screens/DeliveryAddressesScreen';
+import { InvoiceDetailScreen } from '../features/invoices/screens/InvoiceDetailScreen';
 import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
 import { type RestaurantOrdersStackParamList } from './types';
@@ -44,6 +45,11 @@ export function RestaurantOrderManagementTab() {
         name="OrderDetail"
         component={OrderDetailScreen}
         options={{ title: 'Chi tiết đơn hàng' }}
+      />
+      <Stack.Screen
+        name="InvoiceDetail"
+        component={InvoiceDetailScreen}
+        options={{ title: 'Chi tiết hóa đơn' }}
       />
       <Stack.Screen
         name="AddDraftOrderItem"

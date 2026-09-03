@@ -97,7 +97,7 @@ export function ProcurementPurchaseProofCard({
             <View style={styles.localNotice}>
               <Ionicons name="information-circle-outline" size={16} color="#8A5900" />
               <Text style={styles.localNoticeText}>
-                Ảnh đang được giữ tạm trên thiết bị; backend chưa có API để gửi ảnh này cho Admin/Hub.
+                Ảnh xác nhận hiện chỉ được lưu tạm trên thiết bị này.
               </Text>
             </View>
           ) : null}

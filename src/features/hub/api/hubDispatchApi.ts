@@ -312,7 +312,7 @@ export const hubDispatchApi = {
       routes: planRoutes,
       vehicles: vehicles.sort((left, right) => left.capacityKg - right.capacityKg),
       warnings: failedManifestCount > 0
-        ? [`Không tải được loading-manifest của ${failedManifestCount}/${routes.length} tuyến.`]
+        ? [`Không tải được thông tin hàng hóa của ${failedManifestCount}/${routes.length} tuyến.`]
         : [],
     };
   },
@@ -382,7 +382,7 @@ export const hubDispatchApi = {
       routes: planRoutes,
       vehicles: [],
       warnings: failedManifestCount > 0
-        ? [`Không tải được loading-manifest của ${failedManifestCount}/${routes.length} tuyến.`]
+        ? [`Không tải được thông tin hàng hóa của ${failedManifestCount}/${routes.length} tuyến.`]
         : [],
     };
   },

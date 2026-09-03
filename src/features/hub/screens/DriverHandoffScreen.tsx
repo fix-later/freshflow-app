@@ -87,7 +87,7 @@ export function DriverHandoffScreen({ navigation, route: screenRoute }: Props) {
         planItem.route.id,
         planItem.route.driverUserId,
         outboundEventId,
-        `Hub Staff xác nhận đủ ${orders.length} đơn trên App`,
+        `Nhân viên Hub xác nhận đủ ${orders.length} đơn hàng`,
       );
       Alert.alert('Bàn giao thành công', 'Tuyến đã được bàn giao cho tài xế được phân công.', [
         { text: 'Về tổng quan', onPress: () => navigation.navigate('HubTabs', { screen: 'HubDashboard' }) },

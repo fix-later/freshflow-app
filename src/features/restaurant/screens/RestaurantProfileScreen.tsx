@@ -563,7 +563,7 @@ export function RestaurantProfileScreen() {
               <View style={{ flex: 1, gap: 3 }}>
                 <Text style={styles.pendingCardTitle}>Tài khoản đang chờ duyệt</Text>
                 <Text style={styles.pendingCardSub}>
-                  Hệ thống đang xem xét hồ sơ nhà hàng của bạn. Bạn có thể kiểm tra và bổ sung đầy đủ thông tin, MST và tải lên Giấy phép kinh doanh bên dưới trong thời gian chờ đợi.
+                  Hồ sơ nhà hàng của bạn đang được xem xét. Trong thời gian chờ, bạn có thể kiểm tra và bổ sung đầy đủ thông tin, mã số thuế và giấy phép kinh doanh bên dưới.
                 </Text>
               </View>
             </View>

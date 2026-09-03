@@ -396,7 +396,7 @@ export function FileClaimModal({
                 <View style={styles.disclaimerBox}>
                   <Ionicons name="information-circle-outline" size={16} color={Colors.deepTeal} />
                   <Text style={styles.disclaimerText}>
-                    Khi khiếu nại được Admin/Quản lý phê duyệt, số tiền đền bù sẽ được tự động hoàn lại trực tiếp vào hạn mức tín dụng B2B của nhà hàng.
+                    Khi khiếu nại được bộ phận quản lý phê duyệt, số tiền đền bù sẽ được hoàn lại vào hạn mức tín dụng của nhà hàng.
                   </Text>
                 </View>
               </ScrollView>
