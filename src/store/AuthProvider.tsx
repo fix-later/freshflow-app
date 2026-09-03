@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { type User } from '../types/common.types';
 import { AuthContext } from './authStore';
 import { TOKEN_KEY, registerSignOut } from '../services/api/client';
-import { authApi, userFromToken, REFRESH_TOKEN_KEY } from '../features/auth/api/authApi';
+import {
+  authApi,
+  userFromToken,
+  REFRESH_TOKEN_KEY,
+  UnsupportedRoleError,
+} from '../features/auth/api/authApi';
 import { driverRouteStore } from '../features/delivery/store/driverRouteStore';
 import * as SecureStore from 'expo-secure-store';
 
@@ -11,6 +16,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
+  // Distinct from sessionExpired: shown when the app can't sign the user back
+  // in for a reason other than "please log in again" — e.g. a stored token
+  // belongs to a role the mobile app doesn't support at all.
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
 
   // Give the axios interceptor a way to trigger sign-out + session-expired flag
   useEffect(() => {
@@ -34,8 +43,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(restoredUser);
           setToken(storedToken);
         }
-      } catch {
-        // Token missing or malformed — fall through to login
+      } catch (err) {
+        // Stored token is malformed, or (userFromToken throws) belongs to a
+        // role this app doesn't support — e.g. an admin/operations_manager
+        // token saved before UNSUPPORTED_MOBILE_ROLES covered it. Previously
+        // this just fell through to the login screen with the bad token left
+        // in SecureStore, so the user got silently bounced back to login on
+        // every single app launch with no explanation. Clear it so that
+        // can't repeat, and — for the "role not supported" case — say why.
+        await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+        await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY).catch(() => {});
+        if (err instanceof UnsupportedRoleError) {
+          setAuthNotice(err.message);
+        }
       } finally {
         setTimeout(() => setIsLoading(false), 1200);
       }
@@ -47,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(u);
     setToken(t);
     setSessionExpired(false);
+    setAuthNotice(null);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -69,6 +90,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSessionExpired(false);
   }, []);
 
+  const clearAuthNotice = useCallback(() => {
+    setAuthNotice(null);
+  }, []);
+
+  // Used when a signed-in session turns out to be unusable for a reason only
+  // discoverable after sign-in — e.g. AppNavigator finds no mobile stack for
+  // the user's role (a role that isn't in UNSUPPORTED_MOBILE_ROLES today but
+  // has no case in its role→stack map either). Signs the user out locally
+  // and surfaces why, instead of just rendering the login screen with no
+  // explanation as if the credentials themselves had failed.
+  const forceSignOutWithNotice = useCallback((message: string) => {
+    setUser(null);
+    setToken(null);
+    driverRouteStore.reset();
+    SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+    SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY).catch(() => {});
+    setAuthNotice(message);
+  }, []);
+
   const updateUser = useCallback((partial: Partial<User>) => {
     setUser((prev) => (prev ? { ...prev, ...partial } : prev));
   }, []);
@@ -81,10 +121,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: !!user,
         isLoading,
         sessionExpired,
+        authNotice,
         signIn,
         signOut,
         setLoading,
         clearSessionExpired,
+        clearAuthNotice,
+        forceSignOutWithNotice,
         updateUser,
       }}
     >

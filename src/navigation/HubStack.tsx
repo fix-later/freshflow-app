@@ -6,9 +6,7 @@ import { HubDashboardScreen } from '../features/hub/screens/HubDashboardScreen';
 import { MarketDispatchScreen } from '../features/hub/screens/MarketDispatchScreen';
 import { CheckInScreen } from '../features/hub/screens/CheckInScreen';
 import { InboundQueueScreen } from '../features/hub/screens/InboundQueueScreen';
-import { QualityCheckScreen } from '../features/hub/screens/QualityCheckScreen';
 import { DriverHandoffScreen } from '../features/hub/screens/DriverHandoffScreen';
-import { IncidentReportScreen } from '../features/hub/screens/IncidentReportScreen';
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { type HubStackParamList, type HubTabParamList } from './types';
 import { Colors } from '../constants/colors';
@@ -124,9 +122,7 @@ export function HubStack() {
       <Stack.Screen name="HubTabs" component={HubTabs} options={{ headerShown: false }} />
       <Stack.Screen name="MarketDispatch" component={MarketDispatchScreen} options={{ title: 'Phân xe giao nhà hàng' }} />
       <Stack.Screen name="CheckIn" component={CheckInScreen} options={{ title: 'Kiểm đếm lô hàng' }} />
-      <Stack.Screen name="QualityCheck" component={QualityCheckScreen} options={{ title: 'Kiểm tra chất lượng' }} />
       <Stack.Screen name="DriverHandoff" component={DriverHandoffScreen} options={{ title: 'Bàn giao tài xế' }} />
-      <Stack.Screen name="IncidentReport" component={IncidentReportScreen} options={{ title: 'Báo cáo sự cố' }} />
     </Stack.Navigator>
   );
 }

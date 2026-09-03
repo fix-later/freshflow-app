@@ -149,9 +149,7 @@ export type HubStackParamList = {
   HubBatchOrders: { hubId: string; hubName: string; date: string; batchId: string };
   MarketDispatch: undefined;
   CheckIn: { batchId: string; assignedTask?: HubInboundTask };
-  QualityCheck: { batchId: string };
   DriverHandoff: { routeId: string; hubId: string };
-  IncidentReport: { batchId?: string; orderId?: string } | undefined;
 };
 
 export type DriverStackParamList = {

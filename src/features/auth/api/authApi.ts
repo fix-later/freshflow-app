@@ -35,18 +35,22 @@ function mapApprovalStatus(value: LoginResponse['approvalStatus']): ApprovalStat
 
 // Map BE role names (lowercase) → FE UserRole constants (UPPERCASE)
 const ROLE_MAP: Record<string, UserRole> = {
-  restaurant:         'RESTAURANT',
-  market_agent:       'MARKET_AGENT',
-  hub_staff:          'HUB_STAFF',
-  driver:             'DRIVER',
-  operations_manager: 'MARKET_AGENT',
+  restaurant:   'RESTAURANT',
+  market_agent: 'MARKET_AGENT',
+  hub_staff:    'HUB_STAFF',
+  driver:       'DRIVER',
 };
 
 // BE roles (see seed 20260606152229_AddRolesTable.cs) that have no mobile app
 // stack at all. Previously "admin" silently fell back to the RESTAURANT stack,
 // which then broke on every restaurant-only endpoint (404s) instead of telling
-// the user plainly that this account can't be used here.
-const UNSUPPORTED_MOBILE_ROLES = new Set(['admin']);
+// the user plainly that this account can't be used here. "operations_manager"
+// had the same problem in a quieter form: ROLE_MAP used to alias it to
+// MARKET_AGENT, so an ops manager was silently handed the market agent's
+// screens (price entry, assigned markets) instead of an error — there is no
+// operations-manager-specific mobile stack, so block it the same way as admin
+// rather than pretend it's a market agent.
+const UNSUPPORTED_MOBILE_ROLES = new Set(['admin', 'operations_manager']);
 
 export class UnsupportedRoleError extends Error {
   constructor(public readonly role: string) {

@@ -38,7 +38,7 @@ function formatLockedUntil(message: string): string | null {
 
 export function LoginScreen() {
   const navigation = useNavigation();
-  const { signIn, sessionExpired, clearSessionExpired } = useAuthStore();
+  const { signIn, sessionExpired, clearSessionExpired, authNotice, clearAuthNotice } = useAuthStore();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -125,6 +125,17 @@ export function LoginScreen() {
               </Text>
               <Pressable onPress={clearSessionExpired} hitSlop={8}>
                 <Ionicons name="close" size={18} color="#92400E" />
+              </Pressable>
+            </View>
+          )}
+
+          {/* ─── Auth Notice Banner (e.g. unsupported role) ──── */}
+          {authNotice && (
+            <View style={styles.noticeBanner}>
+              <Ionicons name="alert-circle-outline" size={18} color="#991B1B" />
+              <Text style={styles.noticeText}>{authNotice}</Text>
+              <Pressable onPress={clearAuthNotice} hitSlop={8}>
+                <Ionicons name="close" size={18} color="#991B1B" />
               </Pressable>
             </View>
           )}
@@ -372,6 +383,28 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: "#92400E",
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+
+  // ─── Auth Notice Banner ────────────────────
+  noticeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 16,
+    backgroundColor: "#FEE2E2",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#991B1B",
     lineHeight: 18,
     fontWeight: "500",
   },

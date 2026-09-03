@@ -8,10 +8,14 @@ export interface AuthStore {
   isAuthenticated: boolean;
   isLoading: boolean;
   sessionExpired: boolean;
+  /** Non-null when sign-in was reverted for a reason other than expiry — see AuthProvider. */
+  authNotice: string | null;
   signIn: (user: User, token: string) => void;
   signOut: () => Promise<void>;
   setLoading: (loading: boolean) => void;
   clearSessionExpired: () => void;
+  clearAuthNotice: () => void;
+  forceSignOutWithNotice: (message: string) => void;
   updateUser: (partial: Partial<User>) => void;
 }
 

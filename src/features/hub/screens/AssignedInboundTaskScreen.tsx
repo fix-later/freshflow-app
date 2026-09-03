@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { HubStackParamList } from '../../../navigation/types';
@@ -23,6 +25,7 @@ import {
   type HubInboundTask,
   type HubProcurementBatchDto,
 } from '../api/hubApi';
+import { uploadDiscrepancyProof } from '../services/discrepancyProofUpload';
 import { getApiErrorMessage } from '../../../services/errors/apiErrorMessages';
 import {
   formatQuantityWithUnit,
@@ -44,6 +47,10 @@ type ItemReview = {
   notes: string;
   persisted?: boolean;
   serverStatus?: string;
+  /** Local device URI for a picked-but-not-yet-uploaded proof photo. */
+  proofLocalUri?: string;
+  /** secure_url of a proof photo already uploaded and saved on a prior visit. */
+  savedProofImageUrl?: string | null;
 };
 
 type OrderLine = {
@@ -180,6 +187,7 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
           serverStatus: current?.serverStatus === 'OPEN' || discrepancy.status === 'OPEN'
             ? 'OPEN'
             : 'ACKNOWLEDGED',
+          savedProofImageUrl: current?.savedProofImageUrl || discrepancy.proofImageUrl,
         };
       });
       setReviews(next);
@@ -240,6 +248,11 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
       : { status });
   };
 
+  const pickProofPhoto = async (orderItemId: string) => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
+    if (!result.canceled) updateReview(orderItemId, { proofLocalUri: result.assets[0].uri });
+  };
+
   const scrollToIssueField = (orderItemId: string, fieldOffset: number) => {
     const cardOffset = productCardOffsets.current[orderItemId] ?? 0;
     // Wait until the keyboard has resized the viewport, then place the active field
@@ -298,11 +311,15 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
             && saved.notes?.includes(marker)
           ));
           if (!alreadyRecorded) {
+            const proofImageUrl = review.proofLocalUri
+              ? await uploadDiscrepancyProof(task.hubId, task.inboundId, review.proofLocalUri)
+              : null;
             await hubApi.recordDiscrepancy(task.hubId, task.inboundId, {
               orderItemId: line.orderItemId,
               affectedQuantity,
               conditionStatus,
               notes,
+              proofImageUrl,
             });
             recordedCount += 1;
           }
@@ -574,6 +591,32 @@ export function AssignedInboundTaskScreen({ task, navigation }: Props) {
                               maxLength={500}
                               style={styles.notesInput}
                             />
+                            <Text style={styles.inputLabel}>Ảnh bằng chứng</Text>
+                            {review.proofLocalUri ? (
+                              <View style={styles.proofRow}>
+                                <Image source={{ uri: review.proofLocalUri }} style={styles.proofThumb} />
+                                {!locked ? (
+                                  <Pressable
+                                    accessibilityLabel="Xóa ảnh"
+                                    style={styles.proofRemove}
+                                    onPress={() => updateReview(line.orderItemId, { proofLocalUri: undefined })}
+                                  >
+                                    <Ionicons name="close" size={13} color="#FFFFFF" />
+                                  </Pressable>
+                                ) : null}
+                              </View>
+                            ) : locked && review.savedProofImageUrl ? (
+                              <View style={styles.proofRow}>
+                                <Image source={{ uri: review.savedProofImageUrl }} style={styles.proofThumb} />
+                              </View>
+                            ) : locked ? (
+                              <Text style={styles.proofHint}>Không có ảnh bằng chứng.</Text>
+                            ) : (
+                              <Pressable style={styles.proofPickButton} onPress={() => void pickProofPhoto(line.orderItemId)}>
+                                <Ionicons name="camera-outline" size={15} color={Colors.primaryText} />
+                                <Text style={styles.proofPickText}>Chụp hoặc chọn ảnh (khuyến nghị)</Text>
+                              </Pressable>
+                            )}
                             <Text style={styles.restaurantHint}>
                               {persisted
                                 ? review.serverStatus === 'ACKNOWLEDGED'
@@ -725,6 +768,12 @@ const styles = StyleSheet.create({
   quantityInput: { flex: 1, paddingVertical: 0, textAlign: 'right', fontSize: 12, fontFamily: Fonts.monoBold, color: Colors.textPrimary },
   quantityUnit: { fontSize: 8, color: Colors.textMuted, marginLeft: 5 },
   notesInput: { minHeight: 70, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, padding: 10, fontSize: 10, lineHeight: 15, color: Colors.textPrimary },
+  proofPickButton: { minHeight: 38, borderRadius: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.primary600, backgroundColor: Colors.primaryLight, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  proofPickText: { fontSize: 9, fontWeight: '700', color: Colors.primaryText },
+  proofHint: { fontSize: 8, color: Colors.textMuted },
+  proofRow: { alignSelf: 'flex-start' },
+  proofThumb: { width: 64, height: 64, borderRadius: 10, backgroundColor: Colors.surfaceVariant },
+  proofRemove: { position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   restaurantHint: { fontSize: 8, lineHeight: 12, color: Colors.textMuted },
   validationCard: { marginTop: 12, borderRadius: 11, borderWidth: 1, borderColor: '#E6B8B8', backgroundColor: Colors.dangerLight, padding: 10, flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
   validationText: { flex: 1, fontSize: 9, lineHeight: 14, color: Colors.danger },

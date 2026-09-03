@@ -62,6 +62,7 @@ export interface HubDiscrepancyDto {
   affectedQuantity: number;
   conditionStatus: HubDiscrepancyCondition;
   notes: string | null;
+  proofImageUrl: string | null;
   status: 'OPEN' | 'ACKNOWLEDGED' | string;
   acknowledgedBy: string | null;
   acknowledgedAt: string | null;
@@ -74,6 +75,16 @@ export interface RecordHubDiscrepancyRequest {
   affectedQuantity: number;
   conditionStatus: HubDiscrepancyCondition;
   notes?: string | null;
+  proofImageUrl?: string | null;
+}
+
+/** Signed Cloudinary upload payload for a discrepancy proof photo — mirrors ProofOfDeliveryUploadSignature. */
+export interface HubDiscrepancyProofUploadSignature {
+  signature: string;
+  timestamp: number;
+  apiKey: string;
+  cloudName: string;
+  folder: string;
 }
 
 export interface HubWorkDto {
@@ -623,6 +634,21 @@ export const hubApi = {
     const { data } = await apiClient.post<HubDiscrepancyDto>(
       `/api/v1/hubs/${hubId}/inbound/${inboundId}/discrepancy`,
       request,
+    );
+    return data;
+  },
+
+  /**
+   * Requests a signed Cloudinary upload payload for a discrepancy proof photo.
+   * Use with `uploadDiscrepancyProof` in ../services/discrepancyProofUpload.ts
+   * rather than calling this directly.
+   */
+  async getDiscrepancyProofUploadSignature(
+    hubId: string,
+    inboundId: string,
+  ): Promise<HubDiscrepancyProofUploadSignature> {
+    const { data } = await apiClient.post<HubDiscrepancyProofUploadSignature>(
+      `/api/v1/hubs/${hubId}/inbound/${inboundId}/discrepancy/upload-signature`,
     );
     return data;
   },
