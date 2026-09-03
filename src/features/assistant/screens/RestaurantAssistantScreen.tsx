@@ -4,6 +4,7 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -83,13 +84,18 @@ function formatPrice(value: number) {
   return `${value.toLocaleString('vi-VN')}đ`;
 }
 
-// ── Lightweight GFM-table rendering for assistant replies ──────────────────────
-// The LLM often answers product lookups with a `| col | col |` markdown table; rendered as
-// plain <Text> those pipes/dashes show up literally. This detects table blocks inline with
-// regular text and renders just those as an actual table, leaving everything else untouched —
-// full markdown (bold/links/etc.) is out of scope, only tables were the reported readability issue.
+// ── Lightweight, native Markdown rendering for assistant replies ───────────────
+// Assistant content is untrusted, so render the small Markdown subset used by our
+// prompts with native components instead of HTML/WebView. This keeps headings,
+// emphasis, lists, callouts, code and GFM tables readable without exposing syntax.
 type ContentBlock =
-  | { type: 'text'; content: string }
+  | { type: 'paragraph'; content: string }
+  | { type: 'heading'; content: string; level: number }
+  | { type: 'unordered-list'; items: string[] }
+  | { type: 'ordered-list'; items: string[] }
+  | { type: 'quote'; content: string }
+  | { type: 'code'; content: string }
+  | { type: 'divider' }
   | { type: 'table'; headers: string[]; rows: string[][] };
 
 function isTableSeparatorLine(line: string): boolean {
@@ -106,22 +112,42 @@ function parseTableRow(line: string): string[] {
 }
 
 function parseMessageContent(content: string): ContentBlock[] {
-  const lines = content.split('\n');
+  const lines = content.replace(/\r\n?/g, '\n').split('\n');
   const blocks: ContentBlock[] = [];
-  let textBuffer: string[] = [];
+  let paragraphBuffer: string[] = [];
   let i = 0;
 
-  const flushText = () => {
-    const text = textBuffer.join('\n').trim();
-    if (text) blocks.push({ type: 'text', content: text });
-    textBuffer = [];
+  const flushParagraph = () => {
+    const text = paragraphBuffer.join('\n').trim();
+    if (text) blocks.push({ type: 'paragraph', content: text });
+    paragraphBuffer = [];
   };
 
   while (i < lines.length) {
     const line = lines[i];
     const nextLine = lines[i + 1];
+
+    if (!line.trim()) {
+      flushParagraph();
+      i += 1;
+      continue;
+    }
+
+    if (/^\s*```/.test(line)) {
+      flushParagraph();
+      const code: string[] = [];
+      i += 1;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) {
+        code.push(lines[i]);
+        i += 1;
+      }
+      if (i < lines.length) i += 1;
+      blocks.push({ type: 'code', content: code.join('\n') });
+      continue;
+    }
+
     if (line.trim().includes('|') && nextLine !== undefined && isTableSeparatorLine(nextLine)) {
-      flushText();
+      flushParagraph();
       const headers = parseTableRow(line);
       i += 2;
       const rows: string[][] = [];
@@ -132,11 +158,102 @@ function parseMessageContent(content: string): ContentBlock[] {
       blocks.push({ type: 'table', headers, rows });
       continue;
     }
-    textBuffer.push(line);
+
+    const heading = line.match(/^\s{0,3}(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      blocks.push({ type: 'heading', level: heading[1].length, content: heading[2].trim() });
+      i += 1;
+      continue;
+    }
+
+    if (/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)) {
+      flushParagraph();
+      blocks.push({ type: 'divider' });
+      i += 1;
+      continue;
+    }
+
+    if (/^\s*>\s?/.test(line)) {
+      flushParagraph();
+      const quote: string[] = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+        quote.push(lines[i].replace(/^\s*>\s?/, ''));
+        i += 1;
+      }
+      blocks.push({ type: 'quote', content: quote.join('\n').trim() });
+      continue;
+    }
+
+    if (/^\s*[-*+]\s+/.test(line)) {
+      flushParagraph();
+      const items: string[] = [];
+      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-*+]\s+/, '').trim());
+        i += 1;
+      }
+      blocks.push({ type: 'unordered-list', items });
+      continue;
+    }
+
+    if (/^\s*\d+[.)]\s+/.test(line)) {
+      flushParagraph();
+      const items: string[] = [];
+      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*\d+[.)]\s+/, '').trim());
+        i += 1;
+      }
+      blocks.push({ type: 'ordered-list', items });
+      continue;
+    }
+
+    paragraphBuffer.push(line);
     i += 1;
   }
-  flushText();
+  flushParagraph();
   return blocks;
+}
+
+const INLINE_MARKDOWN_PATTERN = /(\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|`[^`\n]+`|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|\*[^*\n]+\*|_[^_\n]+_)/g;
+
+function InlineMarkdown({
+  content,
+  textStyle,
+}: {
+  content: string;
+  textStyle: StyleProp<TextStyle>;
+}) {
+  const parts = content.split(INLINE_MARKDOWN_PATTERN).filter(Boolean);
+
+  return (
+    <Text style={textStyle}>
+      {parts.map((part, index) => {
+        if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('__') && part.endsWith('__'))) {
+          return <Text key={index} style={styles.inlineBold}>{part.slice(2, -2)}</Text>;
+        }
+        if (part.startsWith('~~') && part.endsWith('~~')) {
+          return <Text key={index} style={styles.inlineStrike}>{part.slice(2, -2)}</Text>;
+        }
+        if (part.startsWith('`') && part.endsWith('`')) {
+          return <Text key={index} style={styles.inlineCode}>{part.slice(1, -1)}</Text>;
+        }
+
+        const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/);
+        if (link) {
+          return (
+            <Text key={index} style={styles.inlineLink} onPress={() => void Linking.openURL(link[2])}>
+              {link[1]}
+            </Text>
+          );
+        }
+
+        if ((part.startsWith('*') && part.endsWith('*')) || (part.startsWith('_') && part.endsWith('_'))) {
+          return <Text key={index} style={styles.inlineItalic}>{part.slice(1, -1)}</Text>;
+        }
+        return part;
+      })}
+    </Text>
+  );
 }
 
 // Rough monospace-ish glyph width at fontSize 11 — each row lays out its cells independently
@@ -168,7 +285,7 @@ function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] 
         <View style={[styles.tableRow, styles.tableHeaderRow]}>
           {headers.map((header, index) => (
             <View key={index} style={[styles.tableCell, { width: columnWidths[index] }]}>
-              <Text style={styles.tableHeaderText}>{header}</Text>
+              <InlineMarkdown content={header} textStyle={styles.tableHeaderText} />
             </View>
           ))}
         </View>
@@ -177,9 +294,9 @@ function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] 
             key={rowIndex}
             style={[styles.tableRow, rowIndex % 2 === 1 && styles.tableRowAlt]}
           >
-            {row.map((cell, cellIndex) => (
+            {headers.map((_, cellIndex) => (
               <View key={cellIndex} style={[styles.tableCell, { width: columnWidths[cellIndex] }]}>
-                <Text style={styles.tableCellText} numberOfLines={2}>{cell}</Text>
+                <InlineMarkdown content={row[cellIndex] ?? ''} textStyle={styles.tableCellText} />
               </View>
             ))}
           </View>
@@ -191,24 +308,84 @@ function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] 
 
 function MessageContent({
   content,
-  textStyle,
+  isUser,
 }: {
   content: string;
-  textStyle: StyleProp<TextStyle>;
+  isUser: boolean;
 }) {
   const blocks = useMemo(() => parseMessageContent(content), [content]);
+  const bodyStyle = [styles.messageText, isUser && styles.userMessageText];
+
   return (
-    <>
-      {blocks.map((block, index) =>
-        block.type === 'table' ? (
-          <MarkdownTable key={index} headers={block.headers} rows={block.rows} />
-        ) : (
-          <Text key={index} style={textStyle}>
-            {block.content}
-          </Text>
-        ),
-      )}
-    </>
+    <View style={styles.markdownContent}>
+      {blocks.map((block, index) => {
+        if (block.type === 'table') {
+          return <MarkdownTable key={index} headers={block.headers} rows={block.rows} />;
+        }
+        if (block.type === 'heading') {
+          return (
+            <InlineMarkdown
+              key={index}
+              content={block.content}
+              textStyle={[
+                styles.markdownHeading,
+                block.level === 1
+                  ? styles.markdownHeading1
+                  : block.level === 2
+                    ? styles.markdownHeading2
+                    : styles.markdownHeading3,
+                isUser && styles.userMessageText,
+              ]}
+            />
+          );
+        }
+        if (block.type === 'unordered-list' || block.type === 'ordered-list') {
+          return (
+            <View key={index} style={styles.markdownList}>
+              {block.items.map((item, itemIndex) => (
+                <View key={itemIndex} style={styles.markdownListRow}>
+                  <Text style={[styles.markdownListMarker, isUser && styles.userMessageText]}>
+                    {block.type === 'ordered-list' ? `${itemIndex + 1}.` : '•'}
+                  </Text>
+                  <InlineMarkdown content={item} textStyle={[bodyStyle, styles.markdownListText]} />
+                </View>
+              ))}
+            </View>
+          );
+        }
+        if (block.type === 'quote') {
+          return (
+            <View key={index} style={[styles.markdownQuote, isUser && styles.userMarkdownQuote]}>
+              <InlineMarkdown content={block.content} textStyle={[styles.markdownQuoteText, bodyStyle]} />
+            </View>
+          );
+        }
+        if (block.type === 'code') {
+          return (
+            <View key={index} style={[styles.markdownCodeBlock, isUser && styles.userMarkdownCodeBlock]}>
+              <Text style={[styles.markdownCodeText, isUser && styles.userMessageText]}>{block.content}</Text>
+            </View>
+          );
+        }
+        if (block.type === 'divider') {
+          return <View key={index} style={[styles.markdownDivider, isUser && styles.userMarkdownDivider]} />;
+        }
+
+        const isWarning = !isUser && /^\s*(⚠️|⚠|❗|Lưu ý\b)/i.test(block.content);
+        if (isWarning) {
+          return (
+            <View key={index} style={styles.markdownWarning}>
+              <Ionicons name="warning-outline" size={18} color={Colors.warning} />
+              <InlineMarkdown
+                content={block.content.replace(/^\s*(?:⚠️|⚠|❗)\s*/, '')}
+                textStyle={[bodyStyle, styles.markdownWarningText]}
+              />
+            </View>
+          );
+        }
+        return <InlineMarkdown key={index} content={block.content} textStyle={bodyStyle} />;
+      })}
+    </View>
   );
 }
 
@@ -361,10 +538,7 @@ export function RestaurantAssistantScreen() {
               >
                 <MessageContent
                   content={item.content}
-                  textStyle={[
-                    styles.messageText,
-                    item.role === 'user' && styles.userMessageText,
-                  ]}
+                  isUser={item.role === 'user'}
                 />
                 {item.pendingConfirmation ? (
                   <OrderPreviewCard
@@ -619,16 +793,82 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     backgroundColor: Colors.primary,
   },
-  messageBubble: { maxWidth: '82%', padding: 12, borderRadius: 17 },
+  messageBubble: { maxWidth: '88%', padding: 12, borderRadius: 17 },
   assistantBubble: {
     backgroundColor: Colors.surface,
     borderBottomLeftRadius: 5,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  userBubble: { backgroundColor: Colors.deepTeal, borderBottomRightRadius: 5 },
+  userBubble: { maxWidth: '82%', backgroundColor: Colors.deepTeal, borderBottomRightRadius: 5 },
   messageText: { fontSize: 13, lineHeight: 20, color: Colors.textPrimary },
   userMessageText: { color: Colors.white },
+  markdownContent: { gap: 8 },
+  markdownHeading: { color: Colors.deepTeal, fontFamily: Fonts.bold },
+  markdownHeading1: { fontSize: 18, lineHeight: 24 },
+  markdownHeading2: { fontSize: 16, lineHeight: 22 },
+  markdownHeading3: { fontSize: 14, lineHeight: 20 },
+  markdownList: { gap: 5 },
+  markdownListRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
+  markdownListMarker: {
+    width: 17,
+    paddingTop: 1,
+    fontSize: 13,
+    lineHeight: 20,
+    color: Colors.primaryText,
+    fontFamily: Fonts.bold,
+    textAlign: 'right',
+  },
+  markdownListText: { flex: 1 },
+  markdownQuote: {
+    paddingLeft: 10,
+    paddingVertical: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.primary600,
+    backgroundColor: Colors.primaryLight,
+  },
+  userMarkdownQuote: {
+    borderLeftColor: Colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  markdownQuoteText: { color: Colors.textSecondary },
+  markdownCodeBlock: {
+    padding: 10,
+    borderRadius: 9,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  userMarkdownCodeBlock: { backgroundColor: 'rgba(255,255,255,0.10)' },
+  markdownCodeText: {
+    fontSize: 11,
+    lineHeight: 17,
+    color: Colors.textPrimary,
+    fontFamily: Fonts.monoRegular,
+  },
+  markdownDivider: { height: 1, backgroundColor: Colors.border },
+  userMarkdownDivider: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  markdownWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.warningLight,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  markdownWarningText: { flex: 1 },
+  inlineBold: { fontFamily: Fonts.bold },
+  inlineItalic: { fontStyle: 'italic' },
+  inlineStrike: { textDecorationLine: 'line-through' },
+  inlineCode: {
+    fontFamily: Fonts.monoRegular,
+    fontSize: 12,
+    backgroundColor: Colors.surfaceContainerHigh,
+    color: Colors.deepTeal,
+  },
+  inlineLink: { color: Colors.primaryText, textDecorationLine: 'underline' },
   table: {
     marginTop: 6,
     marginBottom: 2,
