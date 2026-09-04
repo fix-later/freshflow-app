@@ -145,7 +145,7 @@ export function ProcurementLabelsModal({ task, visible, onClose }: Props) {
             <div class="product-name">${lbl.item.productNameSnapshot}</div>
           </div>
           <div class="weight-box">
-            <div class="weight-val">${lbl.quantityKg.toFixed(1)} KG</div>
+            <div class="weight-val">${lbl.quantityKg.toFixed(1)} kg</div>
             <div class="meta-text">Quy cách: ${lbl.capacityKg}kg/kiện</div>
           </div>
         </div>
@@ -159,7 +159,7 @@ export function ProcurementLabelsModal({ task, visible, onClose }: Props) {
       <html>
       <head>
         <meta charset="utf-8" />
-        <title>Tem Thu Mua PO ${batchCode}</title>
+        <title>Tem thu mua lô PO-${batchCode}</title>
         <style>
           @page { size: A4 portrait; margin: 10mm; }
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background: #ffffff; color: #000000; }
@@ -204,7 +204,7 @@ export function ProcurementLabelsModal({ task, visible, onClose }: Props) {
       const html = buildLabelsHtml(batchCode);
       const { uri } = await Print.printToFileAsync({ html });
 
-      // Create a clean, custom PDF file name: e.g. Tem_Thu_Mua_PO_4D4D0F3D.pdf
+      // Tạo tên tệp PDF dễ nhận biết, ví dụ: Tem_Thu_Mua_PO_4D4D0F3D.pdf
       const customFileName = `Tem_Thu_Mua_PO_${batchCode}.pdf`;
       const targetUri = `${FileSystem.cacheDirectory}${customFileName}`;
 
@@ -217,13 +217,13 @@ export function ProcurementLabelsModal({ task, visible, onClose }: Props) {
         await Sharing.shareAsync(targetUri, {
           mimeType: 'application/pdf',
           UTI: 'com.adobe.pdf',
-          dialogTitle: `Chia sẻ PDF Tem Nhãn PO-${batchCode}`,
+          dialogTitle: `Chia sẻ tệp PDF tem nhãn PO-${batchCode}`,
         });
       } else {
-        Alert.alert('Đã xuất PDF', `File PDF đã được tạo tại:\n${targetUri}`);
+        Alert.alert('Đã xuất PDF', `Tệp PDF đã được tạo tại:\n${targetUri}`);
       }
     } catch (exportErr: unknown) {
-      Alert.alert('Không thể xuất file PDF', 'Đã xảy ra lỗi khi xuất file. Vui lòng thử lại.');
+      Alert.alert('Không thể xuất tệp PDF', 'Đã xảy ra lỗi khi xuất tệp. Vui lòng thử lại.');
     } finally {
       setPrinting(false);
     }
@@ -245,8 +245,8 @@ export function ProcurementLabelsModal({ task, visible, onClose }: Props) {
 
   const handlePrintOptions = () => {
     Alert.alert('Xuất tem / In ấn', 'Chọn phương thức xuất tài liệu tem nhãn dán:', [
-      { text: '📄 Chia sẻ File PDF tên đẹp', onPress: () => void handleExportPdf() },
-      { text: '🖨️ Phát lệnh in ra Máy in', onPress: () => void handleDirectPrint() },
+      { text: '📄 Chia sẻ tệp PDF', onPress: () => void handleExportPdf() },
+      { text: '🖨️ Gửi lệnh tới máy in', onPress: () => void handleDirectPrint() },
       { text: 'Đóng', style: 'cancel' },
     ]);
   };
@@ -257,7 +257,7 @@ export function ProcurementLabelsModal({ task, visible, onClose }: Props) {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerCopy}>
-            <Text style={styles.eyebrow}>CUỘN TEM DÁN NHIỆT (THERMAL STICKER SHEET)</Text>
+            <Text style={styles.eyebrow}>CUỘN TEM DÁN NHIỆT</Text>
             <Text style={styles.title}>Tờ in nhãn dán kiện hàng</Text>
             <Text style={styles.batchCode}>Lô #PO-{task.id.replaceAll('-', '').slice(0, 8).toUpperCase()} • {task.batchDate}</Text>
           </View>
@@ -314,7 +314,7 @@ export function ProcurementLabelsModal({ task, visible, onClose }: Props) {
           <View style={styles.paperSheet}>
             <View style={styles.paperRollHeader}>
               <View style={styles.rollHole} />
-              <Text style={styles.rollTitle}>FRESHFLOW THERMAL STICKER ROLL</Text>
+              <Text style={styles.rollTitle}>CUỘN TEM DÁN NHIỆT FRESHFLOW</Text>
               <View style={styles.rollHole} />
             </View>
 
@@ -339,7 +339,7 @@ export function ProcurementLabelsModal({ task, visible, onClose }: Props) {
                       <Text style={styles.productNameLabel} numberOfLines={1}>{lbl.item.productNameSnapshot}</Text>
                     </View>
                     <View style={styles.weightBox}>
-                      <Text style={styles.weightValue}>{lbl.quantityKg.toFixed(1)} KG</Text>
+                      <Text style={styles.weightValue}>{lbl.quantityKg.toFixed(1)} kg</Text>
                       <Text style={styles.packageTag}>Kiện {lbl.packageNumber}/{lbl.packageCount}</Text>
                     </View>
                   </View>
@@ -373,7 +373,7 @@ export function ProcurementLabelsModal({ task, visible, onClose }: Props) {
             ) : (
               <>
                 <Ionicons name="print-outline" size={20} color={Colors.onPrimary} />
-                <Text style={styles.printButtonText}>In / Xuất PDF ({activeLabels.length} tem dán)</Text>
+                <Text style={styles.printButtonText}>In hoặc xuất PDF ({activeLabels.length} tem dán)</Text>
               </>
             )}
           </Pressable>

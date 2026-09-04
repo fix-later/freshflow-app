@@ -20,7 +20,6 @@ import {
 } from './types';
 import { Colors } from '../constants/colors';
 import { Fonts } from '../constants/fonts';
-import { NotificationBellButton } from '../features/notifications/components/NotificationBellButton';
 
 const Tab = createBottomTabNavigator<MarketAgentStackParamList>();
 const HomeStack = createNativeStackNavigator<MarketHomeStackParamList>();
@@ -186,7 +185,7 @@ function MarketAgentTabs() {
       <Tab.Screen
         name="MarketAgentProfile"
         component={ProfileScreen}
-        options={{ title: 'Tài khoản', headerRight: () => <NotificationBellButton /> }}
+        options={{ title: 'Tài khoản' }}
       />
     </Tab.Navigator>
   );
